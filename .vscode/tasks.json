@@ -1,0 +1,37 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Current Python Script in Ghidra Jython",
+            "type": "shell",
+            "command": "${config:GHIDRA_HEADLESS}",            
+            "args": [
+                "${config:GHIDRA_PROJECTS_PATH}${pathSeparator}${config:PROJECT_NAME}",
+                "${config:PROJECT_NAME}",
+                "-postscript",
+                "${file}"
+            ],
+            "problemMatcher": [],
+        },
+        {            
+            "label": "Start ghidra-bridge RPC server",
+            "type": "shell",
+            "command": "${config:GHIDRA_HEADLESS}",            
+            "args": [
+                "${config:GHIDRA_PROJECTS_PATH}${pathSeparator}${config:PROJECT_NAME}",
+                "${config:PROJECT_NAME}",
+                "-scriptPath",
+                "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+                "-propertiesPath",
+                "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+                "-postscript",
+                "ghidra_bridge_server.py",
+                "ls"
+            ],
+            "problemMatcher": [],
+        },
+    ],
+
+}
