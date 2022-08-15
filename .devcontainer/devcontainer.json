@@ -62,6 +62,7 @@
 	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode",
 	"features": {
-		"java": "11"
+		"java": "11",
+		"gradle": "latest"
 	}
 }
