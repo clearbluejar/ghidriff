@@ -1,6 +1,6 @@
-# ghidra-python-vscode-devcontainer-skeleton
+# ghidra-simple-diff-engine
 
-A skeleton repo to provide a Ghidra Headless (non-GUI) Python scripting environment in VS Code.
+A Ghidra Headless (non-GUI) Python script to automate binary patch diffing.
 
 ## Features
 
@@ -15,69 +15,18 @@ A skeleton repo to provide a Ghidra Headless (non-GUI) Python scripting environm
   - [pyhidra](https://github.com/dod-cyber-crime-center/pyhidra) leveraging native CPython interpreter using [jpype](https://jpype.readthedocs.io/en/latest/)
 - Demonstrates running python scripts in [various ways](#different-ways-to-run-a-ghidra-headless-script).
 
-## About
+## Design Goals
 
-This repo is a starting point for your Ghidra Python scripting project in vscode. It demonstrates some useful vscode integrations and prescribes a workflow for running your python scripts. It leverages the power of devcontainers to provide a seamless development environment.
+Perform binary diff
+   - Find added funcitons
+   - Find deleted functions
+   - Find modified functions
+   - Generate JSON capturing Diff Results
 
-### Devcontainers
+## Quick Start Setup
 
-If you haven't tried [developing inside a container](https://code.visualstudio.com/docs/remote/containers#_getting-started) with vscode, you should.
+Follow directions from that repo template [Quick Start](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option)
 
-> "One of the useful things about developing in a container is that you can use specific versions of dependencies that your application needs without impacting your local development environment. " [Get started with development Containers in Visual Studio Code](https://code.visualstudio.com/docs/remote/containers-tutorial)
-
-> "This lets VS Code provide a local-quality development experience including full IntelliSense (completions), code navigation, and debugging regardless of where your tools (or code) are located." [Developing inside a Container using Visual Studio Code Remote Development](https://code.visualstudio.com/docs/remote/containers)
-
-This version is an upgrade from the old [ghidra-python-vscode-skeleton](https://github.com/clearbluejar/ghidra-python-vscode-skeleton). Upgraded via the power of  `vscode` devcontainers. **Everything just works.** Don't believe me? Try it.
-
-![demo](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton/blob/assets/ghidra-python-vscode-devcontainer-skeleton.gif?raw=True)
-
-## Quick Start Setup - Dev Container  (Best Option)
-
-On first run, it will build a fast [debian image](https://github.com/microsoft/vscode-dev-containers/tree/main/containers/python-3) with the python3 installed along with java dependencies needed for Ghidra scripting. Then it will download Ghidra based on your settings in [devcontainer.json](.devcontainer/devcontainer.json#L15-L16) and finally create the virtual environment for python and required pip packages in [post-create.sh](.devcontainer/post-create.sh).
-
-Make sure you have the [prequisites](https://code.visualstudio.com/docs/remote/containers-tutorial#_prerequisites) setup for working with devcontainers in VS Code. Detailed instructions are available [here](https://code.visualstudio.com/docs/remote/containers#_getting-started). If you aren't using the devcontainer, you will need to use the [manual setup](#manual-setup-less-good-option).
-
-### Option 1: Open a Git repository or GitHub PR in an isolated container volume
-
-1. Start VS Code and run `Remote-Containers: Clone Repository in Container Volume...` from the Command Palette (F1).
-2. Ctrl-V `https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton`
-3. VS Code will reload, clone the source code, and start building the container. 
-4. After the build completes, VS Code will open with the container. You can now work with the repository source code in this independent environment as you would if you had cloned the code locally.
-
-### Option 2: Open an existing folder in a container
-
-1. `git clone git@github.com:clearbluejar/ghidra-python-vscode-devcontainer-skeleton.git`
-2. code `ghidra-python-vscode-devcontainer-skeleton`
-3. When VS Code loads, it will recognize the .devcontainer folder and ask if you would like to open
-
-These two options should work out of the box (or container) with an experience like the one shown in the gif above. 
-
-## Manual Setup (Less Good Option)
-
-The manual setup essentially has to mimic the following scripts:
-- Install latest Ghidra - [ghidra-install.sh](.devcontainer/library-scripts/ghidra-install.sh)
-- Provide python and Java install - [devcontainer.json](.devcontainer/devcontainer.json)
-- Install pip packages and venv - [post-create.sh](.devcontainer/post-create.sh)
-
-<details><summary> Expand for Manual Setup Steps </summary>
-
-1. [Install Ghidra](https://github.com/NationalSecurityAgency/ghidra/releases) yourself.
-2. Update `GHIDRA_INSTALL_DIR` and other variables in [settings.json](.vscode/settings.json) with your install paths.
-3. Set environment variable with `GHIDRA_VERSION`
-   - `export GHIDRA_VERSION=10.1.4`
-4. Setup `venv`
-   - `python3 -m venv .env`
-5. Install pip packages
-   - autocomplete 
-     - `ghidra-stubs` that match your `GHIDRA_VERSION`
-       - `pip install https://github.com/clearbluejar/ghidra-pyi-generator/releases/download/v1.0.3-10.1.4/ghidra_stubs-10.1.4.refs_heads_master-py2.py3-none-any.whl` or `pip install ghidra-stubs` from pypi (this is an outdated version)
-   - ghidra bridge
-     - `pip install ghidra-bridge`
-     - `python -m ghidra_bridge.install_server .ghidra_bridge`
-   - pyhidra
-     - `pip install pyhidra`
-
-</details>
 
 ## Workflow
 
