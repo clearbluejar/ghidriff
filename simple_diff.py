@@ -42,34 +42,31 @@ def setup_project(
 
 
 def setup_symbols(symbols_path: Union[str, pathlib.Path]) -> None:
+    """setup symbols to allow Ghidra to download as needed"""
 
-    
     symbols_path = pathlib.Path(symbols_path).absolute()
-    symbols_path.mkdir(exist_ok=True, parents=True)
 
-    # trick Ghidra Local Symbol Store into using StorageLevelDetection 1 
-    adminDir = symbols_path / "000admin"
-    pingmetxt = symbols_path / "pingme.txt"    
-    adminDir.mkdir(exist_ok=True)
-    pingmetxt.touch()
-    
     from jpype import imports
     imports.registerDomain('pdb_','pdb')
+
     from pdb_ import PdbPlugin    
     from pdb_.symbolserver import LocalSymbolStore
     from pdb_.symbolserver import HttpSymbolServer
     from pdb_.symbolserver import SymbolServerService
-    from java.util import List;
 
-    from java.io import File;
-    from java.net import URI;
+    from java.util import List
+    from java.io import File
+    from java.net import URI
 
+    # todo support more than just Windows
     symbolsDir = File(symbols_path)
     localSymbolStore = LocalSymbolStore(symbols_path)
+
+    # Creates a MS-compatible symbol server directory location. pdb/symbolserver/LocalSymbolStore.java#L67
+    localSymbolStore.create(symbolsDir,1)
     msSymbolServer = HttpSymbolServer(URI.create("https://msdl.microsoft.com/download/symbols/"))
     symbolServerService = SymbolServerService(localSymbolStore, List.of(msSymbolServer));
 
-    
     PdbPlugin.saveSymbolServerServiceConfig(symbolServerService);
 
 
