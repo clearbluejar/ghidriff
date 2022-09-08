@@ -46,9 +46,6 @@ def setup_symbols(symbols_path: Union[str, pathlib.Path]) -> None:
 
     symbols_path = pathlib.Path(symbols_path).absolute()
 
-    from jpype import imports
-    imports.registerDomain('pdb_','pdb')
-
     from pdb_ import PdbPlugin    
     from pdb_.symbolserver import LocalSymbolStore
     from pdb_.symbolserver import HttpSymbolServer
