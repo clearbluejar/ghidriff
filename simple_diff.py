@@ -8,11 +8,11 @@ if TYPE_CHECKING:
     import ghidra
     from ghidra_builtins import *
 
-def setup_project(        
+def setup_project(
         binary_paths: [Union[str, pathlib.Path]],
-        project_location: Union[str, pathlib.Path],        
-        project_name: [str]        
-) -> ["ghidra.base.project.GhidraProject"]:
+        project_location: Union[str, pathlib.Path],
+        project_name: str
+) -> "ghidra.base.project.GhidraProject":
     """
     Setup and verify Ghidra Project
     """
@@ -72,7 +72,7 @@ def setup_symbols(symbols_path: Union[str, pathlib.Path]) -> None:
 
 
 
-def analyze_project(project: ["ghidra.base.project.GhidraProject"]) -> None:
+def analyze_project(project: "ghidra.base.project.GhidraProject") -> None:
     """
     Analyzes all files found within the project
     """
@@ -120,10 +120,11 @@ def analyze_project(project: ["ghidra.base.project.GhidraProject"]) -> None:
     
 
 def diff_bins(
-        project: ["ghidra.base.project.GhidraProject"],
-        old: Union[str, pathlib.Path],        
+        project: "ghidra.base.project.GhidraProject",
+        old: Union[str, pathlib.Path],
         new: Union[str, pathlib.Path]
 ) -> str:
+    """Diff the old and new binary from the GhidraProject"""
 
     from ghidra.util.task import ConsoleTaskMonitor
     import difflib
@@ -169,7 +170,7 @@ def diff_bins(
 
     print("Loaded old program: {}".format(p1.getName()))
     print("Loaded new program: {}".format(p2.getName()))
-
+    
     old_funcs = []
     new_funcs = []
     old_symbols = []
