@@ -114,7 +114,48 @@ def analyze_project(project: "ghidra.base.project.GhidraProject") -> None:
         
 
         print(f"Analysis for {domainFile} complete")
-    
+
+def metadata_diff(
+        p1: "ghidra.program.model.listing.Program",
+        p2: "ghidra.program.model.listing.Program",
+    ) -> str:
+    """Generate binary metadata diff"""
+
+    import difflib
+
+    meta = p1.getDomainFile().getMetadata()
+    meta2 = p2.getDomainFile().getMetadata()
+    #ifc.openProgram(p1)
+
+    dmeta = {}
+    dmeta2 = {}
+
+    p1_text = ''    
+    for i in meta:
+        print(f"{i}: {meta[i]}")
+        p1_text += f"{i}: {meta[i]}\n"
+        dmeta[f"{i}"] = f"{meta[i]}"
+        
+    p2_text = ''    
+    for i in meta2:
+        print(f"{i}: {meta2[i]}")
+        p2_text += f"{i}: {meta2[i]}\n"
+        dmeta2[f"{i}"] = f"{meta2[i]}"
+
+    dmeta = sorted(dmeta)
+
+    dmeta2 = sorted(dmeta2)
+
+
+    diff = ''.join(list(difflib.unified_diff(p1_text.splitlines(True),p2_text.splitlines(True),lineterm='\n',fromfile=p1.getName(),tofile=p2.getName(),n=10)))
+    diff_text = "```## Metadata Diff\n"
+    diff_text += diff
+    diff_text += "```\n"
+    diff_text += "\n"
+
+    return diff_text
+
+
 
 def diff_bins(
         project: "ghidra.base.project.GhidraProject",
@@ -122,7 +163,7 @@ def diff_bins(
         new: Union[str, pathlib.Path]
 ) -> str:
     """Diff the old and new binary from the GhidraProject"""
-
+    
     from ghidra.util.task import ConsoleTaskMonitor
     import difflib
     import json
@@ -164,6 +205,8 @@ def diff_bins(
 
     p1 = project.openProgram("/", old, False)
     p2 = project.openProgram("/", new, False)
+
+    print(metadata_diff(p1,p2))
 
     print("Loaded old program: {}".format(p1.getName()))
     print("Loaded new program: {}".format(p2.getName()))
