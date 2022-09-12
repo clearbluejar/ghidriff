@@ -62,9 +62,9 @@ def setup_symbols(symbols_path: Union[str, pathlib.Path]) -> None:
     # Creates a MS-compatible symbol server directory location. pdb/symbolserver/LocalSymbolStore.java#L67
     localSymbolStore.create(symbolsDir,1)
     msSymbolServer = HttpSymbolServer(URI.create("https://msdl.microsoft.com/download/symbols/"))
-    symbolServerService = SymbolServerService(localSymbolStore, List.of(msSymbolServer));
+    symbolServerService = SymbolServerService(localSymbolStore, List.of(msSymbolServer))
 
-    PdbPlugin.saveSymbolServerServiceConfig(symbolServerService);
+    PdbPlugin.saveSymbolServerServiceConfig(symbolServerService)
 
 
 
@@ -84,8 +84,8 @@ def analyze_project(project: "ghidra.base.project.GhidraProject") -> None:
 
 
 
-        from ghidra.app.plugin.core.analysis import PdbAnalyzer;
-        from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer;
+        from ghidra.app.plugin.core.analysis import PdbAnalyzer
+        from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
         PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
         PdbAnalyzer.setAllowRemoteOption(program, True)
 
@@ -108,10 +108,8 @@ def analyze_project(project: "ghidra.base.project.GhidraProject") -> None:
                     project.save(program)
             else:
                 print("analysis already complete.. skipping!")
-        finally:            
+        finally:          
             project.close(program)
-            
-        
 
         print(f"Analysis for {domainFile} complete")
 
@@ -124,8 +122,7 @@ def metadata_diff(
     import difflib
 
     meta = p1.getDomainFile().getMetadata()
-    meta2 = p2.getDomainFile().getMetadata()
-    #ifc.openProgram(p1)
+    meta2 = p2.getDomainFile().getMetadata()    
 
     dmeta = {}
     dmeta2 = {}
@@ -432,6 +429,7 @@ def diff_bins(
                 elif sym2.getName(True) == sym.getName(True):
                     print("Name Exact  {} {}".format(sym.getName(True),sym2.getName(True)))
                     found = True
+                
                 if found:
                     matched.append(sym)
                     matched.append(sym2)
@@ -439,10 +437,10 @@ def diff_bins(
 
 
         if not found:
-            newsym = p2.getSymbolTable().getSymbol(sym.getID())
             print("Not found! {}".format(sym.getName(True)))
-            print("Maybe found? {}".format(newsym.getName(True)))
-            
+            newsym = p2.getSymbolTable().getSymbol(sym.getID())            
+            if newsym:
+                print("Maybe found? {}".format(newsym.getName(True)))            
             unmatched.append(sym)
 
 
@@ -495,10 +493,11 @@ def diff_bins(
                     matches.append([sym,sym2])
         
         if not found:
-            
-            newsym = p1.getSymbolTable().getSymbol(sym.getID())
             print("Not found! {}".format(sym.getName(True)))
-            print("Maybe found? {}".format(newsym.getName(True)))
+            newsym = p1.getSymbolTable().getSymbol(sym.getID())
+            
+            if newsym:
+                print("Maybe found? {}".format(newsym.getName(True)))
             unmatched.append(sym)
 
 
