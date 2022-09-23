@@ -19,7 +19,32 @@
                 "GHIDRA_HEADLESS":  "${config:GHIDRA_HEADLESS}",     
                 "PROJECT_NAME": "${config:PROJECT_NAME}",     
                 "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",           
-            }, 
+            },
+            "args": [                 
+                "bins/rpcrt4.dll.x64.10.0.22000.613",
+                "bins/rpcrt4.dll.x64.10.0.22000.675",
+            ]
+        },
+        {
+            "name": "Python: tcpip",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {                
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS":  "${config:GHIDRA_HEADLESS}",     
+                "PROJECT_NAME": "${config:PROJECT_NAME}",     
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",           
+            },
+            "args": [                 
+                "bins/nettcpip.dll.10.0.22000.708",
+                "bins/nettcpip.dll.10.0.22000.709",
+            ]
         }
     ]
 }

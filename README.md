@@ -1,6 +1,31 @@
 # ghidra-simple-diff-engine
 
-A Ghidra Headless (non-GUI) Python script to automate binary patch diffing.
+A "simple" Ghidra Diffing Engine Implementation
+
+## Usage
+
+```console
+usage: simple_diff.py [-h] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [-o OUTPUT_PATH] old new [new ...]
+
+A simple Ghidra binary diffing tool
+
+positional arguments:
+  old                   Path to older version of binary "/somewhere/bin.old"
+  new                   Path to new version of binary '/somewhere/bin.new'. For multiple binaries add oldest to newest
+
+options:
+  -h, --help            show this help message and exit
+
+Ghidra options:
+  -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
+                        Ghidra Project Path
+  -n PROJECT_NAME, --project-name PROJECT_NAME
+                        Ghidra Project Name
+  -s SYMBOLS_PATH, --symbols-path SYMBOLS_PATH
+                        Ghidra local symbol store directory
+  -o OUTPUT_PATH, --output-path OUTPUT_PATH
+                        Directory to output results
+```
 
 ## Features
 
