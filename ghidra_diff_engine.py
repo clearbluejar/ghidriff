@@ -45,8 +45,10 @@ class GhidraDiffEngine:
         Based on data from Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/api/main/VTMatchInfo.java
         """
 
+        key = str(sym.getID()) + sym.getProgram().getName()
+
         # TODO split this into two memos, one for each prog?
-        if sym not in self.esym_memo:
+        if key not in self.esym_memo:
 
             from ghidra.util.task import ConsoleTaskMonitor
 
@@ -73,9 +75,9 @@ class GhidraDiffEngine:
             results = self.ifc.decompileFunction(func,1,ConsoleTaskMonitor()).getDecompiledFunction()
             code = results.getC() if results else ""
             
-            self.esym_memo[sym] = { 'name': sym.getName(), 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()),'sig':str(func.getSignature(False)),'code':code}            
+            self.esym_memo[key] = { 'name': sym.getName(), 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()),'sig':str(func.getSignature(False)),'code':code}            
 
-        return self.esym_memo[sym]
+        return self.esym_memo[key]
 
     def setup_project(
             self,
@@ -214,11 +216,11 @@ class GhidraDiffEngine:
         
 
         for i in old_meta:
-            print(f"{i}: {old_meta[i]}")
+            # print(f"{i}: {old_meta[i]}")
             old_text += f"{i}: {old_meta[i]}\n"
         
         for i in new_meta:
-            print(f"{i}: {new_meta[i]}")
+            # print(f"{i}: {new_meta[i]}")
             new_text += f"{i}: {new_meta[i]}\n"            
 
         diff = ''.join(list(difflib.unified_diff(old_text.splitlines(True),new_text.splitlines(True),lineterm='\n',fromfile=old_name,tofile=new_name,n=10)))
@@ -301,7 +303,7 @@ class GhidraDiffEngine:
             diff = ''.join(list(difflib.unified_diff(old_code,new_code,lineterm='\n',fromfile=old_name,tofile=new_name)))
             added_text += self._gen_heading_diff_section_md(esym['name'],2,diff)
 
-        # Create Modified section
+        # Create Modified section        
         for modified in funcs['modified']:
             diff = None
             pretext = str(modified['diff_type'])
@@ -309,6 +311,7 @@ class GhidraDiffEngine:
             if 'code' in modified['diff_type']:
                 diff =  modified['diff']
             modified_text += self._gen_heading_diff_section_md(modified['old']['sig'],2,diff,pretext)
+            # print(f"{modified['diff_type']} {modified['old']['sig']} {modified['new']['sig']}")
 
 
         # Add short?
@@ -349,4 +352,7 @@ class GhidraDiffEngine:
             f.write(diff_text)
 
         with json_path.open('w') as f:
-            json.dump(self.pdiff,f,indent=4)
+            json.dump(pdiff,f,indent=4)
+
+    # def add_arg_group_to_parser(parser: argparse.ArgumentParser):
+    #     pass
