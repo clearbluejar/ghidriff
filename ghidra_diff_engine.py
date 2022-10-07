@@ -115,7 +115,22 @@ class GhidraDiffEngine:
 
         return        
         
+    def get_pdb(self, prog: "ghidra.program.model.listing.Program") -> "java.io.File":
+        """
+        Searches the currently configured symbol server paths for a Pdb symbol file.
+        """
+        
+        from pdb_.symbolserver import FindOption
+        from ghidra.util.task import TaskMonitor
+        from pdb_ import PdbPlugin
+        
+        find_opts = FindOption.of(FindOption.ALLOW_REMOTE)
+        #find_opts = FindOption.NO_OPTIONS
+        
+        # Ghidra/Features/PDB/src/main/java/pdb/PdbPlugin.java#L191
+        pdb =  PdbPlugin.findPdb(prog, find_opts, TaskMonitor.DUMMY)
 
+        return pdb
 
     def setup_symbols(self, symbols_path: Union[str, pathlib.Path]) -> None:
         """setup symbols to allow Ghidra to download as needed"""
@@ -139,10 +154,10 @@ class GhidraDiffEngine:
         localSymbolStore.create(symbolsDir,1)
         msSymbolServer = HttpSymbolServer(URI.create("https://msdl.microsoft.com/download/symbols/"))
         symbolServerService = SymbolServerService(localSymbolStore, List.of(msSymbolServer))
+        
+        PdbPlugin.saveSymbolServerServiceConfig(symbolServerService)        
 
-        PdbPlugin.saveSymbolServerServiceConfig(symbolServerService)
-
-    def analyze_project(self) -> None:
+    def analyze_project(self, require_symbols=True) -> None:
         """
         Analyzes all files found within the project
         """
@@ -155,8 +170,13 @@ class GhidraDiffEngine:
 
             from ghidra.app.plugin.core.analysis import PdbAnalyzer
             from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
+            
             PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
             PdbAnalyzer.setAllowRemoteOption(program, True)
+
+            if require_symbols:
+                pdb = self.get_pdb(program)
+                assert pdb is not None
 
             try:
                 flat_api = FlatProgramAPI(program)
