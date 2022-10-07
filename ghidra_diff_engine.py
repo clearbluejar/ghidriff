@@ -60,6 +60,42 @@ class GhidraDiffEngine:
                 print("not a func. {} type {}".format(sym.getName(True),sym.getSymbolType().toString()))
                 return None
 
+            instructions = []
+            mnemonics = []
+            blocks = []
+
+            code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
+            #print("\nInstruction Bulker")
+            for code in code_units:
+                #print(code)
+                instructions.append(str(code))
+
+            # reset iterator
+            code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
+
+            #print("\nMnemonic Bulker")
+            for code in code_units:
+                mnemonic = code.getMnemonicString()
+                mnemonics.append(str(mnemonic))
+                #print(mnemonic)
+            
+            from ghidra.program.model.block import BasicBlockModel
+
+            #print("\nBasic Block Bulker")
+            basic_model = BasicBlockModel(func.getProgram(),True)
+            basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(),ConsoleTaskMonitor())
+
+            for block in basic_blocks:
+
+                code_units = func.getProgram().getListing().getCodeUnits(block, True)            
+                for code in code_units:
+                    mnemonic = code.getMnemonicString()
+                    blocks.append(str(mnemonic))
+                    #print(mnemonic)
+
+            # sort
+            blocks = sorted(blocks)
+
             self.ifc.openProgram(prog)
             func = prog.functionManager.getFunctionAt(sym.getAddress())
 
@@ -71,11 +107,15 @@ class GhidraDiffEngine:
             for f in func.getCallingFunctions(ConsoleTaskMonitor()):
                 calling_funcs.append(f.toString())
 
-                
+
             results = self.ifc.decompileFunction(func,1,ConsoleTaskMonitor()).getDecompiledFunction()
             code = results.getC() if results else ""
             
-            self.esym_memo[key] = { 'name': sym.getName(), 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()),'sig':str(func.getSignature(False)),'code':code}            
+            parent_namespace = sym.getParentNamespace().toString().split('@')[0]
+
+            self.esym_memo[key] = {'name': sym.getName(), 'parent': parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
+                                   'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()), 'sig': str(func.getSignature(False)), 'code': code,
+                                   'instructions': instructions, 'mnemonics': mnemonics, 'blocks': blocks}
 
         return self.esym_memo[key]
 

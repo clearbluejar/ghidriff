@@ -318,16 +318,37 @@ class GhidraSimpleDiff(GhidraDiffEngine):
             old_code_no_sig = ematch_1['code'].split('{',1)[1].splitlines(True) if ematch_1['code'] else ''
             new_code_no_sig = ematch_2['code'].split('{',1)[1].splitlines(True) if ematch_2['code'] else ''
 
+            old_instructions = ematch_1['instructions']
+            new_instructions = ematch_2['instructions']
+
+            instructions_ratio = difflib.SequenceMatcher(None, old_instructions, new_instructions).ratio()
+
+            old_mnemonics = ematch_1['mnemonics']
+            new_mnemonics = ematch_2['mnemonics']
+
+            mnemonics_ratio = difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio()
+
+            old_blocks = ematch_1['blocks']
+            new_blocks = ematch_2['blocks']
+
+            blocks_ratio = difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio()
+
             # ignore signature for ratio
             ratio = difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio()
 
             print(ematch_1['sig'])
             print(ematch_2['sig'])	
+
+            
             diff = ''.join(list(difflib.unified_diff(old_code,new_code,lineterm='\n',fromfile=match[0].getProgram().getName(),tofile=match[1].getProgram().getName())))
             only_code_diff = ''.join(list(difflib.unified_diff(old_code_no_sig,new_code_no_sig,lineterm='\n',fromfile=match[0].getProgram().getName(),tofile=match[1].getProgram().getName()))) # ignores name changes
             
-            if len(only_code_diff) > 0:
-                diff_type.append('code')
+            if len(only_code_diff) > 0 and (mnemonics_ratio < 1.0 or blocks_ratio < 1.0):
+                
+                # TODO remove this hack to find false positives
+                # potential decompile jumptable issue ghidra/issues/2452
+                if not "Could not recover jumptable" in only_code_diff:
+                    diff_type.append('code')
 
             if ematch_1['refcount'] != ematch_2['refcount']:
                 diff_type.append('refcount')
@@ -346,6 +367,12 @@ class GhidraSimpleDiff(GhidraDiffEngine):
 
             if len(set(ematch_1['called']).difference(set(ematch_2['called']))) > 0:
                 diff_type.append('called funcs')
+
+            if ematch_1['parent'] != ematch_2['parent']:
+                diff_type.append('parent')
+
+            # if no differences were found, there should not be a match (see modified func ident)
+            assert len(diff_type) > 0
 
             modified_funcs.append({'old': ematch_1, 'new': ematch_2, 'diff':diff, 'diff_type': diff_type, 'ratio': ratio})
 
