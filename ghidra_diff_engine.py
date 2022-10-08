@@ -47,7 +47,6 @@ class GhidraDiffEngine:
 
         key = str(sym.getID()) + sym.getProgram().getName()
 
-        # TODO split this into two memos, one for each prog?
         if key not in self.esym_memo:
 
             from ghidra.util.task import ConsoleTaskMonitor
@@ -93,7 +92,7 @@ class GhidraDiffEngine:
                     blocks.append(str(mnemonic))
                     #print(mnemonic)
 
-            # sort
+            # sort - This case handles the case for compiler optimizations
             blocks = sorted(blocks)
 
             self.ifc.openProgram(prog)
@@ -218,6 +217,7 @@ class GhidraDiffEngine:
                 pdb = self.get_pdb(program)
                 assert pdb is not None
 
+            # TODO can analysis be threaded??
             try:
                 flat_api = FlatProgramAPI(program)
 

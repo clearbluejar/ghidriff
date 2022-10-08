@@ -347,7 +347,7 @@ class GhidraSimpleDiff(GhidraDiffEngine):
                 
                 # TODO remove this hack to find false positives
                 # potential decompile jumptable issue ghidra/issues/2452
-                if not "Could not recover jumptable" in only_code_diff:
+                if not "Could not recover jumptable" in diff:
                     diff_type.append('code')
 
             if ematch_1['refcount'] != ematch_2['refcount']:
