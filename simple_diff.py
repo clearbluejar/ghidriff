@@ -5,7 +5,7 @@ import pathlib
 import difflib
 from time import time
 
-from typing import List, Union, TYPE_CHECKING
+from typing import List, Union, Tuple, TYPE_CHECKING
 
 from ghidra_diff_engine import GhidraDiffEngine
 
@@ -28,8 +28,39 @@ class GhidraSimpleDiff(GhidraDiffEngine):
     ) -> dict:
         """Diff the old and new binary from the GhidraProject"""
 
-        def _get_compare_key(sym: 'ghidra.program.model.symbol.Symbol', func: 'ghidra.program.model.listing.Function') -> tuple:
+        def _get_compare_key(sym: 'ghidra.program.model.symbol.Symbol', func: 'ghidra.program.model.listing.Function') -> tuple:            
             return (sym.getParentNamespace().toString().split('@')[0],sym.getName(),sym.getReferenceCount(),func.body.numAddresses,func.parameterCount)
+
+        def _syms_match(esym, esym2) -> Tuple[bool, str]:
+            found = False
+            match_type = None
+            min_func_length = 15
+
+            if esym2['name'] == esym['name'] and esym2['paramcount']== esym['paramcount']:
+                print("Name + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
+                found = True     
+                match_type = 'Name:Param'
+            # elif esym2['address'] == esym2['address'] and esym2['paramcount']== esym['paramcount']:
+            #     print("Address + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
+            #     found = True
+            elif esym2['name'] == esym['name'] and esym2['length'] == esym['length']:
+                print("Name + length {} {}".format(sym.getName(True),sym2.getName(True)))
+                found = True
+                match_type = 'Name:Length'
+            elif esym2['address'] == esym2['address'] and esym2['length'] == esym['length'] and min([esym['length'],esym2['length']]) > min_func_length:
+                print("Address {} {}".format(sym.getName(True),sym2.getName(True)))
+                found = True
+                match_type = 'Address:Length'
+            elif esym2['paramcount']== esym['paramcount'] and esym2['length'] == esym['length']:
+                print("param count + func len {} {}".format(sym.getName(True),sym2.getName(True)))
+                found = True
+                match_type = 'Param:Length'
+            elif esym2['fullname'] == esym['fullname']:
+                print("Name Exact {} {}".format(sym.getName(True),sym2.getName(True)))
+                found = True
+                match_type = 'Fullname'
+
+            return found,match_type
 
         start = time()
 
@@ -52,40 +83,33 @@ class GhidraSimpleDiff(GhidraDiffEngine):
         new_symbols = []
 
 
-        # first pass detect added and deleted funcs
-
+        # first pass detect added and deleted symbols
         for sym in p1.getSymbolTable().getDefinedSymbols():
-            
             name = sym.getName()
             if "switch" not in name:
-                old_symbols.append(sym.getName())	
-                #old_symbols.append((sym.getName(),sym.getSymbolType().toString()))
+                old_symbols.append(name)	
 
         for sym in p2.getSymbolTable().getDefinedSymbols():
-            #new_symbols.append((sym.getName(),sym.getSymbolType().toString()))
             name = sym.getName()
             if "switch" not in name:
-                new_symbols.append(sym.getName())	
+                new_symbols.append(name)	
                 
-            
-
         olds = set(old_symbols)
         news = set(new_symbols)
         
         deleted_symbols = olds.difference(news)
-        #print("deleted symbols: {}".format(deleted_symbols))
         print("\ndeleted symbols\n")
         for sym in deleted_symbols:
             print(sym)
 
         added_symbols = news.difference(olds)
-        #print("added symbols: {}".format(added_symbols))
         print("\nadded symbols\n")
         for sym in added_symbols:
             print(sym)
 
-        # Next pass remove false positives from symbols 
-        # Build modified functions list based on (_get_compare_key)        
+        # Next pass 
+        # 1. remove false positives from symbols 
+        # 2. Build modified functions list based on (_get_compare_key)        
         for sym in p1.getSymbolTable().getDefinedSymbols():            
             key = sym.getName()
             if key in deleted_symbols:
@@ -111,8 +135,25 @@ class GhidraSimpleDiff(GhidraDiffEngine):
                     added_symbols.remove(key)
 
             if "function".lower() in sym.getSymbolType().toString().lower():
-                func = p2.functionManager.getFunctionAt(sym.getAddress())
+                func = p2.functionManager.getFunctionAt(sym.getAddress())                
                 new_funcs.append(_get_compare_key(sym, func))
+
+        # TODO check to see if getFunctions returns a more accurate set
+        # Conside replacing with Ghidra/Features/Base/src/main/java/ghidra/app/plugin/match/MatchFunctions.java#L34
+        # count = 0
+        # funcs1 = p1.functionManager.getFunctions(True)
+        # funcs1_check = []
+        # for f in funcs1:
+        #     count += 1
+        #     funcs1_check.append(_get_compare_key(f.getSymbol(),f))
+        # print(count)
+        
+        # print(len(old_funcs))
+        # check = set(funcs1_check)
+
+        # modified = sorted(check.difference(old))
+        # for sym in modified:
+        #     print(sym)                
 
         old = set(old_funcs)
         new = set(new_funcs)
@@ -159,104 +200,66 @@ class GhidraSimpleDiff(GhidraDiffEngine):
             if sym in matched:
                 continue
 
-            sym2 = p2.getSymbolTable().getSymbol(
-                sym.getName(), sym.getAddress(), sym.getParentNamespace())
+            sym2 = p2.getSymbolTable().getSymbol(sym.getName(), sym.getAddress(), sym.getParentNamespace())
             
             if sym2:
-                found = True
-                print("direct getsymbol match {} {}".format(
-                    sym.getName(True), sym2.getName(True)))
-                matched.append(sym)
-                matched.append(sym2)
-                matches.append([sym, sym2])
+                found = True                
+                match_type = 'Direct'
+                print("direct getsymbol match {} {}".format(sym.getName(True),sym2.getName(True)))
             else:
                 for sym2 in p2_modified:
-                    if found or sym2 in matched:
-                    #if found:
+                    if sym2 in matched:
                         continue
+                
                     esym = self.enhance_sym(sym)
                     esym2 = self.enhance_sym(sym2)
-                    if sym2.getName() == sym.getName() and esym2['paramcount']== esym['paramcount']:
-                        print("Name + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True
-                        #sym.getReferenceCount(),func.body.numAddresses,func.parameterCount
-                    elif sym2.getName() == sym.getName() and esym2['length'] == esym['length']:
-                        print("Name + length {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True
-                    elif sym2.getAddress() == sym.getAddress() and esym2['length'] == esym['length']:
-                        print("Address {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True
-                    elif esym2['paramcount']== esym['paramcount'] and esym2['length'] == esym['length']:
-                        print("param count + func len {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True                
-                    elif sym2.getName(True) == sym.getName(True):
-                        print("Name Exact {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True
-                    
+                    found,match_type = _syms_match(esym, esym2)
+                        
                     if found:
-                        matched.append(sym)
-                        matched.append(sym2)
-                        matches.append([sym,sym2])
                         break
 
-
-            if not found:
-                print("Not found! {}".format(sym.getName(True)))                      
-                # newsym = p2.getSymbolTable().getSymbol(sym.getID())            
-                # if newsym:
-                #     # TODO make this a match
-                #     print("Maybe found? {}".format(newsym.getName(True)))            
+            if found:
+                matched.append(sym)
+                matched.append(sym2)
+                matches.append([sym,sym2,match_type])
+            else:
+                print(f"Not found! {_get_compare_key(sym, sym.getProgram().functionManager.getFunctionAt(sym.getAddress()))}")
                 unmatched.append(sym)
 
 
         for sym in p2_modified:
             found = False
+            match_type = None
 
             if sym in matched:
-                print(f"Already matched p2 {sym}")
+
                 continue
 
             print(f"Not yet matched p2 {sym}")
             sym2 = p1.getSymbolTable().getSymbol(sym.getName(),sym.getAddress(),sym.getParentNamespace())
 
             if sym2:
-                found = True
-                print("direct getsymbol match {} {}".format(sym.getName(True),sym2.getName(True)))			
-                matched.append(sym)
-                matched.append(sym2)
-                matches.append([sym,sym2])
+                found = True                
+                match_type = 'Direct'
+                print("direct getsymbol match {} {}".format(sym.getName(True),sym2.getName(True)))
             else:
                 for sym2 in p1_modified:				
-                    if found or sym2 in matched:
+                    if sym2 in matched:
                         continue
                 
                     esym = self.enhance_sym(sym)
                     esym2 = self.enhance_sym(sym2)
-                    if sym2.getName() == sym.getName() and esym2['paramcount'] == esym['paramcount']:
-                        print("Name + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True
-                        #sym.getReferenceCount(),func.body.numAddresses,func.parameterCount
-                    elif sym2.getName() == sym.getName() and esym2['length'] == esym['length']:
-                        print("Name + length {} {}".format(sym.getName(True),sym2.getName(True)))
-                        #found = True
-                    elif sym2.getAddress() == sym.getAddress() and esym2['length'] == esym['length'] and esym2['paramcount'] == esym['paramcount']:
-                        print("Address {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True
-                    elif esym2['paramcount']== esym['paramcount'] and esym2['length'] == esym['length']:
-                        print("param count + func len {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True             
-                    elif sym2.getName(True) == sym.getName(True):
-                        print("Name Exact {} {}".format(sym.getName(True),sym2.getName(True)))
-                        found = True
+                    found,match_type = _syms_match(esym, esym2)
                         
                     if found:
-                        matched.append(sym)
-                        matched.append(sym2)
-                        matches.append([sym,sym2])
                         break
-            
-            if not found:
-                print("Not found! {}".format(sym.getName(True)))
+
+            if found:
+                matched.append(sym)
+                matched.append(sym2)
+                matches.append([sym,sym2,match_type])
+            else:
+                print(f"Not found! {_get_compare_key(sym, sym.getProgram().functionManager.getFunctionAt(sym.getAddress()))}")
                 unmatched.append(sym)
 
         print(len(p1_modified))
@@ -268,7 +271,7 @@ class GhidraSimpleDiff(GhidraDiffEngine):
 
         # Update symbols using match knowledge
         for match in matches:
-            print("{} {}".format(match[0].getName(True),match[1].getName(True)))
+            print("{} {} {}".format(match[0].getName(True),match[1].getName(True),match[2]))
         
             if match[0].getName() in deleted_symbols:
                 deleted_symbols.remove(match[0].getName())
@@ -308,9 +311,11 @@ class GhidraSimpleDiff(GhidraDiffEngine):
             diff_type = []
             diff = ''
             only_code_diff = ''
+            
 
             ematch_1 = self.enhance_sym(match[0])
             ematch_2 = self.enhance_sym(match[1])
+            match_type = match[2]
 
             old_code = ematch_1['code'].splitlines(True)
             new_code = ematch_2['code'].splitlines(True)
@@ -374,7 +379,7 @@ class GhidraSimpleDiff(GhidraDiffEngine):
             # if no differences were found, there should not be a match (see modified func ident)
             assert len(diff_type) > 0
 
-            modified_funcs.append({'old': ematch_1, 'new': ematch_2, 'diff':diff, 'diff_type': diff_type, 'ratio': ratio})
+            modified_funcs.append({'old': ematch_1, 'new': ematch_2, 'diff':diff, 'diff_type': diff_type, 'ratio': ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_type': match_type})
 
 
         

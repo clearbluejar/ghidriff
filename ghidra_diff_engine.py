@@ -112,7 +112,7 @@ class GhidraDiffEngine:
             
             parent_namespace = sym.getParentNamespace().toString().split('@')[0]
 
-            self.esym_memo[key] = {'name': sym.getName(), 'parent': parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
+            self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True),  'parent':  parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
                                    'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()), 'sig': str(func.getSignature(False)), 'code': code,
                                    'instructions': instructions, 'mnemonics': mnemonics, 'blocks': blocks}
 
@@ -367,7 +367,7 @@ class GhidraDiffEngine:
         for modified in funcs['modified']:
             diff = None
             pretext = str(modified['diff_type'])
-            pretext += str(modified['ratio'])
+            pretext += str(modified['m_ratio'])
             if 'code' in modified['diff_type']:
                 diff =  modified['diff']
             modified_text += self._gen_heading_diff_section_md(modified['old']['sig'],2,diff,pretext)
