@@ -362,16 +362,16 @@ class GhidraSimpleDiff(GhidraDiffEngine):
                 diff_type.append('length')
 
             if ematch_1['sig'] != ematch_2['sig']:
-                diff_type.append('signature')
+                diff_type.append('sig')
 
             if ematch_1['address'] != ematch_2['address']:
                 diff_type.append('address')
 
             if len(set(ematch_1['calling']).difference(set(ematch_2['calling']))) > 0:
-                diff_type.append('calling funcs')
+                diff_type.append('calling')
 
             if len(set(ematch_1['called']).difference(set(ematch_2['called']))) > 0:
-                diff_type.append('called funcs')
+                diff_type.append('called')
 
             if ematch_1['parent'] != ematch_2['parent']:
                 diff_type.append('parent')

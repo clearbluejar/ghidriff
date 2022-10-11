@@ -4,6 +4,8 @@ import difflib
 from typing import List, Tuple,Union, TYPE_CHECKING
 
 import pyhidra
+from mdutils.tools.Table import Table
+from mdutils.mdutils import MdUtils
 
 if TYPE_CHECKING:
     import ghidra
@@ -217,7 +219,7 @@ class GhidraDiffEngine:
                 pdb = self.get_pdb(program)
                 assert pdb is not None
 
-            # TODO can analysis be threaded??
+            # TODO can analysis be multithreaded??
             try:
                 flat_api = FlatProgramAPI(program)
 
@@ -305,21 +307,44 @@ class GhidraDiffEngine:
             return False
         return True
 
-    def _gen_heading_diff_section_md(self,heading: str, level: int, diff: str = None, prefix: str = None,) -> str:
+    def _wrap_with_diff(self,diff: str) -> str:
 
-        text = ''        
-        if heading:
-            text += f"{'#'*level} {heading}\n"
-        if prefix:
-            text += prefix
-            text += "\n"
-        if diff:
-            text += "```diff\n"
-            text += diff
-            text += "```\n"
-            text += "\n"
+        text = ''
+        text += "```diff\n"
+        text += diff
+        text += "```\n"
+        text += "\n"
 
         return text
+
+    def gen_esym_table_diff(self, old,new,modified) -> str:
+        diff_table = ''
+
+        table_list = []
+        table_list.extend(['Key', old, new])
+        # table_list.extend(['Key', 'Diff'])
+        column_len = len(table_list)
+
+        skip_keys = ['code', 'instructions', 'mnemonics', 'blocks', 'parent']
+        count = 1
+        for key in modified['old']:
+            if key in skip_keys:
+                continue
+            if key in modified['diff_type']:
+                diff_key = f"`{key}`"
+                table_list.extend([diff_key, modified['old'][key], modified['new'][key]])
+            else:
+                table_list.extend([key, modified['old'][key], modified['new'][key]])
+            
+            # diff_text = '```diff'
+            # diff_text += ''.join(list(difflib.unified_diff(str(modified['old'][key]).splitlines(True),str(modified['new'][key]).splitlines(True),lineterm='\n',fromfile=old,tofile=new)))
+            # diff_text += '```'
+            # table_list.extend([key, diff_text])
+            count += 1
+
+        diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
+
+        return diff_table
 
     def gen_diff_md(
         self,
@@ -328,65 +353,59 @@ class GhidraDiffEngine:
         """
         Generate Markdown Diff from pdiff match results
         """
-
-        diff_text = ''
-        deleted_text = ''
-        added_text = ''
-        modified_text = ''
         
         if isinstance(pdiff,str):
             pdiff = json.loads(pdiff)
         
-
-            
         funcs = pdiff['functions']
 
         old_name = pdiff['old_meta']['Program Name']
         new_name = pdiff['new_meta']['Program Name']
 
+        md = MdUtils('example', f"{old_name}-{new_name} Diff")
+
         # Create Metadata section
-        meta_text = self._gen_heading_diff_section_md(None,0,self.gen_metadata_diff(pdiff))
+        md.new_header(1,'Metadata')
+        md.new_paragraph(self._wrap_with_diff(self.gen_metadata_diff(pdiff)))
+
 
         # Create Deleted section
+        md.new_header(1,'Deleted')
+
         for esym in funcs['deleted']:
             old_code = esym['code'].splitlines(True)
             new_code = ''.splitlines(True)
-
-            diff = ''.join(list(difflib.unified_diff(old_code,new_code,lineterm='\n',fromfile=old_name,tofile=new_name)))
-            deleted_text += self._gen_heading_diff_section_md(esym['name'],2,diff)
-
+            diff = ''.join(list(difflib.unified_diff(old_code, new_code, lineterm='\n', fromfile=old_name, tofile=new_name)))
+            md.new_header(2, esym['name'])
+            md.new_paragraph(self._wrap_with_diff(diff))
+            
+        
         # Create Added section
+        md.new_header(1,'Added')
         for esym in funcs['added']:            
             old_code = ''.splitlines(True)		
-            new_code = esym['code'].splitlines(True)		
-
+            new_code = esym['code'].splitlines(True)
             diff = ''.join(list(difflib.unified_diff(old_code,new_code,lineterm='\n',fromfile=old_name,tofile=new_name)))
-            added_text += self._gen_heading_diff_section_md(esym['name'],2,diff)
+            md.new_header(2, esym['name'])
+            md.new_paragraph(self._wrap_with_diff(diff))
 
-        # Create Modified section        
+        # Create Modified section    
+        md.new_header(1,'Modified')    
         for modified in funcs['modified']:
             diff = None
-            pretext = str(modified['diff_type'])
-            pretext += str(modified['m_ratio'])
             if 'code' in modified['diff_type']:
+                md.new_header(2, modified['old']['name'])
                 diff =  modified['diff']
-            modified_text += self._gen_heading_diff_section_md(modified['old']['sig'],2,diff,pretext)
-            # print(f"{modified['diff_type']} {modified['old']['sig']} {modified['new']['sig']}")
-
-
-        # Add short?
-        # modified_funcs_short.append({'name': [ematch_1['name'], ematch_2['name']], 'length': [ematch_1['length'], ematch_2['length']], 'ratio': ratio, 'diff_type': diff_type })
-
-        diff_text += "# Metadata\n"
-        diff_text += meta_text
-        diff_text += "# Deleted\n"
-        diff_text += deleted_text
-        diff_text += "# Added\n"
-        diff_text += added_text
-        diff_text += "# Modified\n"
-        diff_text += modified_text
-
-        return diff_text
+            else:
+                md.new_header(2, modified['old']['name'],add_table_of_contents='n')
+            
+            md.new_paragraph(self.gen_esym_table_diff(old_name,new_name,modified))
+            if diff:
+                md.new_paragraph(self._wrap_with_diff(modified['diff']))            
+           
+        md.new_table_of_contents('TOC',3)
+        
+        return md.get_md_text()
 
     def dump_pdiff_to_dir(
         self,
