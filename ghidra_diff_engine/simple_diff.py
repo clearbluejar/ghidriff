@@ -7,7 +7,7 @@ from time import time
 
 from typing import List, Union, Tuple, TYPE_CHECKING
 
-from ghidra_diff_engine import GhidraDiffEngine
+from .ghidra_diff_engine import GhidraDiffEngine
 
 if TYPE_CHECKING:
     import ghidra
@@ -411,16 +411,7 @@ if __name__ == "__main__":
     parser.add_argument('old', nargs=1, help='Path to older version of binary "/somewhere/bin.old"')
     parser.add_argument('new', action='append', nargs='+', help="Path to new version of binary '/somewhere/bin.new'. For multiple binaries add oldest to newest")
 
-
-    group = parser.add_argument_group('Ghidra options')
-    group.add_argument('-p', '--project-location', dest="project_location",
-                    help='Ghidra Project Path', default='.ghidra_projects')
-    group.add_argument('-n', '--project-name', dest="project_name",
-                    help='Ghidra Project Name', default='diff_project')
-    group.add_argument('-s', '--symbols-path', dest="symbols_path",
-                    help='Ghidra local symbol store directory', default='.symbols')
-    group.add_argument('-o', '--output-path', dest="output_path",
-                    help='Directory to output results', default='.diffs')   
+    GhidraDiffEngine.add_default_args_to_parser(parser)
 
     args = parser.parse_args()
 

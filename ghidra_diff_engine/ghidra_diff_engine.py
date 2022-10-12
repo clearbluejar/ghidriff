@@ -1,6 +1,7 @@
 import json
 import pathlib
 import difflib
+import argparse
 from typing import List, Tuple,Union, TYPE_CHECKING
 
 import pyhidra
@@ -41,6 +42,22 @@ class GhidraDiffEngine:
         # self.symbols = {}
         self.pdiff = {}
     
+    @staticmethod
+    def add_ghidra_args_to_parser(parser: argparse.ArgumentParser) -> None:
+        """
+        Add required Ghidra args to a parser
+        """
+
+        group = parser.add_argument_group('Ghidra options')
+        group.add_argument('-p', '--project-location', dest="project_location",
+                        help='Ghidra Project Path', default='.ghidra_projects')
+        group.add_argument('-n', '--project-name', dest="project_name",
+                        help='Ghidra Project Name', default='diff_project')
+        group.add_argument('-s', '--symbols-path', dest="symbols_path",
+                        help='Ghidra local symbol store directory', default='.symbols')
+        group.add_argument('-o', '--output-path', dest="output_path",
+                        help='Directory to output results', default='.diffs')                
+
     def enhance_sym( self, sym: 'ghidra.program.model.symbol.Symbol') -> dict:
         """
         Standardize enhanced symbol. Use esym_memo to speed things up. 
