@@ -18,8 +18,6 @@ class GhidraSimpleDiff(GhidraDiffEngine):
     An Ghidra Diff implementation using simple comparison mechanisms
     """
 
-    def __init__(self,verbose=False) -> None:
-        super().__init__(verbose)
 
     def diff_bins(
             self,            
