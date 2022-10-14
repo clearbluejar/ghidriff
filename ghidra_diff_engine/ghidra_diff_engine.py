@@ -7,6 +7,8 @@ from typing import List, Tuple,Union, TYPE_CHECKING
 import pyhidra
 from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
+import asyncio
+import multiprocessing
 
 if TYPE_CHECKING:
     import ghidra
@@ -17,10 +19,20 @@ class GhidraDiffEngine:
     Base Ghidra Diff Engine
     """
 
-    def __init__(self,verbose: bool=False,output_dir: str='.diffs') -> None:
+    def __init__(self,verbose: bool=False,output_dir: str='.diffs', MAX_MEM=None, threaded=False, max_workers=multiprocessing.cpu_count()) -> None:
 
         # Init Pyhidra
-        pyhidra.start(verbose)        
+        if not MAX_MEM:
+            pyhidra.start(verbose)     
+        else:
+            # Set Ghidra Max Memory
+            launcher = pyhidra.HeadlessPyhidraLauncher(verbose)
+            MAX_MEM = "10G"
+            launcher.add_vmargs(f"-Xmx{MAX_MEM}")
+            launcher.start()
+
+        self.threaded: bool = threaded
+        self.max_workers = max_workers
 
         # Setup decompiler interface
         from ghidra.app.decompiler import DecompInterface        
@@ -164,7 +176,7 @@ class GhidraDiffEngine:
             program_path = pathlib.Path(program_path)
             # Import binary if necessary they don't already exist
             if not project.getRootFolder().getFile(program_path.name):
-                print(program_path)
+                print(f'\nImporting {program_path}')
                 program = project.importProgram(program_path)                        
                 project.saveAs(program, "/", program.getName(), True)
                 project.close(program)
@@ -215,52 +227,73 @@ class GhidraDiffEngine:
         
         PdbPlugin.saveSymbolServerServiceConfig(symbolServerService)        
 
+    def analyze_program(self, domainFile, require_symbols):
+        
+        from ghidra.program.flatapi import FlatProgramAPI
+
+        print(f"\n Analyzing: {domainFile}")
+
+        program = self.project.openProgram("/", domainFile.getName(), False)
+
+        from ghidra.app.plugin.core.analysis import PdbAnalyzer
+        from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
+        
+        PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
+        PdbAnalyzer.setAllowRemoteOption(program, True)
+
+        if require_symbols:
+            pdb = self.get_pdb(program)
+            assert pdb is not None
+
+        try:
+            flat_api = FlatProgramAPI(program)
+
+            from ghidra.program.util import GhidraProgramUtilities
+            from ghidra.app.script import GhidraScriptUtil
+            if GhidraProgramUtilities.shouldAskToAnalyze(program):
+                GhidraScriptUtil.acquireBundleHostReference()
+                try:                        
+                    flat_api.analyzeAll(program)                        
+                    GhidraProgramUtilities.setAnalyzedFlag(program, True)                        
+                finally:
+                    GhidraScriptUtil.releaseBundleHostReference()
+                    self.project.save(program)
+            else:
+                print("analysis already complete.. skipping!")
+        finally:          
+            self.project.close(program)
+
+        print(f"Analysis for {domainFile} complete")
+
+    async def run_threaded_analysis(self, require_symbols):
+
+        from concurrent.futures.thread import ThreadPoolExecutor
+        import multiprocessing
+
+        
+        loop = asyncio.get_running_loop()
+        executor = ThreadPoolExecutor(max_workers=self.max_workers)
+        futures = [loop.run_in_executor(executor,self.analyze_program,*[domainFile,require_symbols]) for domainFile in self.project.getRootFolder().getFiles()]
+
+        completed, pending = await asyncio.wait(futures,return_when=asyncio.ALL_COMPLETED)
+
     def analyze_project(self, require_symbols=True) -> None:
         """
         Analyzes all files found within the project
         """
-        from ghidra.program.flatapi import FlatProgramAPI
-
-        for domainFile in self.project.getRootFolder().getFiles():
-            print(domainFile)    
-
-            program = self.project.openProgram("/", domainFile.getName(), False)
-
-            from ghidra.app.plugin.core.analysis import PdbAnalyzer
-            from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
-            
-            PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
-            PdbAnalyzer.setAllowRemoteOption(program, True)
-
-            if require_symbols:
-                pdb = self.get_pdb(program)
-                assert pdb is not None
-
-            # TODO can analysis be multithreaded??
+        
+        if self.threaded:
+            event_loop = asyncio.get_event_loop()
             try:
-                flat_api = FlatProgramAPI(program)
-
-                from ghidra.program.util import GhidraProgramUtilities
-                from ghidra.app.script import GhidraScriptUtil
-                if GhidraProgramUtilities.shouldAskToAnalyze(program):
-                    GhidraScriptUtil.acquireBundleHostReference()
-                    try:
-                        print(GhidraProgramUtilities.shouldAskToAnalyze(program))
-                        flat_api.analyzeAll(program)
-                        print(GhidraProgramUtilities.shouldAskToAnalyze(program))
-                        GhidraProgramUtilities.setAnalyzedFlag(program, True)
-                        print(GhidraProgramUtilities.shouldAskToAnalyze(program))
-                    finally:
-                        GhidraScriptUtil.releaseBundleHostReference()
-                        self.project.save(program)
-                else:
-                    print("analysis already complete.. skipping!")
-            finally:          
-                self.project.close(program)
-
-            print(f"Analysis for {domainFile} complete")
-
-
+                event_loop.run_until_complete(
+                    self.run_threaded_analysis(require_symbols)
+                )
+            finally:
+                event_loop.close()
+        else:
+            for domainFile in self.project.getRootFolder().getFiles():
+                self.analyze_program(domainFile,require_symbols)
+            
     def get_metadata(
         self,
         prog: "ghidra.program.model.listing.Program"
