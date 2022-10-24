@@ -313,6 +313,21 @@ class GhidraSimpleDiff(GhidraDiffEngine):
 
             ematch_1 = self.enhance_sym(match[0])
             ematch_2 = self.enhance_sym(match[1])
+            if ematch_1 is None or ematch_2 is None:
+                print("Symbol enhancing failed. One side is dead here.")
+                match_0_name = match[0].getName(True)
+                match_0_type = match[0].getSymbolType().toString()
+                match_1_name = match[1].getName(True)
+                match_1_type = match[1].getSymbolType().toString()
+                print("match[0] is {} type {}".format(match_0_name, match_0_type))
+                print("match[0] is {} type {}".format(match_1_name, match_1_type))
+                if (match_0_name == match_1_name and
+                   (match_0_type is "Function" or "Label") and
+                   (match_1_type is "Function" or "Label")):
+                    continue
+                else:
+                    assert False
+
             match_type = match[2]
 
             old_code = ematch_1['code'].splitlines(True)
