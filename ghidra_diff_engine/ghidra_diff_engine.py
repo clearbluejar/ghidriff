@@ -243,6 +243,8 @@ class GhidraDiffEngine:
 
         if require_symbols:
             pdb = self.get_pdb(program)
+            if pdb is None:
+                print(f"!!! Failed to download symbols for {domainFile}")
             assert pdb is not None
 
         try:
