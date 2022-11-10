@@ -26,6 +26,8 @@ class GhidraSimpleDiff(GhidraDiffEngine):
     ) -> dict:
         """Diff the old and new binary from the GhidraProject"""
 
+        from ghidra.program.util import DiffUtility
+
         def _get_compare_key(sym: 'ghidra.program.model.symbol.Symbol', func: 'ghidra.program.model.listing.Function') -> tuple:            
             return (sym.getParentNamespace().toString().split('@')[0],sym.getName(),sym.getReferenceCount(),func.body.numAddresses,func.parameterCount)
 
@@ -104,17 +106,18 @@ class GhidraSimpleDiff(GhidraDiffEngine):
         print("\nadded symbols\n")
         for sym in added_symbols:
             print(sym)
-
+        
         # Next pass 
         # 1. remove false positives from symbols 
         # 2. Build modified functions list based on (_get_compare_key)        
         for sym in p1.getSymbolTable().getDefinedSymbols():            
             key = sym.getName()
             if key in deleted_symbols:
-                print("{} {}".format(sym.getName(),sym.getAddress()))
-                sym2 = p2.getSymbolTable().getSymbol(sym.getName(),sym.getAddress(),sym.getParentNamespace())
+                print("{} {} {}".format(sym.getName(),sym.getAddress(), sym.getParentNamespace()))
+                sym2 = DiffUtility.getSymbol(sym,p2)                
+                
                 if sym2:
-                    print("Removing {} from deleted, found match {} {} in p2".format(sym,sym2))
+                    print(f"Removing {sym} from deleted, found match {sym2} in p2")
                     deleted_symbols.remove(key)
                 
             if "function".lower() in sym.getSymbolType().toString().lower():
@@ -125,11 +128,10 @@ class GhidraSimpleDiff(GhidraDiffEngine):
             key = sym.getName()        
             if key in added_symbols:
                 print("{} {}".format(sym.getName(), sym.getAddress()))
-                sym2 = p1.getSymbolTable().getSymbol(
-                    sym.getName(), sym.getAddress(), sym.getParentNamespace())
+                sym2 = DiffUtility.getSymbol(sym,p1)
+                
                 if sym2:
-                    print(
-                        "Removing {} from deleted, found match {} in p1".format(sym, sym2))
+                    print(f"Removing {sym} from deleted, found match {sym2} in p1")
                     added_symbols.remove(key)
 
             if "function".lower() in sym.getSymbolType().toString().lower():
@@ -197,9 +199,9 @@ class GhidraSimpleDiff(GhidraDiffEngine):
 
             if sym in matched:
                 continue
-
-            sym2 = p2.getSymbolTable().getSymbol(sym.getName(), sym.getAddress(), sym.getParentNamespace())
             
+            sym2 = DiffUtility.getSymbol(sym,p2)
+
             if sym2:
                 found = True                
                 match_type = 'Direct'
@@ -234,8 +236,8 @@ class GhidraSimpleDiff(GhidraDiffEngine):
                 continue
 
             print(f"Not yet matched p2 {sym}")
-            sym2 = p1.getSymbolTable().getSymbol(sym.getName(),sym.getAddress(),sym.getParentNamespace())
-
+            sym2 = DiffUtility.getSymbol(sym,p1)
+            
             if sym2:
                 found = True                
                 match_type = 'Direct'
@@ -409,7 +411,7 @@ if __name__ == "__main__":
     parser.add_argument('old', nargs=1, help='Path to older version of binary "/somewhere/bin.old"')
     parser.add_argument('new', action='append', nargs='+', help="Path to new version of binary '/somewhere/bin.new'. For multiple binaries add oldest to newest")
 
-    GhidraDiffEngine.add_default_args_to_parser(parser)
+    GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
     args = parser.parse_args()
 
