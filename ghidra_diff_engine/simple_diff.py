@@ -398,6 +398,9 @@ class GhidraSimpleDiff(GhidraDiffEngine):
         self.pdiff['old_meta'] = self.get_metadata(p1)
         self.pdiff['new_meta'] = self.get_metadata(p2)
 
+        # analysis options used
+        self.pdiff['analysis_options'] = self.get_analysis_options(p1)
+
         self.project.close(p1)
         self.project.close(p2)
 

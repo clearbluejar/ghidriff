@@ -241,6 +241,16 @@ class GhidraDiffEngine:
         PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
         PdbAnalyzer.setAllowRemoteOption(program, True)
 
+        # handle large binaries more efficiently see ghidra/issues/4573 (turn off feature Shared Return Calls )
+        if program and program.getFunctionManager().functionCount > 1000:
+            self.set_analysis_option_bool(program,'Shared Return Calls.Assume Contiguous Functions Only', False)
+
+        # Print analysis options
+        options = self.get_analysis_options(program)
+        print("\nAnalysis Options:")
+        for option in options:
+            print(f"\t{option} : {options[option]}")
+
         if require_symbols:
             pdb = self.get_pdb(program)
             assert pdb is not None
@@ -251,16 +261,16 @@ class GhidraDiffEngine:
             from ghidra.program.util import GhidraProgramUtilities
             from ghidra.app.script import GhidraScriptUtil
             if GhidraProgramUtilities.shouldAskToAnalyze(program):
-                GhidraScriptUtil.acquireBundleHostReference()
+                GhidraScriptUtil.acquireBundleHostReference()                
                 try:                        
                     flat_api.analyzeAll(program)                        
-                    GhidraProgramUtilities.setAnalyzedFlag(program, True)                        
+                    GhidraProgramUtilities.setAnalyzedFlag(program, True)                                           
                 finally:
                     GhidraScriptUtil.releaseBundleHostReference()
                     self.project.save(program)
             else:
                 print("analysis already complete.. skipping!")
-        finally:          
+        finally:
             self.project.close(program)
 
         print(f"Analysis for {domainFile} complete")
@@ -302,11 +312,46 @@ class GhidraDiffEngine:
         Generate dict from program metadata
         """
 
-        meta = prog.getMetadata()
+        meta = prog.getMetadata()       
 
-        dmeta = dict(meta)
+        return dict(meta)
 
-        return dmeta
+    def get_analysis_options(
+        self,
+        prog: "ghidra.program.model.listing.Program"
+    ) -> dict:
+        """
+        Generate dict from program analysis options
+        Inspired by: Ghidra/Features/Base/src/main/java/ghidra/app/script/GhidraScript.java#L1272
+        """
+
+        from ghidra.program.model.listing import Program        
+        
+        prog_options = prog.getOptions(Program.ANALYSIS_PROPERTIES)
+        options = {}
+        
+        for propName in prog_options.getOptionNames():            
+            options[propName] = prog_options.getValueAsString(propName)
+            
+        return options
+
+    def set_analysis_option_bool(
+        self,
+        prog: "ghidra.program.model.listing.Program",
+        option_name: str,
+        value: bool
+    ) -> None:
+        """
+        Set boolean program analysis options
+        Inspired by: Ghidra/Features/Base/src/main/java/ghidra/app/script/GhidraScript.java#L1272
+        """
+
+        from ghidra.program.model.listing import Program        
+        
+        prog_options = prog.getOptions(Program.ANALYSIS_PROPERTIES)
+        
+        prog_options.setBoolean(option_name,value)           
+        
 
     def gen_metadata_diff(
             self,
@@ -417,7 +462,6 @@ class GhidraDiffEngine:
         # Create Metadata section
         md.new_header(1,'Metadata')
         md.new_paragraph(self._wrap_with_diff(self.gen_metadata_diff(pdiff)))
-
 
         # Create Deleted section
         md.new_header(1,'Deleted')
