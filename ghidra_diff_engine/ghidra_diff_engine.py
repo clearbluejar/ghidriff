@@ -2,6 +2,8 @@ import json
 import pathlib
 import difflib
 import argparse
+import re
+from textwrap import dedent
 from typing import List, Tuple,Union, TYPE_CHECKING
 
 import pyhidra
@@ -66,14 +68,12 @@ class GhidraDiffEngine:
         group.add_argument('-n', '--project-name', dest="project_name",
                         help='Ghidra Project Name', default='diff_project')
         group.add_argument('-s', '--symbols-path', dest="symbols_path",
-                        help='Ghidra local symbol store directory', default='.symbols')
-        group.add_argument('-o', '--output-path', dest="output_path",
-                        help='Directory to output results', default='.diffs')                
+                        help='Ghidra local symbol store directory', default='.symbols')          
 
     def enhance_sym( self, sym: 'ghidra.program.model.symbol.Symbol') -> dict:
         """
-        Standardize enhanced symbol. Use esym_memo to speed things up. 
-        Based on data from Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/api/main/VTMatchInfo.java
+        Standardize enhanced symbol. Use esym_memo to speed things up.
+        Inspired by Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/api/main/VTMatchInfo.java
         """
 
         key = str(sym.getID()) + sym.getProgram().getName()
@@ -142,6 +142,10 @@ class GhidraDiffEngine:
             code = results.getC() if results else ""
             
             parent_namespace = sym.getParentNamespace().toString().split('@')[0]
+
+
+            called_funcs = sorted(called_funcs)
+            calling_funcs = sorted(calling_funcs)
 
             self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True),  'parent':  parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
                                    'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()), 'sig': str(func.getSignature(False)), 'code': code,
@@ -235,33 +239,36 @@ class GhidraDiffEngine:
 
         program = self.project.openProgram("/", domainFile.getName(), False)
 
-        from ghidra.app.plugin.core.analysis import PdbAnalyzer
-        from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
-        
-        PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
-        PdbAnalyzer.setAllowRemoteOption(program, True)
-
-        # handle large binaries more efficiently see ghidra/issues/4573 (turn off feature Shared Return Calls )
-        if program and program.getFunctionManager().functionCount > 1000:
-            self.set_analysis_option_bool(program,'Shared Return Calls.Assume Contiguous Functions Only', False)
-
-        # Print analysis options
-        options = self.get_analysis_options(program)
-        print("\nAnalysis Options:")
-        for option in options:
-            print(f"\t{option} : {options[option]}")
-
-        if require_symbols:
-            pdb = self.get_pdb(program)
-            assert pdb is not None
-
         try:
             flat_api = FlatProgramAPI(program)
-
+            
             from ghidra.program.util import GhidraProgramUtilities
             from ghidra.app.script import GhidraScriptUtil
+
             if GhidraProgramUtilities.shouldAskToAnalyze(program):
-                GhidraScriptUtil.acquireBundleHostReference()                
+                GhidraScriptUtil.acquireBundleHostReference()
+
+                from ghidra.app.plugin.core.analysis import PdbAnalyzer
+                from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
+                
+                PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
+                PdbAnalyzer.setAllowRemoteOption(program, True)
+
+                if require_symbols:
+                    pdb = self.get_pdb(program)
+                    assert pdb is not None
+
+                # handle large binaries more efficiently 
+                # see ghidra/issues/4573 (turn off feature Shared Return Calls )
+                if program and program.getFunctionManager().functionCount > 1000:
+                    self.set_analysis_option_bool(program,'Shared Return Calls.Assume Contiguous Functions Only', False)
+
+                # Print analysis options
+                options = self.get_analysis_options(program)
+                print("\nAnalysis Options:")
+                for option in options:
+                    print(f"\t{option} : {options[option]}")
+
                 try:                        
                     flat_api.analyzeAll(program)                        
                     GhidraProgramUtilities.setAnalyzedFlag(program, True)                                           
@@ -269,7 +276,7 @@ class GhidraDiffEngine:
                     GhidraScriptUtil.releaseBundleHostReference()
                     self.project.save(program)
             else:
-                print("analysis already complete.. skipping!")
+                print(f"analysis already complete.. skipping {domainFile}!")
         finally:
             self.project.close(program)
 
@@ -278,8 +285,6 @@ class GhidraDiffEngine:
     async def run_threaded_analysis(self, require_symbols):
 
         from concurrent.futures.thread import ThreadPoolExecutor
-        import multiprocessing
-
         
         loop = asyncio.get_running_loop()
         executor = ThreadPoolExecutor(max_workers=self.max_workers)
@@ -412,12 +417,40 @@ class GhidraDiffEngine:
 
         return text
 
-    def gen_esym_table_diff(self, old,new,modified) -> str:
+    def _wrap_with_details(self,diff: str, summary: str = None) -> str:
+
+        text = ''
+        text += "<details>\n"
+        if summary:
+            text += f"<summary>{summary}</summary>"
+        text += diff
+        text += "\n</details>\n"       
+
+        return text
+
+    def gen_esym_table(self,old_name,esym) -> str:        
+
+        table_list = []
+        table_list.extend(['Key', old_name])        
+        column_len = len(table_list)
+
+        skip_keys = ['code', 'instructions', 'mnemonics', 'blocks', 'parent']
+        count = 1
+        for key in esym:
+            if key in skip_keys:
+                continue
+            table_list.extend([key, esym[key]])
+            count += 1
+
+        diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
+
+        return diff_table
+
+    def gen_esym_table_diff(self, old_name, new_name, modified) -> str:
         diff_table = ''
 
         table_list = []
-        table_list.extend(['Key', old, new])
-        # table_list.extend(['Key', 'Diff'])
+        table_list.extend(['Key', old_name, new_name])        
         column_len = len(table_list)
 
         skip_keys = ['code', 'instructions', 'mnemonics', 'blocks', 'parent']
@@ -427,28 +460,134 @@ class GhidraDiffEngine:
                 continue
             if key in modified['diff_type']:
                 diff_key = f"`{key}`"
-                table_list.extend([diff_key, modified['old'][key], modified['new'][key]])
             else:
-                table_list.extend([key, modified['old'][key], modified['new'][key]])
-            
-            # diff_text = '```diff'
-            # diff_text += ''.join(list(difflib.unified_diff(str(modified['old'][key]).splitlines(True),str(modified['new'][key]).splitlines(True),lineterm='\n',fromfile=old,tofile=new)))
-            # diff_text += '```'
-            # table_list.extend([key, diff_text])
+                diff_key = f"{key}"
+
+            table_list.extend([diff_key, modified['old'][key], modified['new'][key]])
+            count += 1
+
+        diff_table = Table().create_table(columns=column_len, rows=count,
+                                          text=table_list, text_align='center')
+
+        return diff_table
+
+    def gen_esym_table_diff_meta(self,old_name,new_name,modified) -> str:
+        diff_table = ''
+
+        table_list = []
+        table_list.extend(['Key', f"{old_name} - {new_name}"])        
+        column_len = len(table_list)
+
+        keys = ['diff_type', 'ratio', 'i_ratio','m_ratio', 'b_ratio', 'match_type']
+        count = 1
+        for key in keys:                        
+            table_list.extend([key, modified[key]])
             count += 1
 
         diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
 
-        return diff_table
+        return diff_table        
+
+    def gen_code_table_diff_html(self, old_code, new_code, old_name, new_name) -> str:
+        """
+        Generates side by side diff in HTML
+        """
+
+        if isinstance(old_code,str):
+            old_code = old_code.splitlines(True)
+        if isinstance(new_code,str):
+            new_code = new_code.splitlines(True)
+
+        diff_html = ''.join(list(difflib.HtmlDiff(tabsize=4).make_table(old_code,new_code,fromdesc=old_name, todesc=new_name)))
+        diff_html = dedent(diff_html) + '\n'
+
+        return diff_html
+
+    def gen_table_from_dict(self, headers: list , items: dict):
+
+        table = ''
+
+        table_list = []
+        table_list.extend(headers)
+        column_len = len(table_list)
+
+        count = 1
+        for key,values in items.items():
+            table_list.extend([key, values])
+            count += 1
+
+        table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
+
+        return table
+
+    def gen_mermaid_diff_flowchart(self, pdiff: dict) -> str:
+
+        diff_flow = '''
+```mermaid
+
+flowchart LR;
+linkStyle default interpolate basis
+
+{modified_links}
+
+subgraph {new_bin}
+
+    {new_modified}
+		
+	subgraph Added
+		{added}
+	end
+
+end
+
+subgraph {old_bin}
+
+    {old_modified}
+	subgraph Deleted
+		{deleted}
+	end
+end
+
+```'''        
+
+        added = []
+        deleted = []
+        modified_links = []
+        old_modified = []
+        new_modified = []
+
+        old_bin = pdiff['old_meta']['Program Name']
+        new_bin = pdiff['new_meta']['Program Name']
+        
+        for func in pdiff['functions']['added']:
+            added.append(self._clean_md_header(func['name']))
+
+        for func in pdiff['functions']['deleted']:
+            deleted.append(self._clean_md_header(func['name']))
+
+        for modified in pdiff['functions']['modified']:
+
+            if 'code' in modified['diff_type']:
+                old_modified.append(self._clean_md_header(f"{modified['old']['name']}-{modified['old']['paramcount']}-old"))
+                new_modified.append(self._clean_md_header(f"{modified['new']['name']}-{modified['old']['paramcount']}-new"))
+                modified_links.append(f"{self._clean_md_header(modified['old']['name'])}-{modified['old']['paramcount']}-old<--BBlocks Match {int(modified['b_ratio']*100)}%-->{self._clean_md_header(modified['new']['name'])}-{modified['old']['paramcount']}-new")
+
+        
+
+        return diff_flow.format(old_bin=old_bin, new_bin=new_bin, added='\n'.join(added), deleted='\n'.join(deleted), modified_links='\n'.join(modified_links), old_modified='\n'.join(old_modified), new_modified='\n'.join(new_modified))
+
+    def _clean_md_header(self,text):
+        return re.sub('[^A-Za-z0-9_\-]', '', text.replace(' ', '-'))
 
     def gen_diff_md(
         self,
         pdiff: Union[str,dict],
+        side_by_side: bool = False,  
         ) -> str:
         """
         Generate Markdown Diff from pdiff match results
         """
-        
+
         if isinstance(pdiff,str):
             pdiff = json.loads(pdiff)
         
@@ -459,9 +598,25 @@ class GhidraDiffEngine:
 
         md = MdUtils('example', f"{old_name}-{new_name} Diff")
 
+        md.new_header(1,'Chart Diff')
+        md.new_paragraph(self.gen_mermaid_diff_flowchart(pdiff))
+
         # Create Metadata section
         md.new_header(1,'Metadata')
+
+        md.new_header(2,'Ghidra Diff Engine')
         md.new_paragraph(self._wrap_with_diff(self.gen_metadata_diff(pdiff)))
+
+        md.new_header(3,'Analysis Options', add_table_of_contents='n')
+        md.new_paragraph(self._wrap_with_details(self.gen_table_from_dict(['Analysis Option', 'Value'],pdiff['analysis_options'])))
+
+        md.new_header(2,'Binary Metadata Diff')
+        md.new_paragraph(self._wrap_with_diff(self.gen_metadata_diff(pdiff)))
+
+        md.new_header(2,'Diff Stats')
+        md.new_paragraph(self.gen_table_from_dict(['Stat', 'Value'],pdiff['stats']))
+
+
 
         # Create Deleted section
         md.new_header(1,'Deleted')
@@ -471,8 +626,9 @@ class GhidraDiffEngine:
             new_code = ''.splitlines(True)
             diff = ''.join(list(difflib.unified_diff(old_code, new_code, lineterm='\n', fromfile=old_name, tofile=new_name)))
             md.new_header(2, esym['name'])
-            md.new_paragraph(self._wrap_with_diff(diff))
-            
+            md.new_header(3, "Function Meta",add_table_of_contents='n')
+            md.new_paragraph(self.gen_esym_table(old_name,esym))
+            md.new_paragraph(self._wrap_with_diff(diff))            
         
         # Create Added section
         md.new_header(1,'Added')
@@ -481,21 +637,70 @@ class GhidraDiffEngine:
             new_code = esym['code'].splitlines(True)
             diff = ''.join(list(difflib.unified_diff(old_code,new_code,lineterm='\n',fromfile=old_name,tofile=new_name)))
             md.new_header(2, esym['name'])
+            md.new_header(3, "Function Meta",add_table_of_contents='n')
+            md.new_paragraph(self.gen_esym_table(old_name,esym))
             md.new_paragraph(self._wrap_with_diff(diff))
 
-        # Create Modified section    
-        md.new_header(1,'Modified')    
+        # Create Modified section
+        md.new_header(1,'Modified')
+        md.new_paragraph(f"*Modified functions contain code changes*") 
         for modified in funcs['modified']:
+
             diff = None
-            if 'code' in modified['diff_type']:
-                md.new_header(2, modified['old']['name'])
-                diff =  modified['diff']
-            else:
-                md.new_header(2, modified['old']['name'],add_table_of_contents='n')
             
-            md.new_paragraph(self.gen_esym_table_diff(old_name,new_name,modified))
-            if diff:
-                md.new_paragraph(self._wrap_with_diff(modified['diff']))            
+            # selectively include matches
+            if 'code' in modified['diff_type']:                
+                
+                md.new_header(2, modified['old']['name'])
+
+                md.new_header(3, "Match Info",add_table_of_contents='n')
+                md.new_paragraph(self.gen_esym_table_diff_meta(old_name,new_name,modified))
+
+                md.new_header(3, "Function Meta Diff",add_table_of_contents='n')
+                md.new_paragraph(self.gen_esym_table_diff(old_name,new_name,modified))
+
+                md.new_header(3, f"{modified['old']['name']} Diff",add_table_of_contents='n')
+                md.new_paragraph(self._wrap_with_diff(modified['diff']))
+                    
+                # only include side by side diff if requested (this adds html to markdown and considerable size)
+                if side_by_side:
+                    md.new_header(3, f"{modified['old']['name']} Side By Side Diff",add_table_of_contents='n')
+                    html_diff = self.gen_code_table_diff_html(modified['old']['code'],modified['new']['code'],old_name, new_name)                    
+                    md.new_paragraph(self._wrap_with_details(html_diff))
+
+
+
+
+        # Create Slightly Modified secion
+        # slightly as in no code changes but other relevant changes.
+
+        slight_mods = ['refcount', 'length', 'called', 'calling', 'name', 'fullname']
+        
+        md.new_header(1,'Modified (No Code Changes)')
+        md.new_paragraph(f"*Slightly modified functions have no code changes, rather differnces in:*")
+        md.new_list(slight_mods)
+        
+        for modified in funcs['modified']:
+
+            mods = set(slight_mods).intersection(set(modified['diff_type']))
+                
+            if 'code' not in modified['diff_type'] and len(mods) > 0:
+
+                # ignore name and fullname changes for generic functions starting with "FUN_"
+                if modified['old']['name'].startswith('FUN_') and len(mods.difference(['name', 'fullname'])) == 0:
+                    continue
+                
+                # only include in TOC if code change
+                md.new_header(2, modified['old']['name'])
+
+                md.new_header(3, "Match Info",add_table_of_contents='n')
+                md.new_paragraph(self.gen_esym_table_diff_meta(old_name,new_name,modified))
+
+                md.new_header(3, "Function Meta Diff",add_table_of_contents='n')
+                md.new_paragraph(self.gen_esym_table_diff(old_name,new_name,modified))
+
+
+
            
         md.new_table_of_contents('TOC',3)
         
@@ -505,7 +710,8 @@ class GhidraDiffEngine:
         self,
         name: str,
         pdiff: Union[str,dict],
-        dir: Union[str,pathlib.Path]
+        dir: Union[str,pathlib.Path],
+        side_by_side: bool = False,
     ) -> None:
         """
         Dump pdiff result to directory
@@ -519,7 +725,7 @@ class GhidraDiffEngine:
         md_path = dir / pathlib.Path(name + '.md')
         json_path = dir / pathlib.Path(name + '.json')
 
-        diff_text = self.gen_diff_md(pdiff)
+        diff_text = self.gen_diff_md(pdiff,side_by_side=side_by_side)
 
         with md_path.open('w') as f:
             f.write(diff_text)
