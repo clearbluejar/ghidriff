@@ -12,6 +12,8 @@ from mdutils.mdutils import MdUtils
 import asyncio
 import multiprocessing
 
+from ghidra_diff_engine import __version__
+
 if TYPE_CHECKING:
     import ghidra
     from ghidra_builtins import *
@@ -21,7 +23,7 @@ class GhidraDiffEngine:
     Base Ghidra Diff Engine
     """
 
-    def __init__(self,verbose: bool=False,output_dir: str='.diffs', MAX_MEM=None, threaded=False, max_workers=multiprocessing.cpu_count()) -> None:
+    def __init__(self,verbose: bool=False, output_dir: str='.diffs', MAX_MEM=None, threaded=False, max_workers=multiprocessing.cpu_count()) -> None:
 
         # Init Pyhidra
         if not MAX_MEM:
@@ -45,15 +47,11 @@ class GhidraDiffEngine:
 
         self.project: "ghidra.base.project.GhidraProject" = None
 
+        self.version = __version__
+
         # Global instance var to store symbol lookup results
         self.esym_memo = {}
 
-        # self.deleted_funcs = []
-        # self.added_funcs = []
-        # self.modified_funcs = []
-        # self.modified_funcs_short = []
-        # self.funcs = {}        
-        # self.symbols = {}
         self.pdiff = {}
     
     @staticmethod
@@ -70,7 +68,7 @@ class GhidraDiffEngine:
         group.add_argument('-s', '--symbols-path', dest="symbols_path",
                         help='Ghidra local symbol store directory', default='.symbols')          
 
-    def enhance_sym( self, sym: 'ghidra.program.model.symbol.Symbol') -> dict:
+    def enhance_sym(self, sym: 'ghidra.program.model.symbol.Symbol') -> dict:
         """
         Standardize enhanced symbol. Use esym_memo to speed things up.
         Inspired by Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/api/main/VTMatchInfo.java
@@ -87,69 +85,87 @@ class GhidraDiffEngine:
             listing = prog.getListing().getFunctionAt(sym.getAddress())
             func = prog.functionManager.getFunctionAt(sym.getAddress())
             if not sym.getSymbolType().toString().lower() == "function" and not listing and not func:
-                print("not a func. {} type {}".format(sym.getName(True),sym.getSymbolType().toString()))
-                return None
-
-            instructions = []
-            mnemonics = []
-            blocks = []
-
-            code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
-            #print("\nInstruction Bulker")
-            for code in code_units:
-                #print(code)
-                instructions.append(str(code))
-
-            # reset iterator
-            code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
-
-            #print("\nMnemonic Bulker")
-            for code in code_units:
-                mnemonic = code.getMnemonicString()
-                mnemonics.append(str(mnemonic))
-                #print(mnemonic)
+                
+                from ghidra.app.merge.listing import CodeUnitDetails                
             
-            from ghidra.program.model.block import BasicBlockModel
+                calling = set()
+                ref_types = set()
+                for ref in sym.references:
+                    #print(ref)
+                    #cu = prog.getListing().getCodeUnitContaining(ref.fromAddress)
+                    #print(CodeUnitDetails.getInstructionDetails(cu))
+                    ref_types.add(ref.referenceType.toString())
+                    f = prog.getFunctionManager().getFunctionContaining(ref.fromAddress)
+                    if f:
+                        calling.add(f.getName())
 
-            #print("\nBasic Block Bulker")
-            basic_model = BasicBlockModel(func.getProgram(),True)
-            basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(),ConsoleTaskMonitor())
+                calling = list(calling)
+                ref_types = list(ref_types)
 
-            for block in basic_blocks:
+                self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True), 'parent':  sym.getParentSymbol().name, 'refcount': sym.getReferenceCount(), 'reftypes': ref_types,  'calling': calling, 
+                    'address': str(sym.getAddress()), 'sym_type': str(sym.getSymbolType())}
 
-                code_units = func.getProgram().getListing().getCodeUnits(block, True)            
+            else:
+                instructions = []
+                mnemonics = []
+                blocks = []
+
+                code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
+                #print("\nInstruction Bulker")
+                for code in code_units:
+                    #print(code)
+                    instructions.append(str(code))
+
+                # reset iterator
+                code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
+
+                #print("\nMnemonic Bulker")
                 for code in code_units:
                     mnemonic = code.getMnemonicString()
-                    blocks.append(str(mnemonic))
+                    mnemonics.append(str(mnemonic))
                     #print(mnemonic)
+                
+                from ghidra.program.model.block import BasicBlockModel
 
-            # sort - This case handles the case for compiler optimizations
-            blocks = sorted(blocks)
+                #print("\nBasic Block Bulker")
+                basic_model = BasicBlockModel(func.getProgram(),True)
+                basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(),ConsoleTaskMonitor())
 
-            self.ifc.openProgram(prog)
-            func = prog.functionManager.getFunctionAt(sym.getAddress())
+                for block in basic_blocks:
 
-            called_funcs = []
-            for f in func.getCalledFunctions(ConsoleTaskMonitor()):
-                called_funcs.append(f.toString())
+                    code_units = func.getProgram().getListing().getCodeUnits(block, True)            
+                    for code in code_units:
+                        mnemonic = code.getMnemonicString()
+                        blocks.append(str(mnemonic))
+                        #print(mnemonic)
 
-            calling_funcs = []
-            for f in func.getCallingFunctions(ConsoleTaskMonitor()):
-                calling_funcs.append(f.toString())
+                # sort - This case handles the case for compiler optimizations
+                blocks = sorted(blocks)
+
+                self.ifc.openProgram(prog)
+                func = prog.functionManager.getFunctionAt(sym.getAddress())
+
+                called_funcs = []
+                for f in func.getCalledFunctions(ConsoleTaskMonitor()):
+                    called_funcs.append(f.toString())
+
+                calling_funcs = []
+                for f in func.getCallingFunctions(ConsoleTaskMonitor()):
+                    calling_funcs.append(f.toString())
 
 
-            results = self.ifc.decompileFunction(func,1,ConsoleTaskMonitor()).getDecompiledFunction()
-            code = results.getC() if results else ""
-            
-            parent_namespace = sym.getParentNamespace().toString().split('@')[0]
+                results = self.ifc.decompileFunction(func,1,ConsoleTaskMonitor()).getDecompiledFunction()
+                code = results.getC() if results else ""
+                
+                parent_namespace = sym.getParentNamespace().toString().split('@')[0]
 
 
-            called_funcs = sorted(called_funcs)
-            calling_funcs = sorted(calling_funcs)
+                called_funcs = sorted(called_funcs)
+                calling_funcs = sorted(calling_funcs)
 
-            self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True),  'parent':  parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
-                                   'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()), 'sig': str(func.getSignature(False)), 'code': code,
-                                   'instructions': instructions, 'mnemonics': mnemonics, 'blocks': blocks}
+                self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True),  'parent':  parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
+                                    'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()), 'sig': str(func.getSignature(False)), 'code': code,
+                                    'instructions': instructions, 'mnemonics': mnemonics, 'blocks': blocks, 'sym_type': str(sym.getSymbolType())}
 
         return self.esym_memo[key]
 
@@ -229,7 +245,7 @@ class GhidraDiffEngine:
         msSymbolServer = HttpSymbolServer(URI.create("https://msdl.microsoft.com/download/symbols/"))
         symbolServerService = SymbolServerService(localSymbolStore, List.of(msSymbolServer))
         
-        PdbPlugin.saveSymbolServerServiceConfig(symbolServerService)        
+        PdbPlugin.saveSymbolServerServiceConfig(symbolServerService)
 
     def analyze_program(self, domainFile, require_symbols):
         
@@ -355,7 +371,7 @@ class GhidraDiffEngine:
         
         prog_options = prog.getOptions(Program.ANALYSIS_PROPERTIES)
         
-        prog_options.setBoolean(option_name,value)           
+        prog_options.setBoolean(option_name,value)
         
 
     def gen_metadata_diff(
@@ -395,6 +411,16 @@ class GhidraDiffEngine:
         new: Union[str, pathlib.Path]
     ) -> dict:
         raise NotImplementedError
+
+    def get_command_line(self,pdiff) -> str:
+        
+        # create command line to generate current diff
+
+        # assert len(pdiff) > 1, 'Pdiff needs to exist to create command line!'
+
+        # cmd = f"{file} "
+        pass
+
 
     def validate_diff_json(
         self,
@@ -525,30 +551,21 @@ class GhidraDiffEngine:
         diff_flow = '''
 ```mermaid
 
-flowchart LR;
-linkStyle default interpolate basis
+flowchart LR
 
 {modified_links}
 
 subgraph {new_bin}
-
     {new_modified}
-		
-	subgraph Added
-		{added}
-	end
-
+    {added_sub}
 end
 
 subgraph {old_bin}
-
     {old_modified}
-	subgraph Deleted
-		{deleted}
-	end
+    {deleted_sub}
 end
 
-```'''        
+```'''
 
         added = []
         deleted = []
@@ -570,11 +587,54 @@ end
             if 'code' in modified['diff_type']:
                 old_modified.append(self._clean_md_header(f"{modified['old']['name']}-{modified['old']['paramcount']}-old"))
                 new_modified.append(self._clean_md_header(f"{modified['new']['name']}-{modified['old']['paramcount']}-new"))
-                modified_links.append(f"{self._clean_md_header(modified['old']['name'])}-{modified['old']['paramcount']}-old<--BBlocks Match {int(modified['b_ratio']*100)}%-->{self._clean_md_header(modified['new']['name'])}-{modified['old']['paramcount']}-new")
+                modified_links.append(f"{self._clean_md_header(modified['old']['name'])}-{modified['old']['paramcount']}-old<--Match {int(modified['b_ratio']*100)}%-->{self._clean_md_header(modified['new']['name'])}-{modified['old']['paramcount']}-new")
 
+        deleted_sub = ''
+        added_sub = ''
+        if len(deleted) > 0:
+            deleted_sub = '''subgraph Deleted\ndirection LR\n{}\nend'''.format('\n    '.join(deleted))
+        if len(added) > 0:
+            added_sub = '''subgraph Added\ndirection LR\n{}\nend'''.format('\n    '.join(added))
+
+        return diff_flow.format(old_bin=old_bin, new_bin=new_bin, added_sub=added_sub, deleted_sub=deleted_sub, modified_links='\n'.join(modified_links), old_modified='\n'.join(old_modified), new_modified='\n'.join(new_modified))
+
+    def gen_mermaid_pie_from_dict(self, data: dict, title: str, skip_keys: list = None, include_keys: list = None) -> str:
+        """
+        Generate basic mermaidjs Pie chart from dict
+        skip_keys: [ 'skipkey1', 'skipkey45'] List of keys to skip from Dict
+        includes_keys: ['random_key1', 'otherkey2'] - Only include these keys
+        Default: include all keys and values from dict. 
+        """
+
+        pie_template = '''
+```mermaid
+pie showData
+    title {title}
+{rows}
+```
+'''
+        rows = []
         
+        for key,value in data.items():
 
-        return diff_flow.format(old_bin=old_bin, new_bin=new_bin, added='\n'.join(added), deleted='\n'.join(deleted), modified_links='\n'.join(modified_links), old_modified='\n'.join(old_modified), new_modified='\n'.join(new_modified))
+            row = None
+
+            if skip_keys and key in skip_keys:
+                continue
+
+            if include_keys:
+                if key in include_keys:
+                    row = f'"{self._clean_md_header(key)}" : {value}'
+            else:
+                row = f'"{self._clean_md_header(key)}" : {value}'
+            
+            if row:
+                rows.append(row)
+            
+        return pie_template.format(title=title,rows='\n'.join(rows))
+
+    def _clean_md_header_lower(self, text):
+        return re.sub('[^a-z0-9_\-]', '', text.lower().replace(' ', '-'))
 
     def _clean_md_header(self,text):
         return re.sub('[^A-Za-z0-9_\-]', '', text.replace(' ', '-'))
@@ -598,16 +658,18 @@ end
 
         md = MdUtils('example', f"{old_name}-{new_name} Diff")
 
-        md.new_header(1,'Chart Diff')
+        md.new_header(1,'Visual Chart Diff')
         md.new_paragraph(self.gen_mermaid_diff_flowchart(pdiff))
 
         # Create Metadata section
         md.new_header(1,'Metadata')
 
-        md.new_header(2,'Ghidra Diff Engine')
-        md.new_paragraph(self._wrap_with_diff(self.gen_metadata_diff(pdiff)))
+        md.new_header(2,'Ghidra Diff Engine')        
+        
+        md.new_header(3,'Command Line')
+        #md.new_paragraph(self.get_command_line(pdiff))
 
-        md.new_header(3,'Analysis Options', add_table_of_contents='n')
+        md.new_header(3,'Ghidra Analysis Options', add_table_of_contents='n')
         md.new_paragraph(self._wrap_with_details(self.gen_table_from_dict(['Analysis Option', 'Value'],pdiff['analysis_options'])))
 
         md.new_header(2,'Binary Metadata Diff')
@@ -615,7 +677,9 @@ end
 
         md.new_header(2,'Diff Stats')
         md.new_paragraph(self.gen_table_from_dict(['Stat', 'Value'],pdiff['stats']))
-
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats']['match_types'],'Match Types'))
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats'],'Diff Stats', skip_keys=['match_types', 'diff_time','added_symbols_len', 'deleted_symbols_len']))
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats'],'Symbols', include_keys=['added_symbols_len', 'deleted_symbols_len']))
 
 
         # Create Deleted section
@@ -632,6 +696,7 @@ end
         
         # Create Added section
         md.new_header(1,'Added')
+
         for esym in funcs['added']:            
             old_code = ''.splitlines(True)		
             new_code = esym['code'].splitlines(True)
@@ -673,7 +738,6 @@ end
 
         # Create Slightly Modified secion
         # slightly as in no code changes but other relevant changes.
-
         slight_mods = ['refcount', 'length', 'called', 'calling', 'name', 'fullname']
         
         md.new_header(1,'Modified (No Code Changes)')
@@ -686,9 +750,30 @@ end
                 
             if 'code' not in modified['diff_type'] and len(mods) > 0:
 
-                # ignore name and fullname changes for generic functions starting with "FUN_"
-                if modified['old']['name'].startswith('FUN_') and len(mods.difference(['name', 'fullname'])) == 0:
-                    continue
+                if modified['old']['name'].startswith('FUN_') or modified['new']['name'].startswith('FUN_'):
+
+                    ignore_called = False
+                    ignore_calling = False
+
+                    if len(modified['old']['called']) > 0 and len(modified['new']['called']) > 0:
+                        called_set = set(modified['old']['called']).difference(modified['new']['called'])
+                        ignore_called =  all('FUN_' in name for name in list(called_set))
+                    
+                    if len(modified['old']['calling']) > 0 and len(modified['new']['calling']) > 0:
+                        calling_set = set(modified['old']['calling']).difference(modified['new']['calling'])                    
+                        ignore_calling =  all('FUN_' in name for name in list(calling_set))
+
+                    # skip name and fullname changes 
+                    if len(mods.difference(['name', 'fullname'])) == 0:
+                        continue
+                    # if all called are FUN_ skip
+                    elif 'called' in modified['diff_type'] and 'calling' in modified['diff_type'] and ignore_called and ignore_calling:
+                        continue
+                    elif 'calling' in modified['diff_type'] and ignore_calling:
+                        continue
+                    elif 'called' in modified['diff_type'] and called_set:
+                        continue
+                
                 
                 # only include in TOC if code change
                 md.new_header(2, modified['old']['name'])
@@ -698,9 +783,6 @@ end
 
                 md.new_header(3, "Function Meta Diff",add_table_of_contents='n')
                 md.new_paragraph(self.gen_esym_table_diff(old_name,new_name,modified))
-
-
-
            
         md.new_table_of_contents('TOC',3)
         
