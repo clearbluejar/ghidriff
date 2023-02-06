@@ -1,5 +1,3 @@
-ghidra-bridge==0.2.5
-ghidra-stubs @ https://github.com/clearbluejar/ghidra-pyi-generator/releases/download/v1.0.3-10.1.5/ghidra_stubs-10.1.5.refs_heads_master-py2.py3-none-any.whl
-jfx-bridge==0.9.1
-JPype1==1.4.0
-pyhidra==0.1.5
+ghidra-stubs
+pyhidra
+mdutils
