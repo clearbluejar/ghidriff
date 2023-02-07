@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ghidra_builtins import *
 
 
-class GhidraStructualDiff(GhidraDiffEngine):
+class GhidraStructualGraphDiff(GhidraDiffEngine):
     """
     An Ghidra Diff implementation using simple comparison mechanisms
     """
@@ -74,7 +74,7 @@ class GhidraStructualDiff(GhidraDiffEngine):
 
         def _get_compare_key2(sym: 'ghidra.program.model.symbol.Symbol', func: 'ghidra.program.model.listing.Function') -> tuple:
             """
-            Builds tuple from symbol (parent, name, refcount, length, paramcount)
+            Builds structural graph hash. Thank you Halvar Flake!)
             """
 
             from ghidra.program.model.block import BasicBlockModel
@@ -99,7 +99,6 @@ class GhidraStructualDiff(GhidraDiffEngine):
 
                     code_units = func.getProgram().getListing().getCodeUnits(block, True)
                     for code in code_units:
-                        # print(code.getMnemonicString())
                         if code.getMnemonicString() == 'CALL':
                             num_call_subfunctions += 1
 
@@ -151,103 +150,11 @@ class GhidraStructualDiff(GhidraDiffEngine):
 
             return found, match_type
 
-        old_funcs = []
-        new_funcs = []
-        old_symbols = []
-        new_symbols = []
-
-        sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
-
-        # if sym_count_diff > 4000 and not last_attempt:
-        #     # this can occur if analysis fails silenty, or the pdb was not applied
-        #     # try to recover with reanalysis
-
-        #     if p1.getSymbolTable().numSymbols > p2.getSymbolTable().numSymbols:
-        #         program_to_fix = p2
-        #         # delete file
-        #         name = p1.getName()
-        #         self.project.close(p1)
-        #         self.project.getRootFolder().getFile(p2.getName()).delete()
-        #         program_to_fix = self.project.importProgram(new)
-        #     else:
-        #         program_to_fix = p1
-        #         name = p1.getName()
-        #         self.project.close(p1)
-        #         self.project.getRootFolder().getFile(name).delete()
-        #         program_to_fix = self.project.importProgram(old)
-        #         # self.project.saveAs(program_to_fix, "/", program_to_fix.getName(), True)
-        #         # program_to_fix = self.project.openProgram("/", name, False)
-
-        #     # clear current PDB loaded Ghidra/Features/PDB/src/main/java/ghidra/app/util/pdb/PdbProgramAttributes.java#L132
-        #     # from ghidra.app.util.bin.format.pdb import PdbParserConstants
-        #     # self.set_proginfo_option_bool(program_to_fix, PdbParserConstants.PDB_LOADED, False)
-
-        #     self.analyze_program(program_to_fix, require_symbols=True, force_analysis=True)
-
-        # #     from ghidra.app.util.bin.format.pdb import PdbParserConstants
-        # #     self.set_proginfo_option_bool(p1, PdbParserConstants.PDB_LOADED, False)
-        # #     self.analyze_program(p1, require_symbols=True, force_analysis=True)
-
-        # #     self.set_proginfo_option_bool(p2, PdbParserConstants.PDB_LOADED, False)
-        # #     self.analyze_program(p2, require_symbols=True, force_analysis=True)
-
-        # #     self.project.close(p1)
-        # #     self.project.close(p2)
-
-        # #     # try one more time
-        #     return self.diff_bins(old, new, last_attempt=True)
-
-        assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or missing symbols! Check Ghidra analysis or pdb!'
-
-        # first pass detect added and deleted symbols
-        common_sym_prefix = ['switch', 'FUN_', 'caseD', 'local_', 'lambda']
-
-        for sym in p1.getSymbolTable().getDefinedSymbols():
-            name = sym.getName()
-            if not any([common in name for common in common_sym_prefix]):
-                old_symbols.append(name)
-
-        for sym in p2.getSymbolTable().getDefinedSymbols():
-            name = sym.getName()
-            if not any([common in name for common in common_sym_prefix]):
-                new_symbols.append(name)
-
-        olds = set(old_symbols)
-        news = set(new_symbols)
-
-        deleted_symbols = olds.difference(news)
-        print("\ndeleted symbols\n")
-        for sym in deleted_symbols:
-            print(sym)
-
-        added_symbols = news.difference(olds)
-        print("\nadded symbols\n")
-        for sym in added_symbols:
-            print(sym)
-
-        # Next pass
-        # 1. remove false positives from symbols
-        # 2. Build modified functions list based on (_get_compare_key)
-
         from ghidra.program.model.symbol import SymbolType
 
         print(f'Calculating initial structural signature for all ')
         p1_funcs = {}
         p2_funcs = {}
-
-        # count_all = 0
-        # count_all2 = 0
-        # for sym in p1.getSymbolTable().getDefinedSymbols():
-        #     if "function".lower() in sym.getSymbolType().toString().lower():
-        #         count_all += 1
-
-        # for sym in p1.getSymbolTable().getDefinedSymbols():
-        #     if sym.getSymbolType() == SymbolType.FUNCTION:
-        #         count_all2 += 1
-
-        # count_func = 0
-        # for func in p1.functionManager.getFunctions(True):
-        #     count_func += 1
 
         from time import time
         start_p1 = time()
@@ -263,39 +170,8 @@ class GhidraStructualDiff(GhidraDiffEngine):
                 p2_funcs[func] = _get_compare_key2(sym, func)
         end_p2 = time()
 
-        print(f'p1 time: {end_p1 - start_p1}')
-        print(f'p2 time: {end_p2 - end_p1}')
-
-        from ghidra.app.plugin.match import FunctionHasher
-        from ghidra.app.plugin.match import MatchFunctions
-        from ghidra.app.plugin.match import ExactMnemonicsFunctionHasher
-
-        from ghidra.util.task import ConsoleTaskMonitor
-        monitor = ConsoleTaskMonitor()
-        one_to_one = True
-        hasher = ExactMnemonicsFunctionHasher.INSTANCE
-        matchedFunctions = MatchFunctions.matchFunctions(p1, p1.getMemory().initializedAddressSet, p2, p2.getMemory().initializedAddressSet,
-                                                         10, one_to_one, not one_to_one, hasher, monitor)
-
-        for match in matchedFunctions:
-            print(match)
-
-        # TODO check to see if getFunctions returns a more accurate set
-        # Conside replacing with Ghidra/Features/Base/src/main/java/ghidra/app/plugin/match/MatchFunctions.java#L34
-        # count = 0
-        # funcs1 = p1.functionManager.getFunctions(True)
-        # funcs1_check = []
-        # for f in funcs1:
-        #     count += 1
-        #     funcs1_check.append(_get_compare_key(f.getSymbol(),f))
-        # print(count)
-
-        # print(len(old_funcs))
-        # check = set(funcs1_check)
-
-        # modified = sorted(check.difference(old))
-        # for sym in modified:
-        #     print(sym)
+        print(f'p1 structural signature time: {end_p1 - start_p1}')
+        print(f'p2 structural signature time: {end_p2 - end_p1}')
 
         from collections import Counter
 
@@ -326,27 +202,6 @@ class GhidraStructualDiff(GhidraDiffEngine):
         print(f'modified_new: {len(modified_new)}')
         print(f'matching_compare_keys: {len(matching_compare_keys)}')
 
-        # account for compare_key match types
-        # TODO account for hashes this!!
-        # for sym in matching_compare_keys:
-        #     all_match_types.append('Hash')
-
-        # FUNCTION_MINIMUM_SIZE_DEFAULT = 10
-
-        # from ghidra.app.plugin.match import FunctionHasher
-
-        # if (!func.isThunk() && func.getBody().getNumAddresses() >= minimumFunctionSize) {
-        # 		hashFunction(monitor, functionHashes, func, hasher, true);
-        # }
-
-        # hasher = FunctionHasher()
-
-        # for key in matching_compare_keys:
-
-        #     hasher.hash()
-
-        # for key in
-
         p1_modified = []
         p2_modified = []
 
@@ -365,10 +220,6 @@ class GhidraStructualDiff(GhidraDiffEngine):
                 key = (func.getName(True), func.parameterCount)
                 p2_name_to_func.setdefault(key, []).append(func)
 
-        # for key in p1_name_to_func.keys():
-        #     if p2_name_to_func.get(key):
-        #         assert len(p1_name_to_func[key]) == len(p2_name_to_func[key])
-
         print("\nmodified_old_modified")
         for sym in p1_modified:
             print(sym)
@@ -378,59 +229,25 @@ class GhidraStructualDiff(GhidraDiffEngine):
             print(sym)
 
         # Find modified functions based on compare_key
-        # for sym in p1.getSymbolTable().getDefinedSymbols():
+        for sym in p1.getSymbolTable().getDefinedSymbols():
 
-        #     if "function".lower() in sym.getSymbolType().toString().lower():
-        #         func = p1.functionManager.getFunctionAt(sym.getAddress())
-        #         if (_get_compare_key2(sym, func)) in modified_old:
-        #             p1_modified.append(sym)
+            if "function".lower() in sym.getSymbolType().toString().lower():
+                func = p1.functionManager.getFunctionAt(sym.getAddress())
+                if (_get_compare_key2(sym, func)) in modified_old:
+                    p1_modified.append(sym)
 
-        # for sym in p2.getSymbolTable().getDefinedSymbols():
+        for sym in p2.getSymbolTable().getDefinedSymbols():
 
-        #     if "function".lower() in sym.getSymbolType().toString().lower():
-        #         func = p2.functionManager.getFunctionAt(sym.getAddress())
-        #         if (_get_compare_key2(sym, func)) in modified_new:
-        #             p2_modified.append(sym)
+            if "function".lower() in sym.getSymbolType().toString().lower():
+                func = p2.functionManager.getFunctionAt(sym.getAddress())
+                if (_get_compare_key2(sym, func)) in modified_new:
+                    p2_modified.append(sym)
 
         matched = []
         unmatched = []
         matches = []
 
         print("\nMatching functions...")
-
-        hashes = []
-
-        # for sym in p1_modified:
-        #     for sym2 in p2_modified:
-
-        #         if sym2 in matched:
-        #                 continue
-
-        #         func = p1.functionManager.getFunctionAt(sym.getAddress())
-        #         func2 = p2.functionManager.getFunctionAt(sym2.getAddress())
-
-        #         # reset iterator
-        #         mnemonics = []
-        #         mnemonics2 = []
-
-        #         code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
-        #         code_units2 = func2.getProgram().getListing().getCodeUnits(func2.getBody(), True)
-
-        #         #print("\nMnemonic Bulker")
-        #         for code in code_units:
-        #             mnemonics.append(code.getMnemonicString())
-
-        #         for code in code_units2:
-        #             mnemonics2.append(code.getMnemonicString())
-
-        #         fhash = hashlib.sha256(''.join(mnemonics).encode('UTF-8')).hexdigest()
-        #         fhash2 = hashlib.sha256(''.join(mnemonics2).encode('UTF-8')).hexdigest()
-
-        #         hashes.append(fhash)
-        #         hashes.append(fhash2)
-
-        #         if fhash ==  fhash2:
-        # print("whata!?!")
 
         # match by name and paramcount
         for sym in p1_modified:
@@ -478,30 +295,6 @@ class GhidraStructualDiff(GhidraDiffEngine):
                     matched.append(sym)
                     matched.append(sym2)
                     matches.append([sym, sym2, match_type])
-
-        # match by name and paramcount
-        # for sym in p1_modified:
-        #     for sym2 in p2_modified:
-
-        #         if sym in matched or sym2 in matched:
-        #             continue
-
-        #         func = p1.functionManager.getFunctionAt(sym.getAddress())
-        #         func2 = p2.functionManager.getFunctionAt(sym2.getAddress())
-
-        #         # esym = self.enhance_sym(sym)
-        #         # esym2 = self.enhance_sym(sym2)
-
-        #         # if esym2['fullname'] == esym['fullname'] and esym2['paramcount']== esym['paramcount']:
-
-        #         if sym.getName(True) == sym2.getName(True) and func.parameterCount == func2.parameterCount:
-        #             print("FullName + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
-        #             print(_get_compare_key2(sym, sym.getProgram().functionManager.getFunctionAt(sym.getAddress())))
-        #             print(_get_compare_key2(sym2, sym2.getProgram().functionManager.getFunctionAt(sym.getAddress())))
-        #             match_type = 'FullName:Param'
-        #             matched.append(sym)
-        #             matched.append(sym2)
-        #             matches.append([sym, sym2, match_type])
 
         for sym in p1_modified:
             found = False
@@ -583,16 +376,10 @@ class GhidraStructualDiff(GhidraDiffEngine):
 
         matches = sorted(matches, key=lambda x: str(x[0]))
 
-        # Update symbols using match knowledge
-        for match in matches:
-            print(f"{match[0].getName(True)} {match[1].getName(True)} {match[2]}")
+        # no need to skip types because we just ignore the matches for structual sig
+        skip_types = []
 
-            if match[0].getName() in deleted_symbols:
-                deleted_symbols.remove(match[0].getName())
-            if match[1].getName() in added_symbols:
-                added_symbols.remove(match[1].getName())
-
-        return [deleted_symbols, added_symbols, unmatched, matches, []]
+        return [unmatched, matches, skip_types]
 
 
 if __name__ == "__main__":
