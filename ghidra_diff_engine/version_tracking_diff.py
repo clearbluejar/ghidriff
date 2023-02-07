@@ -3,6 +3,7 @@ from collections import Counter
 import json
 import pathlib
 import hashlib
+from time import time
 
 from typing import List, Tuple, TYPE_CHECKING
 
@@ -21,11 +22,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
     MIN_FUNC_LEN = 10
 
-    # def __init__(self, verbose: bool = False, output_dir: str = '.diffs', MAX_MEM=None, threaded=False, max_workers=...) -> None:
-    #     super().__init__(verbose, output_dir, MAX_MEM, threaded, max_workers)
-    #     self.name = 'GhidraSimpleDiff'
-    #     self.file = __file__
-
     def find_matches(
         self,
         p1: "ghidra.program.model.listing.Program",
@@ -36,18 +32,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         Find matching and unmatched functions between p1 and p2
         """
 
-        # from Features/Base/src/main/java/ghidra/app/plugin/match/MatchSymbol.java
-        def _is_sym_string(sym: 'ghidra.program.model.symbol.Symbol') -> bool:
-
-            sym_addr = sym.getAddress()
-            if sym_addr is not None:
-                data = sym.getProgram().getListing().getDataAt(sym_addr)
-                if data is not None and data.hasStringValue():
-                    return True
-
-            return False
-
-        from .correlators import StructuralGraphHasher, BulkInstructionsHasher, BulkMnemonicHasher, BulkBasicBlockMnemonicHasher
+        from .correlators import StructuralGraphExactHasher, StructuralGraphHasher, BulkInstructionsHasher, BulkMnemonicHasher, BulkBasicBlockMnemonicHasher, NamespaceNameParamHasher, NameParamHasher, NameParamRefHasher
         from ghidra.program.model.symbol import SourceType
 
         from ghidra.app.plugin.match import FunctionHasher
@@ -56,16 +41,348 @@ class VersionTrackingDiff(GhidraDiffEngine):
         from ghidra.app.plugin.match import MatchSymbol
         from ghidra.program.model.listing import Function
         from ghidra.program.model.symbol import SymbolType
-
+        from ghidra.program.model.address import AddressSet
         from ghidra.util.task import ConsoleTaskMonitor
 
-        sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
 
-        # sanity check - ensure comparing apples to apples
-        assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or missing symbols! Check Ghidra analysis or pdb!'
+# # first pass detect added and deleted symbols
+        # common_sym_prefix = ['switch', 'FUN_', 'caseD', 'local_']
+
+        # for sym in p1.getSymbolTable().getDefinedSymbols():
+        #     name = sym.getName()
+        #     if not any([common in name for common in common_sym_prefix]):
+        #         old_symbols.append(name)
+
+        # for sym in p2.getSymbolTable().getDefinedSymbols():
+        #     name = sym.getName()
+        #     if not any([common in name for common in common_sym_prefix]):
+        #         new_symbols.append(name)
+
+        # olds = set(old_symbols)
+        # news = set(new_symbols)
+
+        # # translate matches to expected format [ sym, sym2, match_type ]
+        # for func in unmatched_p1:
+        #     unmatched.append(func.getSymbol())
+
+        # for func in unmatched_p2:
+        #     unmatched.append(func.getSymbol())
+
+        # expected_matches = []
+        # for match_addrs, match_types in matches.items():
+        #     address = match_addrs[0]
+        #     address2 = match_addrs[1]
+        #     sym = all_p1_funcs[address].getSymbol()
+        #     sym2 = all_p2_funcs[address2].getSymbol()
+        #     expected_matches.append([sym, sym2, match_types])
+
+        # skip_types = ['ExternalsName', 'StructuralGraphHash']
+
+        # return [deleted_symbols, added_symbols, unmatched, expected_matches, skip_types]
+
+        # ==============================
+        # one_to_one = True
+        # one_to_many = False
+        # hasher = ExactBytesFunctionHasher.INSTANCE
+
+        # with _catchtime() as t:
+        #     exact_bytes_funcs = MatchFunctions.matchFunctions(
+        #         p1, p1_unmatched, p2, p2_unmatched, 10, one_to_one, one_to_many, hasher, monitor)
+
+        # print(f'Exec time ExactBytesFunctionHasher: {t():.4f} secs')
+        # print(exact_bytes_funcs.size())
+
+        # # p1.functionManager.getFunctionContaining(match.aFunctionAddress).getBody() TODO
+        # for match in exact_bytes_funcs:
+        #     p1_matches.add(match.aFunctionAddress)
+        #     p2_matches.add(match.bFunctionAddress)
+
+        # p1_unmatched = p1_unmatched.subtract(p1_matches)
+        # p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        # one_to_one = True
+        # one_to_many = False
+        # hasher = ExactInstructionsFunctionHasher.INSTANCE
+
+        # with _catchtime() as t:
+        #     exact_instr_funcs = MatchFunctions.matchFunctions(
+        #         p1, p1_unmatched, p2, p2_unmatched, 10, one_to_one, one_to_many, hasher, monitor)
+
+        # print(f'Exec time ExactInstructionsFunctionHasher: {t():.4f} secs')
+        # print(exact_instr_funcs.size())
+
+        # for match in exact_instr_funcs:
+        #     p1_matches.add(match.aFunctionAddress)
+        #     p2_matches.add(match.bFunctionAddress)
+
+        # p1_unmatched = p1_unmatched.subtract(p1_matches)
+        # p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        # hasher = StructuralGraphExactHasher()
+        # one_to_one = True
+
+        # one_to_many = False
+
+        # # graph_funcs = MatchFunctions.matchFunctions(
+        # #     p1, p1_addrs, p2, p2_addrs, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
+
+        # with _catchtime() as t:
+        #     exact_struct_funcs = MatchFunctions.matchFunctions(
+        #         p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, StructuralGraphExactHasher(), monitor)
+
+        # print(f'Exec time StructuralGraphExactHasher: {t():.4f} secs')
+        # print(exact_struct_funcs.size())
+
+        # for match in exact_struct_funcs:
+        #     p1_matches.add(match.aFunctionAddress)
+        #     p2_matches.add(match.bFunctionAddress)
+
+        # p1_unmatched = p1_unmatched.subtract(p1_matches)
+        # p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        # one_to_one = True
+        # one_to_many = False
+        # hasher = ExactMnemonicsFunctionHasher.INSTANCE
+
+        # with _catchtime() as t:
+        #     # exact_mnemonics_funcs = MatchFunctions.matchFunctions(
+        #     #     p1, p1_addrs, p2, p2_addrs, 10, one_to_one, one_to_many, hasher, monitor)
+        #     exact_mnemonics_funcs = MatchFunctions.matchFunctions(
+        #         p1, p1_unmatched, p2, p2_unmatched, 10, one_to_one, one_to_many, hasher, monitor)
+
+        # print(f'Exec time ExactMnemonicsFunctionHasher: {t():.4f} secs')
+        # print(exact_mnemonics_funcs.size())
+
+        # for match in exact_mnemonics_funcs:
+        #     p1_matches.add(match.aFunctionAddress)
+        #     p2_matches.add(match.bFunctionAddress)
+
+        # p1_unmatched = p1_unmatched.subtract(p1_matches)
+        # p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        # hasher = StructuralGraphHasher()
+        # one_to_one = True
+
+        # # TODO: Yes flag allows for false positives is structal graph matching.
+        # # At the same time, if a function had a matching sig (matching logic in p2) how important can it be?
+        # one_to_many = True
+
+        # # graph_funcs = MatchFunctions.matchFunctions(
+        # #     p1, p1_addrs, p2, p2_addrs, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
+
+        # with _catchtime() as t:
+        #     struct_funcs = MatchFunctions.matchFunctions(
+        #         p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
+
+        # print(f'Exec time StructuralGraphHasher: {t():.4f} secs')
+        # print(struct_funcs.size())
+
+        # for match in struct_funcs:
+        #     p1_matches.add(match.aFunctionAddress)
+        #     p2_matches.add(match.bFunctionAddress)
+
+        # p1_unmatched = p1_unmatched.subtract(p1_matches)
+        # p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        # one_to_one = True
+        # one_to_many = False
+        # hasher = NameParamHasher()
+
+        # with _catchtime() as t:
+        #     # exact_mnemonics_funcs = MatchFunctions.matchFunctions(
+        #     #     p1, p1_addrs, p2, p2_addrs, 10, one_to_one, one_to_many, hasher, monitor)
+        #     name_param_funcs = MatchFunctions.matchFunctions(
+        #         p1, p1_unmatched, p2, p2_unmatched, 10, one_to_one, one_to_many, hasher, monitor)
+
+        # print(f'Exec time NameParam: {t():.4f} secs')
+        # print(name_param_funcs.size())
+
+        # for match in name_param_funcs:
+        #     p1_matches.add(match.aFunctionAddress)
+        #     p2_matches.add(match.bFunctionAddress)
+
+        # p1_unmatched = p1_unmatched.subtract(p1_matches)
+        # p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        # one_to_one = True
+        # one_to_many = False
+        # hasher = BulkBasicBlockMnemonicHasher()
+        # with _catchtime() as t:
+        #     bulk_block_mnemonic_matches = MatchFunctions.matchFunctions(
+        #         p1, p1_unmatched, p2, p2_unmatched, 10, one_to_one, one_to_many, hasher, monitor)
+
+        # print(f'Exec time BulkBasicBlockMnemonicHasher: {t():.4f} secs')
+
+        # for match in bulk_block_mnemonic_matches:
+        #     p1_matches.add(match.aFunctionAddress)
+        #     p2_matches.add(match.bFunctionAddress)
+
+        # p1_unmatched = p1_unmatched.subtract(p1_matches)
+        # p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        # print(f'Exec time NameParam: {t():.4f} secs')
+        # print(bulk_block_mnemonic_matches.size())
+
+        # ==================
 
         all_p1_funcs = {}
         all_p2_funcs = {}
+
+        monitor = ConsoleTaskMonitor()
+
+        p1_addrs = p1.getMemory().loadedAndInitializedAddressSet
+        p2_addrs = p1.getMemory().loadedAndInitializedAddressSet
+
+        p1_unmatched = AddressSet(p1.getMemory().loadedAndInitializedAddressSet)
+        p2_unmatched = AddressSet(p2.getMemory().loadedAndInitializedAddressSet)
+        p1_matches = AddressSet()
+        p2_matches = AddressSet()
+
+        # tuples of correlators instances
+        # ( name, hasher, one_to_one, one_to_many)
+        # DO NOT CHANGE ORDER UNLESS INTENDED
+        func_correlators = [
+            ('ExactBytesFunctionHasher', ExactBytesFunctionHasher.INSTANCE, True, False),
+            ('ExactInstructionsFunctionHasher', ExactInstructionsFunctionHasher.INSTANCE, True, False),
+            (StructuralGraphExactHasher.MATCH_TYPE, StructuralGraphExactHasher(), True, False),
+            ('ExactMnemonicsFunctionHasher', ExactMnemonicsFunctionHasher.INSTANCE, True, False),
+            # WARN: one_to_many=True flag allows for false negatives is structal graph matching. Mitgated by added references, func name in hash
+            (StructuralGraphHasher.MATCH_TYPE, StructuralGraphHasher(), True, True),
+            (NamespaceNameParamHasher.MATCH_TYPE, NamespaceNameParamHasher(), True, False),
+            # WARN: one_to_many=True flag allows for false negatives is structal graph matching. Mitgated by added references, func name in hash
+            (BulkBasicBlockMnemonicHasher.MATCH_TYPE, BulkBasicBlockMnemonicHasher(), True, True),
+            # (NameParamHasher.MATCH_TYPE, NameParamHasher(), True, True)
+        ]
+
+        unmatched = []
+        matches = {}
+
+        for cor in func_correlators:
+            print(cor)
+            start = time()
+
+            name, hasher, one_to_one, one_to_many = cor
+
+            func_matches = MatchFunctions.matchFunctions(
+                p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
+
+            end = time()
+
+            # p1.functionManager.getFunctionContaining(match.aFunctionAddress).getBody() TODO
+            for match in func_matches:
+                p1_matches.add(match.aFunctionAddress)
+                p2_matches.add(match.bFunctionAddress)
+                matches.setdefault((match.aFunctionAddress, match.bFunctionAddress), {}).setdefault(name, 0)
+                matches[(match.aFunctionAddress, match.bFunctionAddress)][name] += 1
+
+            p1_unmatched = p1_unmatched.subtract(p1_matches)
+            p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+            print(f'Exec time {name}: {end-start:.4f} secs')
+            print(func_matches.size())
+            print(Counter([tuple(x) for x in matches.values()]))
+
+        one_to_one = True
+        include_externals = True
+        min_sym_name_len = 3
+        matchedSymbols = MatchSymbol.matchSymbol(p1, p1.getMemory(), p2, p2.getMemory(),
+                                                 min_sym_name_len, one_to_one, include_externals, monitor)
+
+        start = time()
+        for match in matchedSymbols:
+            if match.matchType == SymbolType.FUNCTION:
+                func = p1.functionManager.getFunctionContaining(match.aSymbolAddress)
+                assert func.entryPoint == match.aSymbolAddress
+                func2 = p2.functionManager.getFunctionContaining(match.bSymbolAddress)
+                assert func2.entryPoint == match.bSymbolAddress
+
+                p1_matches.add(match.aSymbolAddress)
+                p2_matches.add(match.bSymbolAddress)
+                matches.setdefault((match.aSymbolAddress, match.bSymbolAddress), {}).setdefault(name, 0)
+                matches[(match.aSymbolAddress, match.bSymbolAddress)][name] += 1
+        end = time()
+
+        p1_unmatched = p1_unmatched.subtract(p1_matches)
+        p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        print(f'Exec time MatchSymbol: {end-start:.4f} secs')
+        print(matchedSymbols.size())
+        print(Counter([tuple(x) for x in matches.values()]))
+
+        p1_missing = []
+        p2_missing = []
+        for func in p1.functionManager.getFunctions(p1_unmatched, True):
+            if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
+                p1_missing.append(func)
+
+        for func in p2.functionManager.getFunctions(p2_unmatched, True):
+            if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
+                p2_missing.append(func)
+
+        print(f'p1 missing = {len(p1_missing)}')
+        print(f'p2 missing = {len(p2_missing)}')
+
+        unmatched.extend([func.getSymbol() for func in p1_missing])
+        unmatched.extend([func.getSymbol() for func in p2_missing])
+
+        # Find added and deleted externs
+        p1_externals = {}
+        # get external funcs (these are still interesting)
+        for func in p1.functionManager.getExternalFunctions():
+            key = func.getName(True)
+            if p1_externals.get(key):
+                print(f'Warning: key already found in p1 externals {key}')
+            p1_externals[key] = func
+
+        p2_externals = {}
+        # get external funcs (these are still interesting)
+        for func in p2.functionManager.getExternalFunctions():
+            key = func.getName(True)
+            if p2_externals.get(key):
+                print(f'Warning: key already found in p2 externals {key}')
+            p2_externals[key] = func
+
+        deleted_externs = list(set(p1_externals.keys()).difference(p2_externals.keys()))
+        added_externs = list(set(p2_externals.keys()).difference(p1_externals.keys()))
+        matched_externs = list(set(p2_externals.keys()).intersection(p1_externals.keys()))
+
+        unmatched.extend([p1_externals[key].getSymbol() for key in deleted_externs])
+        unmatched.extend([p2_externals[key].getSymbol() for key in added_externs])
+
+        for key in matched_externs:
+            name = 'ExternalsName'
+            func = p1_externals[key]
+            func2 = p2_externals[key]
+            matches.setdefault((func.entryPoint, func2.entryPoint), {}).setdefault(name, 0)
+            matches[(func.entryPoint, func2.entryPoint)][name] += 1
+
+        # find matching functions with different references counts
+        # NameParamRefHasher
+
+        # translate matches to expected format [ sym, sym2, match_type ]
+        matched = []
+        for match_addrs, match_types in matches.items():
+
+            func = p1.functionManager.getFunctionContaining(match_addrs[0])
+            assert func.entryPoint == match_addrs[0]
+            func2 = p2.functionManager.getFunctionContaining(match_addrs[1])
+            assert func2.entryPoint == match_addrs[1]
+
+            matched.append([func.getSymbol(), func2.getSymbol(), list(match_types.keys())])
+
+        # skip types will undergo less processing
+        skip_types = ['ExternalsName', 'StructuralGraphHash',
+                      'ExactInstructionsFunctionHasher', 'ExactBytesFunctionHasher']
+
+        return [unmatched, matched, skip_types]
+
+        all_p1_funcs = {}
+        all_p2_funcs = {}
+
+        monitor = ConsoleTaskMonitor()
+
+        p1_addrs = p1.getMemory().loadedAndInitializedAddressSet
+        p2_addrs = p1.getMemory().loadedAndInitializedAddressSet
 
         # get external funcs (these are still interesting)
         for func in p1.functionManager.getExternalFunctions():
@@ -107,26 +424,36 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         # follow pattern for Ghidra/Features/Base/src/main/java/ghidra/app/plugin/match/MatchSymbol.java
         for sym in p1.getSymbolTable().getAllSymbols(True):
+            # skip default names
             if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
-                if not isinstance(sym, Function):
+                # skip local symbols
+                if not isinstance(sym.getParentNamespace(), Function):
                     all_p1_syms[sym.getAddress()] = sym
-                else:
-                    print(sym)
+
+        print(f'p1 sym count: reported: {p1.symbolTable.numSymbols} analyzed: {len(all_p1_syms)}')
 
         for sym in p2.getSymbolTable().getAllSymbols(True):
+            # skip default names
             if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
-                if not isinstance(sym, Function):
+                # skip local symbols
+                if not isinstance(sym.getParentNamespace(), Function):
                     all_p2_syms[sym.getAddress()] = sym
 
-        # for sym in p2.getSymbolTable().getDefinedSymbols():
-        #     if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
-        #         all_p2_syms[sym.getAddress()] = sym
+        print(f'p2 sym count: reported: {p2.symbolTable.numSymbols} analyzed: {len(all_p2_syms)}')
 
-        monitor = ConsoleTaskMonitor()
-
-        # this sets Addresses over which functoins are hashed (does not include externals)
+        # this sets Addresses over which functions are hashed (does not include externals)
+        #   /**
+        #  * Returns the set of addresses which correspond to all the "loaded" memory blocks that have
+        #  * initialized data.  This does not include initialized memory blocks that contain data from
+        #  * the program's file header such as debug sections.
+        #  */
         p1_addrs = p1.getMemory().loadedAndInitializedAddressSet
         p2_addrs = p1.getMemory().loadedAndInitializedAddressSet
+        from ghidra.program.model.address import AddressSet
+
+        remaining = AddressSet()
+        p1_leftovers = AddressSet()
+        p2_leftovers = AddressSet()
 
         matched_p1 = set()
         matched_p2 = set()
@@ -134,13 +461,12 @@ class VersionTrackingDiff(GhidraDiffEngine):
         matches = {}
 
         # match exeternals O(N x M) :(
-
         for ext in p1.functionManager.getExternalFunctions():
             for ext2 in p2.functionManager.getExternalFunctions():
                 if ext.getName() == ext2.getName():
                     matched_p1.add(ext)
                     matched_p2.add(ext2)
-                    matches.setdefault((ext.getEntryPoint(), ext2.getEntryPoint()), []).append('ExternalsName')
+                    matches.setdefault((ext.getEntryPoint(), ext2.getEntryPoint()), set()).add('ExternalsName')
 
         unmatched_p1 = set(all_p1_funcs.values()).difference(matched_p1)
         unmatched_p2 = set(all_p2_funcs.values()).difference(matched_p2)
@@ -161,7 +487,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             matched_p1.add(func)
             matched_p2.add(func2)
             matches.setdefault((match.aFunctionAddress, match.bFunctionAddress),
-                               []).append('ExactMnemonicsFunctionHasher')
+                               set()).add('ExactMnemonicsFunctionHasher')
 
         unmatched_p1 = set(all_p1_funcs.values()).difference(matched_p1)
         unmatched_p2 = set(all_p2_funcs.values()).difference(matched_p2)
@@ -181,7 +507,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             matched_p1.add(func)
             matched_p2.add(func2)
             matches.setdefault((match.aFunctionAddress, match.bFunctionAddress),
-                               []).append(BulkBasicBlockMnemonicHasher.MATCH_TYPE)
+                               set()).add(BulkBasicBlockMnemonicHasher.MATCH_TYPE)
 
         unmatched_p1 = set(all_p1_funcs.values()).difference(matched_p1)
         unmatched_p2 = set(all_p2_funcs.values()).difference(matched_p2)
@@ -201,7 +527,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             matched_p1.add(func)
             matched_p2.add(func2)
             matches.setdefault((match.aFunctionAddress, match.bFunctionAddress),
-                               []).append(BulkMnemonicHasher.MATCH_TYPE)
+                               set()).add(BulkMnemonicHasher.MATCH_TYPE)
 
         unmatched_p1 = set(all_p1_funcs.values()).difference(matched_p1)
         unmatched_p2 = set(all_p2_funcs.values()).difference(matched_p2)
@@ -221,7 +547,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             matched_p1.add(func)
             matched_p2.add(func2)
             matches.setdefault((match.aFunctionAddress, match.bFunctionAddress),
-                               []).append(BulkInstructionsHasher.MATCH_TYPE)
+                               set()).add(BulkInstructionsHasher.MATCH_TYPE)
 
         unmatched_p1 = set(all_p1_funcs.values()).difference(matched_p1)
         unmatched_p2 = set(all_p2_funcs.values()).difference(matched_p2)
@@ -239,13 +565,19 @@ class VersionTrackingDiff(GhidraDiffEngine):
         graph_funcs = MatchFunctions.matchFunctions(
             p1, p1_addrs, p2, p2_addrs, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
 
+        # graph_funcs2 = MatchFunctions.matchFunctions(
+        #     p1, p1_addrs, p2, p2_addrs, self.MIN_FUNC_LEN, one_to_one, False, StructuralGraphExactHasher(), monitor)
+
+#        print(graph_funcs2.size())
+        print(graph_funcs.size())
+
         for match in graph_funcs:
             func = all_p1_funcs[match.aFunctionAddress]
             func2 = all_p2_funcs[match.bFunctionAddress]
             matched_p1.add(func)
             matched_p2.add(func2)
             matches.setdefault((match.aFunctionAddress, match.bFunctionAddress),
-                               []).append(StructuralGraphHasher.MATCH_TYPE)
+                               set()).add(StructuralGraphHasher.MATCH_TYPE)
 
         unmatched_p1 = set(all_p1_funcs.values()).difference(matched_p1)
         unmatched_p2 = set(all_p2_funcs.values()).difference(matched_p2)
@@ -282,7 +614,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
                     matched_p1.add(func)
                     matched_p2.add(func2)
                     matches.setdefault((match.aSymbolAddress, match.bSymbolAddress),
-                                       []).append('SymbolMatcher')
+                                       set()).add('SymbolMatcher')
                 else:
                     print(f'missing {all_p1_funcs.get(match.aSymbolAddress)} and {all_p2_funcs.get(match.bSymbolAddress)}')
                     print(all_p1_syms.get(match.aSymbolAddress))
@@ -321,7 +653,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
                     matched_p1.add(func)
                     matched_p2.add(func2)
                     matches.setdefault((func.getEntryPoint(), func2.getEntryPoint()),
-                                       []).append('NameParam')
+                                       set()).add('NameParam')
 
         unmatched_p1 = set(all_p1_funcs.values()).difference(matched_p1)
         unmatched_p2 = set(all_p2_funcs.values()).difference(matched_p2)
