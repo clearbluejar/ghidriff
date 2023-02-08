@@ -77,6 +77,35 @@ class VersionTrackingDiff(GhidraDiffEngine):
         unmatched = []
         matches = {}
 
+        # Run Symbol Correlator
+
+        one_to_one = True
+        include_externals = True
+        min_sym_name_len = 3
+        matchedSymbols = MatchSymbol.matchSymbol(p1, p1.getMemory(), p2, p2.getMemory(),
+                                                 min_sym_name_len, one_to_one, include_externals, monitor)
+
+        start = time()
+
+        hasher = StructuralGraphHasher()
+        name = 'SymbolsHash'
+        for match in matchedSymbols:
+            if match.matchType == SymbolType.FUNCTION:
+                p1_matches.add(match.aSymbolAddress)
+                p2_matches.add(match.bSymbolAddress)
+                matches.setdefault((match.aSymbolAddress, match.bSymbolAddress), {}).setdefault(name, 0)
+                matches[(match.aSymbolAddress, match.bSymbolAddress)][name] += 1
+        end = time()
+
+        p1_unmatched = p1_unmatched.subtract(p1_matches)
+        p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        print(f'Exec time MatchSymbol: {end-start:.4f} secs')
+        print(matchedSymbols.size())
+        print(Counter([tuple(x) for x in matches.values()]))
+
+        # Run Function Correlators
+
         for cor in func_correlators:
             print(cor)
             start = time()
@@ -102,32 +131,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             print(func_matches.size())
             print(Counter([tuple(x) for x in matches.values()]))
 
-        one_to_one = True
-        include_externals = True
-        min_sym_name_len = 3
-        matchedSymbols = MatchSymbol.matchSymbol(p1, p1.getMemory(), p2, p2.getMemory(),
-                                                 min_sym_name_len, one_to_one, include_externals, monitor)
-
-        start = time()
-        for match in matchedSymbols:
-            if match.matchType == SymbolType.FUNCTION:
-                func = p1.functionManager.getFunctionContaining(match.aSymbolAddress)
-                assert func.entryPoint == match.aSymbolAddress
-                func2 = p2.functionManager.getFunctionContaining(match.bSymbolAddress)
-                assert func2.entryPoint == match.bSymbolAddress
-
-                p1_matches.add(match.aSymbolAddress)
-                p2_matches.add(match.bSymbolAddress)
-                matches.setdefault((match.aSymbolAddress, match.bSymbolAddress), {}).setdefault(name, 0)
-                matches[(match.aSymbolAddress, match.bSymbolAddress)][name] += 1
-        end = time()
-
-        p1_unmatched = p1_unmatched.subtract(p1_matches)
-        p2_unmatched = p2_unmatched.subtract(p2_matches)
-
-        print(f'Exec time MatchSymbol: {end-start:.4f} secs')
-        print(matchedSymbols.size())
-        print(Counter([tuple(x) for x in matches.values()]))
+        # Find unmatched functions
 
         p1_missing = []
         p2_missing = []
@@ -145,21 +149,18 @@ class VersionTrackingDiff(GhidraDiffEngine):
         unmatched.extend([func.getSymbol() for func in p1_missing])
         unmatched.extend([func.getSymbol() for func in p2_missing])
 
-        # Find added and deleted externs
+        # Find external function unmatched and matched
+
         p1_externals = {}
         # get external funcs (these are still interesting)
         for func in p1.functionManager.getExternalFunctions():
             key = func.getName(True)
-            if p1_externals.get(key):
-                print(f'Warning: key already found in p1 externals {key}')
             p1_externals[key] = func
 
         p2_externals = {}
         # get external funcs (these are still interesting)
         for func in p2.functionManager.getExternalFunctions():
             key = func.getName(True)
-            if p2_externals.get(key):
-                print(f'Warning: key already found in p2 externals {key}')
             p2_externals[key] = func
 
         deleted_externs = list(set(p1_externals.keys()).difference(p2_externals.keys()))
@@ -188,8 +189,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
             matched.append([func.getSymbol(), func2.getSymbol(), list(match_types.keys())])
 
         # skip types will undergo less processing
-        skip_types = ['ExternalsName', 'StructuralGraphHash',
-                      'ExactInstructionsFunctionHasher', 'ExactBytesFunctionHasher']
+        skip_types = ['ExternalsName', 'ExactInstructionsFunctionHasher',
+                      'ExactBytesFunctionHasher', 'ExactMnemonicsFunctionHasher']
 
         return [unmatched, matched, skip_types]
 
@@ -240,6 +241,8 @@ if __name__ == "__main__":
 
         print(pdiff['stats'])
         assert d.validate_diff_json(pdiff_json) is True
+
+        assert pdiff['stats']['items_to_process'] < 5000, 'Diff too large to write'
 
         diff_name = f"{pathlib.Path(diff[0]).name}_to_{pathlib.Path(diff[1]).name}_diff"
         d.dump_pdiff_to_dir(diff_name, pdiff, args.output_path)
