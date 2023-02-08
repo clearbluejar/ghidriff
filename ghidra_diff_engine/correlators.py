@@ -14,6 +14,7 @@ class StructuralGraphHasher:
     Hash function using Graph Centric Comparison of function control flow graphs (thank you 2004 halvar)
     Hash calculates a 3-tuple measurement from each node (function cfg) in the program
     (num_basic_blocks, num_edges_of_blocks, num_call_subfunctions)
+    There are several other properties (length, refcount, paramcount) added to this hash, as it is meant to be run with one_to_many = True
     Based on "Structural Comparison of Executable Objects" by Halvar Flake
     """
 
@@ -24,44 +25,35 @@ class StructuralGraphHasher:
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
 
         from ghidra.program.model.block import BasicBlockModel
-        from ghidra.util.task import ConsoleTaskMonitor
         from ghidra.program.model.symbol import SourceType
-        from ghidra.program.model.listing import Function
+        from ghidra.program.model.symbol import SymbolUtilities
 
         # graph structure vars
         num_basic_blocks = 0
         num_edges_of_blocks = 0
         num_call_subfunctions = 0
 
-        # # skip func like FUN_ and LAB_, or local symbols like switch
-        symbol = func.getSymbol()
+        sym = func.symbol
 
-        if symbol.getSource() == SourceType.DEFAULT:
-            # print(f'{symbol.getProgram().getName()} : {symbol} : {symbol.getSource()}')
+        # # skip func like FUN_ and LAB_, or local symbols like switch
+        if sym.getSource() == SourceType.DEFAULT:
             fname = ''
         else:
-            # print(f'{symbol.getProgram().getName()} : {symbol} : {symbol.getSource()}')
-            fname = func.getName()
-            if '@' in fname:
-                fname = fname.split('@')[0]
-            elif '$' in fname:
-                fname = fname.split('$')[0]
+            fname = SymbolUtilities.getCleanSymbolName(sym.getName(True), sym.address)
 
-        if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
+        basic_model = BasicBlockModel(func.getProgram(), True)
+        basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
 
-            basic_model = BasicBlockModel(func.getProgram(), True)
-            basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
+        for block in basic_blocks:
+            num_edges_of_blocks += block.getNumDestinations(monitor)
+            num_basic_blocks += 1
 
-            for block in basic_blocks:
-                num_edges_of_blocks += block.getNumDestinations(monitor)
-                num_basic_blocks += 1
+            code_units = func.getProgram().getListing().getCodeUnits(block, True)
+            for code in code_units:
+                if code.mnemonicString == 'CALL':
+                    num_call_subfunctions += 1
 
-                code_units = func.getProgram().getListing().getCodeUnits(block, True)
-                for code in code_units:
-                    if code.mnemonicString == 'CALL':
-                        num_call_subfunctions += 1
-
-        return hash((fname, num_basic_blocks, num_edges_of_blocks, num_call_subfunctions, func.body.numAddresses, func.parameterCount, symbol.referenceCount))
+        return hash((fname, num_basic_blocks, num_edges_of_blocks, num_call_subfunctions, func.body.numAddresses, func.parameterCount, sym.referenceCount))
 
     @ JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
@@ -84,33 +76,23 @@ class StructuralGraphExactHasher:
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
 
         from ghidra.program.model.block import BasicBlockModel
-        from ghidra.util.task import ConsoleTaskMonitor
-        from ghidra.program.model.symbol import SourceType
-        from ghidra.program.model.listing import Function
 
-        # graph structure vars
         num_basic_blocks = 0
         num_edges_of_blocks = 0
         num_call_subfunctions = 0
-        num_flow_type = 0
 
-        if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
+        basic_model = BasicBlockModel(func.getProgram(), True)
+        basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
 
-            basic_model = BasicBlockModel(func.getProgram(), True)
-            basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
+        for block in basic_blocks:
+            num_edges_of_blocks += block.getNumDestinations(monitor)
+            num_basic_blocks += 1
 
-            for block in basic_blocks:
-                num_edges_of_blocks += block.getNumDestinations(monitor)
-                num_basic_blocks += 1
-
-                # if block.flowType.call:
-                #     num_flow_type += 1
-                # print(block.flowType)
-
-                code_units = func.getProgram().getListing().getCodeUnits(block, True)
-                for code in code_units:
-                    if code.mnemonicString == 'CALL':
-                        num_call_subfunctions += 1
+            code_units = func.getProgram().getListing().getCodeUnits(block, True)
+            for code in code_units:
+                # TODO verify BL instruction for ARM https://developer.arm.com/documentation/den0013/d/Application-Binary-Interfaces/Procedure-Call-Standard?lang=en
+                if code.mnemonicString == 'CALL' or code.mnemonicString == 'BL':
+                    num_call_subfunctions += 1
 
         return hash((num_basic_blocks, num_call_subfunctions, num_edges_of_blocks))
 
@@ -192,20 +174,15 @@ class BulkBasicBlockMnemonicHasher:
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
 
         from ghidra.program.model.block import BasicBlockModel
-        from ghidra.util.task import ConsoleTaskMonitor
 
-        if (not func.isThunk() and func.getBody().getNumAddresses() >= 10):
+        basic_model = BasicBlockModel(func.getProgram(), True)
+        basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
+        blocks = []
 
-            monitor = ConsoleTaskMonitor()
-
-            basic_model = BasicBlockModel(func.getProgram(), True)
-            basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
-            blocks = []
-
-            for block in basic_blocks:
-                code_units = func.getProgram().getListing().getCodeUnits(block, True)
-                for code in code_units:
-                    blocks.append(code.getMnemonicString())
+        for block in basic_blocks:
+            code_units = func.getProgram().getListing().getCodeUnits(block, True)
+            for code in code_units:
+                blocks.append(code.getMnemonicString())
 
         return hash(tuple(sorted(blocks)))
 
@@ -227,10 +204,6 @@ class NamespaceNameParamHasher:
 
     @JOverride
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
-
-        if self.FIRST_RUN:
-            monitor.setMessage('Running {self.class}')
-            self.FIRST_RUN = False
 
         return hash((func.getName(True), func.parameterCount))
 
@@ -254,10 +227,6 @@ class NameParamHasher:
     @JOverride
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
 
-        if self.FIRST_RUN:
-            monitor.setMessage('Running {self.class}')
-            self.FIRST_RUN = False
-
         return hash((func.getName(), func.parameterCount))
 
     @ JOverride
@@ -279,10 +248,6 @@ class NameParamRefHasher:
 
     @JOverride
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
-
-        if self.FIRST_RUN:
-            monitor.setMessage('Running {self.class}')
-            self.FIRST_RUN = False
 
         return hash((func.getName(True), func.parameterCount, func.symbol.referenceCount))
 
