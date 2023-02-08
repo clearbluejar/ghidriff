@@ -6,14 +6,13 @@ import re
 from time import time
 from collections import Counter
 import difflib
-import concurrent
+import concurrent.futures
 from textwrap import dedent
 from typing import List, Tuple, Union, TYPE_CHECKING
 
 import pyhidra
 from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
-import asyncio
 import multiprocessing
 
 from ghidra_diff_engine import __version__
@@ -59,8 +58,7 @@ class GhidraDiffEngine:
         self.max_workers = max_workers
 
         # Setup decompiler interface
-        from ghidra.app.decompiler import DecompInterface
-        self.ifc = DecompInterface()
+        self.decompilers = {}
 
         self.project: "ghidra.base.project.GhidraProject" = None
 
@@ -80,7 +78,7 @@ class GhidraDiffEngine:
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='diff_project')
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='.symbols')
 
-    def enhance_sym(self, sym: 'ghidra.program.model.symbol.Symbol') -> dict:
+    def enhance_sym(self, sym: 'ghidra.program.model.symbol.Symbol', thread_id: int = 0) -> dict:
         """
         Standardize enhanced symbol. Use esym_memo to speed things up.
         Inspired by Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/api/main/VTMatchInfo.java
@@ -88,15 +86,16 @@ class GhidraDiffEngine:
 
         from ghidra.program.model.symbol import SymbolType
 
-        key = str(sym.getID()) + sym.getProgram().getName()
+        key = f'{sym.iD}-{sym.program.name}'
 
         if key not in self.esym_memo:
 
             from ghidra.util.task import ConsoleTaskMonitor
 
+            monitor = ConsoleTaskMonitor()
             prog = sym.program
-            listing = prog.getListing().getFunctionAt(sym.getAddress())
-            func: 'ghidra.program.model.listing.Function' = prog.functionManager.getFunctionAt(sym.getAddress())
+            listing = prog.listing.getFunctionAt(sym.address)
+            func: 'ghidra.program.model.listing.Function' = prog.functionManager.getFunctionAt(sym.address)
 
             if not sym.symbolType == SymbolType.FUNCTION and not listing and not func:
 
@@ -104,6 +103,7 @@ class GhidraDiffEngine:
 
                 calling = set()
                 ref_types = set()
+
                 for ref in sym.references:
                     ref_types.add(ref.referenceType.toString())
                     f = prog.getFunctionManager().getFunctionContaining(ref.fromAddress)
@@ -140,7 +140,7 @@ class GhidraDiffEngine:
 
                 # Basic Block Bulker
                 basic_model = BasicBlockModel(func.getProgram(), True)
-                basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), ConsoleTaskMonitor())
+                basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
 
                 for block in basic_blocks:
                     code_units = func.getProgram().getListing().getCodeUnits(block, True)
@@ -150,17 +150,17 @@ class GhidraDiffEngine:
                 # sort - This case handles the case for compiler optimizations
                 blocks = sorted(blocks)
 
-                self.ifc.openProgram(prog)
-
                 called_funcs = []
-                for f in func.getCalledFunctions(ConsoleTaskMonitor()):
+                for f in func.getCalledFunctions(monitor):
                     called_funcs.append(f.toString())
 
                 calling_funcs = []
-                for f in func.getCallingFunctions(ConsoleTaskMonitor()):
+                for f in func.getCallingFunctions(monitor):
                     calling_funcs.append(f.toString())
 
-                results = self.ifc.decompileFunction(func, 1, ConsoleTaskMonitor()).getDecompiledFunction()
+                TIMEOUT = 1
+                results = self.decompilers[prog.name][thread_id].decompileFunction(
+                    func, TIMEOUT, monitor).getDecompiledFunction()
                 code = results.getC() if results else ""
 
                 parent_namespace = sym.getParentNamespace().toString().split('@')[0]
@@ -229,6 +229,54 @@ class GhidraDiffEngine:
             bin_results.append([program_path, imported, has_pdb])
 
         return bin_results
+
+    def setup_decompliers(
+        self,
+        p1: "ghidra.program.model.listing.Program",
+        p2: "ghidra.program.model.listing.Program"
+    ) -> bool:
+        """
+        Setup decompliers to use during diff bins. Each one must be initialized with a program.
+        """
+
+        from ghidra.app.decompiler import DecompInterface
+
+        if self.threaded:
+            decompiler_count = 2 * self.max_workers
+            for i in range(self.max_workers):
+                self.decompilers.setdefault(p1.name, {}).setdefault(i, DecompInterface())
+                self.decompilers.setdefault(p2.name, {}).setdefault(i, DecompInterface())
+                self.decompilers[p1.name][i].openProgram(p1)
+                self.decompilers[p2.name][i].openProgram(p2)
+        else:
+            decompiler_count = 2
+            self.decompilers.setdefault(p1.name, {}).setdefault(0, DecompInterface())
+            self.decompilers.setdefault(p2.name, {}).setdefault(0, DecompInterface())
+            self.decompilers[p1.name][0].openProgram(p1)
+            self.decompilers[p2.name][0].openProgram(p2)
+
+        print(f'Setup {decompiler_count} decompliers')
+
+        return True
+
+    def shutdown_decompilers(
+        self,
+        p1: "ghidra.program.model.listing.Program",
+        p2: "ghidra.program.model.listing.Program"
+    ) -> bool:
+        """
+        Shutdown decompliers
+        """
+
+        if self.threaded:
+            for i in range(self.max_workers):
+                self.decompilers[p1.name][i].closeProgram()
+                self.decompilers[p2.name][i].closeProgram()
+        else:
+            self.decompilers[p1.name][0].openProgram(p1)
+            self.decompilers[p2.name][0].openProgram(p2)
+
+        self.decompilers = {}
 
     def get_pdb(self, prog: "ghidra.program.model.listing.Program") -> "java.io.File":
         """
@@ -346,17 +394,6 @@ class GhidraDiffEngine:
 
         return df_or_prog
 
-    async def run_threaded_analysis(self, require_symbols):
-
-        from concurrent.futures.thread import ThreadPoolExecutor
-
-        loop = asyncio.get_running_loop()
-        executor = ThreadPoolExecutor(max_workers=self.max_workers)
-        futures = [loop.run_in_executor(executor, self.analyze_program, *[domainFile, require_symbols])
-                   for domainFile in self.project.getRootFolder().getFiles()]
-
-        completed, pending = await asyncio.wait(futures, return_when=asyncio.ALL_COMPLETED)
-
     def analyze_project(self, require_symbols=True) -> None:
         """
         Analyzes all files found within the project
@@ -473,9 +510,9 @@ class GhidraDiffEngine:
         return diff
 
     def find_matches(
-        self,
-        p1: "ghidra.program.model.listing.Program",
-        p2: "ghidra.program.model.listing.Program"
+            self,
+            p1: "ghidra.program.model.listing.Program",
+            p2: "ghidra.program.model.listing.Program"
     ) -> list:
         """
         Find matching and unmatched functions between p1 and p2
@@ -488,7 +525,7 @@ class GhidraDiffEngine:
         p2: "ghidra.program.model.listing.Program"
     ) -> list:
         """
-        Find matching and unmatched symbols between p1 and p2
+        Find matching and unmatched (non-function) symbols between p1 and p2
         """
 
         # from Features/Base/src/main/java/ghidra/app/plugin/match/MatchSymbol.java
@@ -505,6 +542,7 @@ class GhidraDiffEngine:
         # find added and deleted symbols
         from ghidra.program.model.symbol import SymbolUtilities
         from ghidra.program.model.symbol import SourceType
+        from ghidra.program.model.symbol import SymbolType
         from ghidra.program.model.listing import Function
 
         all_p1_syms = {}
@@ -514,24 +552,28 @@ class GhidraDiffEngine:
 
         # follow pattern for Ghidra/Features/Base/src/main/java/ghidra/app/plugin/match/MatchSymbol.java
         for sym in p1.getSymbolTable().getAllSymbols(True):
-            # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
-            if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
-                # skip local symbols
-                if not isinstance(sym.getParentNamespace(), Function):
-                    # get name lacking '_' or '@'
-                    clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
-                    all_p1_syms[clean_name] = sym
+            # skip functions
+            if not sym.symbolType == SymbolType.FUNCTION:
+                # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
+                if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
+                    # skip local symbols
+                    if not isinstance(sym.getParentNamespace(), Function):
+                        # get name lacking '_' or '@'
+                        clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
+                        all_p1_syms[clean_name] = sym
 
         print(f'p1 sym count: reported: {p1.symbolTable.numSymbols} analyzed: {len(all_p1_syms)}')
 
         for sym in p2.getSymbolTable().getAllSymbols(True):
-            # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
-            if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
-                # skip local symbols
-                if not isinstance(sym.getParentNamespace(), Function):
-                    # get name lacking '_' or '@'
-                    clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
-                    all_p2_syms[clean_name] = sym
+            # skip functions
+            if not sym.symbolType == SymbolType.FUNCTION:
+                # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
+                if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
+                    # skip local symbols
+                    if not isinstance(sym.getParentNamespace(), Function):
+                        # get name lacking '_' or '@'
+                        clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
+                        all_p2_syms[clean_name] = sym
 
         print(f'p2 sym count: reported: {p2.symbolTable.numSymbols} analyzed: {len(all_p2_syms)}')
 
@@ -550,6 +592,35 @@ class GhidraDiffEngine:
         print(f'Found unmatched: {len(unmatched)} matched: {len(matched)}')
 
         return [unmatched, matched]
+
+    def syms_need_diff(
+        self,
+        sym: 'ghidra.program.model.symbol.Symbol',
+        sym2: 'ghidra.program.model.listing.Function'
+    ) -> bool:
+        """
+        Determine quickly if a function match requires a deeper diff
+        """
+
+        from ghidra.program.model.symbol import SourceType
+
+        func: 'ghidra.program.model.listing.Function' = sym.program.functionManager.getFunctionAt(sym.address)
+        func2: 'ghidra.program.model.listing.Function' = sym2.program.functionManager.getFunctionAt(sym2.address)
+
+        assert func is not None and func2 is not None
+
+        need_diff = False
+
+        if func.body.numAddresses != func2.body.numAddresses:
+            need_diff = True
+        elif sym.referenceCount != sym2.referenceCount:
+            need_diff = True
+        # # if names aren't FUN_ or LAB_ and names aren't equal
+        # elif sym.getSource() != SourceType.DEFAULT and sym2.source != SourceType.DEFAULT and func.name != func2.name:
+        #     # need_diff = True
+        #     print(f'{func.name} != {func2.name}')
+
+        return need_diff
 
     def diff_bins(
             self,
@@ -577,6 +648,9 @@ class GhidraDiffEngine:
         p1 = self.project.openProgram("/", old.name, True)
         p2 = self.project.openProgram("/", new.name, True)
 
+        # setup decompilers
+        self.setup_decompliers(p1, p2)
+
         print("Loaded old program: {}".format(p1.getName()))
         print("Loaded new program: {}".format(p2.getName()))
 
@@ -585,7 +659,7 @@ class GhidraDiffEngine:
         # sanity check - ensure comparing apples to apples
         assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or only one binary has symbols! Check Ghidra analysis or pdb!'
 
-        unmatched_syms, matched_syms = self.diff_symbols(p1, p2)
+        unmatched_syms, _ = self.diff_symbols(p1, p2)
 
         deleted_symbols = []
         added_symbols = []
@@ -615,27 +689,32 @@ class GhidraDiffEngine:
             esym_lookups = []
             esym_lookups.extend(deleted_symbols)
             esym_lookups.extend(added_symbols)
+            esym_lookups.extend(unmatched)
 
             for sym, sym2, match_types in matches:
 
                 # skip enhancing matches with these types
-                if any([match_type in skip_types for match_type in match_types]):
-                    # want to keep ref differences
-                    if sym.referenceCount == sym2.referenceCount:
-                        continue
+                if not self.syms_need_diff(sym, sym2):
+                    continue
+                # elif any([match_type in skip_types for match_type in match_types]):
+                #     # want to keep ref differences
+                #     continue
 
                 esym_lookups.append(sym)
                 esym_lookups.append(sym2)
 
             print(f'Starting esym lookups for {len(esym_lookups)} symbols using {self.max_workers} threads')
 
-            # TODO add monitor and progress updates
+            completed = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = (executor.submit(self.enhance_sym, sym)
-                           for sym in esym_lookups)
+                futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers)
+                           for thread_id, sym in enumerate(esym_lookups))
                 for future in concurrent.futures.as_completed(futures):
                     # TODO increment progress
                     result = future.result()
+                    completed += 1
+                    if (completed % 100) == 0:
+                        print(f'Completed {completed} and {int(completed/len(esym_lookups)*100)}%')
 
         for sym in deleted_symbols:
             symbols['deleted'].append(self.enhance_sym(sym))
@@ -657,11 +736,13 @@ class GhidraDiffEngine:
             skip_match = False
 
             # skip enhancing matches with these types
-            if any([match_type in skip_types for match_type in match_types]):
-                # want to keep ref differences
-                if sym.referenceCount == sym2.referenceCount:
-                    skip_match = True
+            # if any([match_type in skip_types for match_type in match_types]):
+            #     # want to keep ref differences
+            #     if sym.referenceCount == sym2.referenceCount:
+            #         skip_match = True
 
+            if not self.syms_need_diff(sym, sym2):
+                continue
             # account for match types
             # (only take fist match as this will count towards total)
 
@@ -701,9 +782,6 @@ class GhidraDiffEngine:
 
             # ignore signature for ratio
             ratio = difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio()
-
-            print(ematch_1['sig'])
-            print(ematch_2['sig'])
 
             diff = ''.join(list(difflib.unified_diff(old_code, new_code, lineterm='\n',
                            fromfile=sym.getProgram().getName(), tofile=sym2.getProgram().getName())))
@@ -750,7 +828,14 @@ class GhidraDiffEngine:
                 print(f'no diff: {sym} {sym2} {match_types}')
                 continue
 
-            modified_funcs.append({'old': ematch_1, 'new': ematch_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
+            ematch_min_1 = ematch_1.copy()
+            ematch_min_2 = ematch_2.copy()
+            # reduce size of esym with hash
+            for field in ['instructions', 'mnemonics', 'blocks']:
+                ematch_min_1[field] = hash(tuple(ematch_min_1[field]))
+                ematch_min_2[field] = hash(tuple(ematch_min_2[field]))
+
+            modified_funcs.append({'old': ematch_min_1, 'new': ematch_min_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
                                   'i_ratio': instructions_ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_types': match_types})
 
         # Set funcs
@@ -762,8 +847,10 @@ class GhidraDiffEngine:
 
         # Set pdiff
         elapsed = time() - start
+        items_to_process = len(added_funcs) + len(deleted_funcs) + len(modified_funcs) + \
+            len(symbols['added']) + len(symbols['deleted'])
         pdiff['stats'] = {'added_funcs_len': len(added_funcs), 'deleted_funcs_len': len(deleted_funcs), 'modified_funcs_len': len(modified_funcs), 'added_symbols_len': len(
-            symbols['added']), 'deleted_symbols_len': len(symbols['deleted']), 'diff_time': elapsed, 'match_types': Counter(all_match_types)}
+            symbols['added']), 'deleted_symbols_len': len(symbols['deleted']), 'diff_time': elapsed, 'match_types': Counter(all_match_types), 'items_to_process': items_to_process}
         pdiff['symbols'] = symbols
         pdiff['functions'] = funcs
 
@@ -773,8 +860,16 @@ class GhidraDiffEngine:
         # analysis options used (just check p1, same used for both)
         pdiff['analysis_options'] = self.get_analysis_options(p1)
 
+        self.shutdown_decompilers(p1, p2)
+
+        # reset global esym OTHERWISE this gets big
+        self.esym_memo = {}
+
         self.project.close(p1)
         self.project.close(p2)
+
+        print("Finished diffing old program: {}".format(p1.getName()))
+        print("Finished diffing program: {}".format(p2.getName()))
 
         return pdiff
 
@@ -791,19 +886,22 @@ class GhidraDiffEngine:
         self,
         results: json
     ) -> bool:
+
+        is_valid = False
         try:
             json.loads(results)
+            is_valid = True
         except ValueError as err:
             print(err)
-            return False
-        return True
+
+        return is_valid
 
     def _wrap_with_diff(self, diff: str) -> str:
 
         text = ''
         text += "```diff\n"
         text += diff
-        text += "```\n"
+        text += "\n```\n"
         text += "\n"
 
         return text
@@ -878,6 +976,18 @@ class GhidraDiffEngine:
         diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
 
         return diff_table
+
+    def gen_esym_key_diff(self, esym: dict, esym2: dict, key: str, n=3) -> str:
+        """
+        Generate a difflib unified diff from two esyms and a key
+        n is the number of context lines for diff lib to wrap around the found diff
+        """
+        diff = ''
+
+        diff += '\n'.join(difflib.unified_diff(esym[key], esym2[key],
+                          fromfile=f'old {key}', tofile=f'new {key}', lineterm='', n=n))
+
+        return self._wrap_with_diff(diff)
 
     def gen_code_table_diff_html(self, old_code, new_code, old_name, new_name) -> str:
         """
@@ -1111,6 +1221,13 @@ pie showData
                 md.new_header(3, "Function Meta Diff", add_table_of_contents='n')
                 md.new_paragraph(self.gen_esym_table_diff(old_name, new_name, modified))
 
+                if 'called' in modified['diff_type']:
+                    md.new_header(3, "Called Diff", add_table_of_contents='n')
+                    md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'called', n=0))
+                if 'calling' in modified['diff_type']:
+                    md.new_header(3, "Calling Diff", add_table_of_contents='n')
+                    md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'calling', n=0))
+
                 md.new_header(3, f"{modified['old']['name']} Diff", add_table_of_contents='n')
                 md.new_paragraph(self._wrap_with_diff(modified['diff']))
 
@@ -1168,6 +1285,13 @@ pie showData
                 md.new_header(3, "Function Meta Diff", add_table_of_contents='n')
                 md.new_paragraph(self.gen_esym_table_diff(old_name, new_name, modified))
 
+                if 'called' in modified['diff_type']:
+                    md.new_header(3, "Called Diff", add_table_of_contents='n')
+                    md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'called', n=0))
+                if 'calling' in modified['diff_type']:
+                    md.new_header(3, "Calling Diff", add_table_of_contents='n')
+                    md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'calling', n=0))
+
         md.new_table_of_contents('TOC', 3)
 
         return md.get_md_text()
@@ -1198,3 +1322,6 @@ pie showData
 
         with json_path.open('w') as f:
             json.dump(pdiff, f, indent=4)
+
+        print(f'Wrote {md_path}')
+        print(f'Wrote {json_path}')
