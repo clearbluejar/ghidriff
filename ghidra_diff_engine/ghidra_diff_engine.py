@@ -792,6 +792,7 @@ pie showData
         self,
         name: str,
         pdiff: Union[str,dict],
+        md_diff:str,
         dir: Union[str,pathlib.Path],
         side_by_side: bool = False,
     ) -> None:
@@ -807,10 +808,9 @@ pie showData
         md_path = dir / pathlib.Path(name + '.md')
         json_path = dir / pathlib.Path(name + '.json')
 
-        diff_text = self.gen_diff_md(pdiff,side_by_side=side_by_side)
 
         with md_path.open('w') as f:
-            f.write(diff_text)
+            f.write(md_diff)
 
         with json_path.open('w') as f:
             json.dump(pdiff,f,indent=4)

@@ -93,6 +93,8 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
+  -f {none,no-code,no-asm}, --json_formatter {none,no-code,no-asm}
+                        Set the data to appear in the json output. no-code: removes all assembly and pseudo-C from the output. no-asm: removes all assembly from the output. none (default): does not modify the JSON output.
 
 Ghidra options:
   -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
@@ -101,7 +103,6 @@ Ghidra options:
                         Ghidra Project Name
   -s SYMBOLS_PATH, --symbols-path SYMBOLS_PATH
                         Ghidra local symbol store directory
-  -o OUTPUT_PATH, --output-path OUTPUT_PATH
 ```
 
 ## Quick Start Environment Setup
