@@ -557,13 +557,11 @@ if __name__ == "__main__":
 
     parser.add_argument('old', nargs=1, help='Path to older version of binary "/somewhere/bin.old"')
     parser.add_argument('new', action='append', nargs='+', help="Path to new version of binary '/somewhere/bin.new'. For multiple binaries add oldest to newest")
-
+    parser.add_argument('-o', '--output-path', dest="output_path",
+                        help='Path to store diffing results', default='.diffs')    
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
     args = parser.parse_args()
-
-    print(args)
-
     binary_paths = args.old + [bin for sublist in args.new for bin in sublist]
 
     d = GhidraSimpleDiff(True)
@@ -592,4 +590,5 @@ if __name__ == "__main__":
         assert d.validate_diff_json(pdiff_json) is True
 
         diff_name = f"{pathlib.Path(diff[0]).name}_to_{pathlib.Path(diff[1]).name}_diff"
+
         d.dump_pdiff_to_dir(diff_name,pdiff,args.output_path)
