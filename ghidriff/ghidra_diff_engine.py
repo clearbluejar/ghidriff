@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import json
 import pathlib
 import difflib
@@ -5,7 +6,6 @@ import argparse
 import re
 from time import time
 from collections import Counter
-import difflib
 import concurrent.futures
 from textwrap import dedent
 from typing import List, Tuple, Union, TYPE_CHECKING
@@ -15,7 +15,7 @@ from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
 import multiprocessing
 
-from ghidra_diff_engine import __version__
+from ghidriff import __version__
 
 if TYPE_CHECKING:
     import ghidra
@@ -509,6 +509,7 @@ class GhidraDiffEngine:
 
         return diff
 
+    @abstractmethod
     def find_matches(
             self,
             p1: "ghidra.program.model.listing.Program",

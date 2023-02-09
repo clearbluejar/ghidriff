@@ -2,7 +2,6 @@ import argparse
 from collections import Counter
 import json
 import pathlib
-import hashlib
 from time import time
 
 from typing import List, Tuple, TYPE_CHECKING
@@ -17,7 +16,9 @@ if TYPE_CHECKING:
 
 class VersionTrackingDiff(GhidraDiffEngine):
     """
-    An Ghidra Diff implementation using several exact and fuzzy correlators
+    An Ghidra Diff implementation using several exact and some fuzzy correlators
+    This differ is inspired by Ghidra's Version Tracking (albeit much faster)
+    ghidra/tree/master/Ghidra/Features/VersionTracking
     """
 
     MIN_FUNC_LEN = 10
@@ -82,8 +83,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
         one_to_one = True
         include_externals = True
         min_sym_name_len = 3
-        matchedSymbols = MatchSymbol.matchSymbol(p1, p1.getMemory(), p2, p2.getMemory(),
-                                                 min_sym_name_len, one_to_one, include_externals, monitor)
+        matchedSymbols = MatchSymbol.matchSymbol(
+            p1, p1.getMemory(), p2, p2.getMemory(), min_sym_name_len, one_to_one, include_externals, monitor)
 
         start = time()
 
@@ -197,7 +198,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='A simple Ghidra binary diffing tool')
+    parser = argparse.ArgumentParser(description='Ghidra Version Tracking Style Binary Diffing Tool')
 
     parser.add_argument('old', nargs=1, help='Path to older version of binary "/somewhere/bin.old"')
     parser.add_argument('new', action='append', nargs='+',
@@ -205,6 +206,10 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output-path', help='Output path for resulting diff', default='.output_diffs')
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
+
+    group = parser.add_argument_group('Diff Markdown Options')
+    group.add_argument('--sxs', dest='side_by_side', action=argparse.BooleanOptionalAction,
+                       help='Diff Markdown includes side by side diff', default=False)
 
     args = parser.parse_args()
 
@@ -245,4 +250,4 @@ if __name__ == "__main__":
         assert pdiff['stats']['items_to_process'] < 5000, 'Diff too large to write'
 
         diff_name = f"{pathlib.Path(diff[0]).name}_to_{pathlib.Path(diff[1]).name}_diff"
-        d.dump_pdiff_to_dir(diff_name, pdiff, args.output_path)
+        d.dump_pdiff_to_dir(diff_name, pdiff, args.output_path, side_by_side=args.side_by_side)
