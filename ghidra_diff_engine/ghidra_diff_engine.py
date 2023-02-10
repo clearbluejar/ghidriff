@@ -98,7 +98,7 @@ class GhidraDiffEngine:
             listing = prog.listing.getFunctionAt(sym.address)
             func: 'ghidra.program.model.listing.Function' = prog.functionManager.getFunctionAt(sym.address)
 
-            if not sym.symbolType == SymbolType.FUNCTION and not listing and not func:
+            if not sym.symbolType == SymbolType.FUNCTION:
 
                 # process symbol
 
@@ -120,7 +120,7 @@ class GhidraDiffEngine:
                     parent = None
 
                 self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True), 'parent':  parent, 'refcount': sym.getReferenceCount(), 'reftypes': ref_types,  'calling': calling,
-                                       'address': str(sym.getAddress()), 'sym_type': str(sym.getSymbolType()), 'external': sym.external}
+                                       'address': str(sym.getAddress()), 'sym_type': str(sym.getSymbolType()), 'sym_source': str(sym.source), 'external': sym.external}
 
             else:
                 # proces function
@@ -171,7 +171,7 @@ class GhidraDiffEngine:
 
                 self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True),  'parent':  parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
                                        'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()), 'sig': str(func.getSignature(False)), 'code': code,
-                                       'instructions': instructions, 'mnemonics': mnemonics, 'blocks': blocks, 'sym_type': str(sym.getSymbolType()), 'external': sym.external}
+                                       'instructions': instructions, 'mnemonics': mnemonics, 'blocks': blocks, 'sym_type': str(sym.getSymbolType()), 'sym_source': str(sym.source), 'external': sym.external}
 
         return self.esym_memo[key]
 
@@ -376,7 +376,7 @@ class GhidraDiffEngine:
 
                 # handle large binaries more efficiently
                 # see ghidra/issues/4573 (turn off feature Shared Return Calls )
-                if program and program.getFunctionManager().functionCount > 1000:
+                if program and program.getFunctionManager().getFunctionCount() > 1000:
                     self.set_analysis_option_bool(
                         program, 'Shared Return Calls.Assume Contiguous Functions Only', False)
 
@@ -521,6 +521,17 @@ class GhidraDiffEngine:
         """
         raise NotImplementedError
 
+    # based on Features/Base/src/main/java/ghidra/app/plugin/match/MatchSymbol.java
+    def is_sym_string(self, sym: 'ghidra.program.model.symbol.Symbol') -> bool:
+
+        sym_addr = sym.getAddress()
+        if sym_addr is not None:
+            data = sym.getProgram().getListing().getDataAt(sym_addr)
+            if data is not None and data.hasStringValue():
+                return True
+
+        return False
+
     def diff_symbols(
         self,
         p1: "ghidra.program.model.listing.Program",
@@ -529,17 +540,6 @@ class GhidraDiffEngine:
         """
         Find matching and unmatched (non-function) symbols between p1 and p2
         """
-
-        # from Features/Base/src/main/java/ghidra/app/plugin/match/MatchSymbol.java
-        def _is_sym_string(sym: 'ghidra.program.model.symbol.Symbol') -> bool:
-
-            sym_addr = sym.getAddress()
-            if sym_addr is not None:
-                data = sym.getProgram().getListing().getDataAt(sym_addr)
-                if data is not None and data.hasStringValue():
-                    return True
-
-            return False
 
         # find added and deleted symbols
         from ghidra.program.model.symbol import SymbolUtilities
@@ -554,28 +554,30 @@ class GhidraDiffEngine:
 
         # follow pattern for Ghidra/Features/Base/src/main/java/ghidra/app/plugin/match/MatchSymbol.java
         for sym in p1.getSymbolTable().getAllSymbols(True):
-            # skip functions
-            if not sym.symbolType == SymbolType.FUNCTION:
-                # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
-                if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
-                    # skip local symbols
-                    if not isinstance(sym.getParentNamespace(), Function):
-                        # get name lacking '_' or '@'
-                        clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
-                        all_p1_syms[clean_name] = sym
+            if not sym.referenceCount == 0:
+                # skip functions
+                if not sym.symbolType == SymbolType.FUNCTION:
+                    # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
+                    if sym.getSource() != SourceType.DEFAULT or self.is_sym_string(sym):
+                        # skip local symbols
+                        if not isinstance(sym.getParentNamespace(), Function):
+                            # get name lacking '_' or '@'
+                            clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
+                            all_p1_syms[clean_name] = sym
 
         print(f'p1 sym count: reported: {p1.symbolTable.numSymbols} analyzed: {len(all_p1_syms)}')
 
         for sym in p2.getSymbolTable().getAllSymbols(True):
-            # skip functions
-            if not sym.symbolType == SymbolType.FUNCTION:
-                # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
-                if sym.getSource() != SourceType.DEFAULT or _is_sym_string(sym):
-                    # skip local symbols
-                    if not isinstance(sym.getParentNamespace(), Function):
-                        # get name lacking '_' or '@'
-                        clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
-                        all_p2_syms[clean_name] = sym
+            if not sym.referenceCount == 0:
+                # skip functions
+                if not sym.symbolType == SymbolType.FUNCTION:
+                    # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
+                    if sym.getSource() != SourceType.DEFAULT or self.is_sym_string(sym):
+                        # skip local symbols
+                        if not isinstance(sym.getParentNamespace(), Function):
+                            # get name lacking '_' or '@'
+                            clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
+                            all_p2_syms[clean_name] = sym
 
         print(f'p2 sym count: reported: {p2.symbolTable.numSymbols} analyzed: {len(all_p2_syms)}')
 
@@ -617,10 +619,6 @@ class GhidraDiffEngine:
             need_diff = True
         elif sym.referenceCount != sym2.referenceCount:
             need_diff = True
-        # # if names aren't FUN_ or LAB_ and names aren't equal
-        # elif sym.getSource() != SourceType.DEFAULT and sym2.source != SourceType.DEFAULT and func.name != func2.name:
-        #     # need_diff = True
-        #     print(f'{func.name} != {func2.name}')
 
         return need_diff
 
@@ -629,6 +627,7 @@ class GhidraDiffEngine:
             old: Union[str, pathlib.Path],
             new: Union[str, pathlib.Path],
             ignore_FUN: bool = False,
+            force_diff=True
     ) -> dict:
         """
         Diff the old and new binary from the GhidraProject.
@@ -656,28 +655,61 @@ class GhidraDiffEngine:
         print("Loaded old program: {}".format(p1.getName()))
         print("Loaded new program: {}".format(p2.getName()))
 
-        sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
+        if not force_diff:
+            # ensure architectures match
+            assert p1.languageID == p2.languageID, 'p1: {} != p2: {}. The arch or processor does not match.'
 
-        # sanity check - ensure comparing apples to apples
-        assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or only one binary has symbols! Check Ghidra analysis or pdb!'
+            # sanity check - ensure both programs have symbols, or both don't
+            sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
+            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or only one binary has symbols! Check Ghidra analysis or pdb!'
 
+        # Find (non function) symbols
         unmatched_syms, _ = self.diff_symbols(p1, p2)
+
+        # Find functions matches
+        unmatched, matched, skip_types = self.find_matches(p1, p2)
+
+        # dedupe unmatched funcs with syms by names (rare but somtimes Ghidra symbol types get crossed, or pdb parsing issues)
+        dupes = []
+        for func in unmatched:
+            for sym in unmatched_syms:
+                if func.getName(True) == sym.getName(True):
+                    # ensure they are from different progs
+                    assert func.program != sym.program
+                    assert func.source == sym.source
+                    dupes.append(func)
+                    dupes.append(sym)
+
+        for dupe in dupes:
+            if dupe in unmatched:
+                unmatched.remove(dupe)
+            if dupe in unmatched_syms:
+                unmatched_syms.remove(dupe)
 
         deleted_symbols = []
         added_symbols = []
+        deleted_strings = []
+        added_strings = []
 
         for sym in unmatched_syms:
             if sym.program == p1:
-                deleted_symbols.append(sym)
+                if self.is_sym_string(sym):
+                    deleted_strings.append(sym)
+                else:
+                    deleted_symbols.append(sym)
             else:
-                added_symbols.append(sym)
-
-        unmatched, matches, skip_types = self.find_matches(p1, p2)
+                if self.is_sym_string(sym):
+                    added_strings.append(sym)
+                else:
+                    added_symbols.append(sym)
 
         symbols = {}
         funcs = {}
+        strings = {}
         symbols['added'] = []
         symbols['deleted'] = []
+        strings['added'] = []
+        strings['deleted'] = []
 
         deleted_funcs = []
         added_funcs = []
@@ -689,21 +721,19 @@ class GhidraDiffEngine:
         if self.threaded:
 
             esym_lookups = []
-            esym_lookups.extend(deleted_symbols)
-            esym_lookups.extend(added_symbols)
             esym_lookups.extend(unmatched)
+            esym_lookups.extend(unmatched_syms)
 
-            for sym, sym2, match_types in matches:
+            for sym, sym2, match_types in matched:
 
-                # skip enhancing matches with these types
                 if not self.syms_need_diff(sym, sym2):
                     continue
-                # elif any([match_type in skip_types for match_type in match_types]):
-                #     # want to keep ref differences
-                #     continue
 
                 esym_lookups.append(sym)
                 esym_lookups.append(sym2)
+
+            # there can be duplicate multiple function matches, just do this once
+            esym_lookups = list(set(esym_lookups))
 
             print(f'Starting esym lookups for {len(esym_lookups)} symbols using {self.max_workers} threads')
 
@@ -712,7 +742,6 @@ class GhidraDiffEngine:
                 futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers)
                            for thread_id, sym in enumerate(esym_lookups))
                 for future in concurrent.futures.as_completed(futures):
-                    # TODO increment progress
                     result = future.result()
                     completed += 1
                     if (completed % 100) == 0:
@@ -724,6 +753,12 @@ class GhidraDiffEngine:
         for sym in added_symbols:
             symbols['added'].append(self.enhance_sym(sym))
 
+        for sym in deleted_strings:
+            strings['deleted'].append(self.enhance_sym(sym))
+
+        for sym in added_strings:
+            strings['added'].append(self.enhance_sym(sym))
+
         for lost in unmatched:
             elost = self.enhance_sym(lost)
 
@@ -733,25 +768,12 @@ class GhidraDiffEngine:
             else:
                 added_funcs.append(elost)
 
-        for sym, sym2, match_types in matches:
-
-            skip_match = False
-
-            # skip enhancing matches with these types
-            # if any([match_type in skip_types for match_type in match_types]):
-            #     # want to keep ref differences
-            #     if sym.referenceCount == sym2.referenceCount:
-            #         skip_match = True
-
-            if not self.syms_need_diff(sym, sym2):
-                continue
-            # account for match types
-            # (only take fist match as this will count towards total)
+        for sym, sym2, match_types in matched:
 
             first_match = match_types[0]
             all_match_types.append(first_match)
 
-            if skip_match:
+            if not self.syms_need_diff(sym, sym2):
                 continue
 
             diff_type = []
@@ -854,6 +876,7 @@ class GhidraDiffEngine:
         pdiff['stats'] = {'added_funcs_len': len(added_funcs), 'deleted_funcs_len': len(deleted_funcs), 'modified_funcs_len': len(modified_funcs), 'added_symbols_len': len(
             symbols['added']), 'deleted_symbols_len': len(symbols['deleted']), 'diff_time': elapsed, 'match_types': Counter(all_match_types), 'items_to_process': items_to_process}
         pdiff['symbols'] = symbols
+        pdiff['strings'] = strings
         pdiff['functions'] = funcs
 
         pdiff['old_meta'] = self.get_metadata(p1)
