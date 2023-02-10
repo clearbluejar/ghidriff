@@ -15,7 +15,7 @@ from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
 import multiprocessing
 
-from ghidriff import __version__
+from ghidra_diff_engine import __version__
 
 if TYPE_CHECKING:
     import ghidra

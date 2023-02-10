@@ -1,6 +1,6 @@
-# Ghidriff - Ghidra Diffing Engine
+# ghidra-diff-engine
 
-`ghidriff` is a Python package providing a binary diffing engine. It is a tool that leverages the power of Ghidra's [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. It's primary use case if for patch diffing.
+`ghidra-diff-engine` is a Python package providing a [Ghidra](https://ghidra-sre.org/) enabled binary diffing engine. It leverages the power of Ghidra's [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. It's primary use case is for patch diffing. It is written in Python 3 using `pyhidra` as the interface to Ghidra. 
 
 ## High Level
 
@@ -40,14 +40,14 @@ The heavy lifting of the binary analysis is done by Ghidra.  This library is jus
 
 > An "engine" is a self-contained, but externally-controllable, piece of code that encapsulates powerful logic designed to perform a specific type of work.
 
-`ghidriff` is composed of a core [GhidraDiffEngine](ghidra_diff_engine.py), a self-contained base class that can be extended to create your own binary diffing [implementations](#implementations).
+`ghidra-diff-engine` is composed of a core [GhidraDiffEngine](ghidra_diff_engine.py), a base class, that can be extended to create your own binary diffing [implementations](#implementations).
 
 The base class implements first 3 steps of the Ghidra [headless workflow](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#steps):
 >1. **Create Ghidra Project** - Directory and collection of Ghidra project files and data
 >2. **Import Binary to project** - Import one or more binaries to the project for analysis
 >3. **Analyze Binary** - Ghidra will perform default binary analysis on each binary
 
-The base class provides the abstract method [find_matches](ghidra_diff_engine.py) where the actual "diffing" takes place. 
+The base class provides the abstract method [find_matches](ghidra_diff_engine.py) where the actual "diffing" takes place.
 
 ## Implementation 
 
@@ -59,6 +59,7 @@ class NewDiffTool(GhidraDiffEngine):
     def __init__(self,verbose=False) -> None:
         super().__init__(verbose)
 
+    @abstractmethod
     def find_matches(
             self,            
             old: Union[str, pathlib.Path],
@@ -72,11 +73,13 @@ class NewDiffTool(GhidraDiffEngine):
 
 ## Implementations
 
-There are currently 3 differs, which display the evolution of diffing for the project. 
+There are currently 3 differs, which display the evolution of diffing for the project.
 
 1. [GhidraSimpleDiff](simple_diff.py) - A simple diff finding implementation. "Simple" as in it relies mostly on known symbols to find the differences between functions.
-2. [GhidraStructualGraphDiff](ghidra_diff_engine/structural_graph_diff.py) - A slight more advanced differ, begining to perform some more advanced hashing (such as )
-3. [VersionTrackingDiff]
+2. [GhidraStructualGraphDiff](ghidra_diff_engine/structural_graph_diff.py) - A slightly more advanced differ, begining to perform some more advanced hashing (such as Halvar's Structural Graph Comparison)
+3. [VersionTrackingDiff](ghidra_diff_engine/version_tracking_diff.py) - The latest differ, with several [correlators](ghidra_diff_engine/correlators.py) (an algorithm used to score specific associations based on code, program flow, or any observable aspect of comparison) for function matching. **This one is fast.**
+
+Each implementation leverags the base class, and implements `find_changes`. Let's take a look at the `VersionTrackingDiff`
 
 ### Ghidra Version Tracking Differ
 
@@ -84,7 +87,7 @@ There are currently 3 differs, which display the evolution of diffing for the pr
 #### Usage
 
 ```bash
-python -m ghidriff.version_tracking_diff -h
+python -m ghidra_diff_engine.version_tracking_diff -h
 usage: version_tracking_diff.py [-h] [-o OUTPUT_PATH] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--sxs | --no-sxs] old new [new ...]
 
 Ghidra Version Tracking Style Binary Diffing Tool
