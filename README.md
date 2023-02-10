@@ -1,6 +1,8 @@
-# ghidra-diff-engine
+# Ghidriff - A Binary Diffing Engine Powered by Ghidra
 
-`ghidra-diff-engine` is a Python package providing a [Ghidra](https://ghidra-sre.org/) enabled binary diffing engine. It leverages the power of Ghidra's [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. It's primary use case is for patch diffing. It is written in Python 3 using `pyhidra` as the interface to Ghidra. 
+`ghidriff` is a [Ghidra](https://ghidra-sre.org/) enabled binary diffing engine. It leverages the power of Ghidra's SRE [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. 
+
+It's primary use case is for patch diffing. It is written in Python 3 using `pyhidra` and as the interface to Ghidra.
 
 ## High Level
 
@@ -38,9 +40,11 @@ The heavy lifting of the binary analysis is done by Ghidra.  This library is jus
 
 ## About
 
+
 > An "engine" is a self-contained, but externally-controllable, piece of code that encapsulates powerful logic designed to perform a specific type of work.
 
-`ghidra-diff-engine` is composed of a core [GhidraDiffEngine](ghidra_diff_engine.py), a base class, that can be extended to create your own binary diffing [implementations](#implementations).
+
+`ghidriff` is provides a core [GhidraDiffEngine](ghidra_diff_engine.py), a base class, that can be extended to create your own binary diffing [implementations](#implementations).
 
 The base class implements first 3 steps of the Ghidra [headless workflow](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#steps):
 >1. **Create Ghidra Project** - Directory and collection of Ghidra project files and data
@@ -51,7 +55,7 @@ The base class provides the abstract method [find_matches](ghidra_diff_engine.py
 
 ## Implementation 
 
-The basic idea is create new diffing tools from the base class. 
+The basic idea is create new diffing tools by implementing the `find_matches` method from the base class. 
 
 ```python
 class NewDiffTool(GhidraDiffEngine):
