@@ -45,11 +45,12 @@ class GhidraDiffEngine:
             launcher.add_vmargs(f'-XX:MaxRAMPercentage={max_ram_percent}')
             # want JVM to crash if we run out of memory (otherwise no error it propagated)
             launcher.add_vmargs('-XX:+CrashOnOutOfMemoryError')
+            launcher.add_vmargs('-XX:+HeapDumpOnOutOfMemoryError')
 
             # Match ghidra launch support script
 
             if debug_jvm:
-                launcher.add_vmargs('-XX:+HeapDumpOnOutOfMemoryError')
+
                 launcher.add_vmargs('-XX:+PrintFlagsFinal')
 
             launcher.start()
@@ -1201,7 +1202,7 @@ pie showData
             else:
                 md.new_header(2, esym['name'])
             md.new_header(3, "Function Meta", add_table_of_contents='n')
-            md.new_paragraph(self.gen_esym_table(old_name, esym))
+            md.new_paragraph(self.gen_esym_table(new_name, esym))
             md.new_paragraph(self._wrap_with_diff(diff))
 
         # Create Modified section
