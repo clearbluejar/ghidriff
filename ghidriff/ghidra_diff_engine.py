@@ -5,6 +5,7 @@ import difflib
 import argparse
 import re
 from time import time
+from datetime import datetime
 from collections import Counter
 import concurrent.futures
 from textwrap import dedent
@@ -78,6 +79,15 @@ class GhidraDiffEngine:
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='.ghidra_projects')
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='diff_project')
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='.symbols')
+
+    def gen_credits(self) -> str:
+        """
+        Generate script credits
+        """
+        now = datetime.now().replace(microsecond=0).isoformat()
+        text = f"\n<sub>Generated with `{__package__}` version: {self.version} on {now}</sub>"
+
+        return text
 
     def enhance_sym(self, sym: 'ghidra.program.model.symbol.Symbol', thread_id: int = 0) -> dict:
         """
@@ -1326,6 +1336,9 @@ pie showData
                     md.new_header(3, "Calling Diff", add_table_of_contents='n')
                     md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'calling', n=0))
 
+        # add credit
+        md.new_paragraph(self.gen_credits())
+        # generate TOC
         md.new_table_of_contents('TOC', 3)
 
         return md.get_md_text()
