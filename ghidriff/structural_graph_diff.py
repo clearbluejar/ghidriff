@@ -5,7 +5,12 @@ import hashlib
 
 from typing import List, Tuple, TYPE_CHECKING
 
-from .ghidra_diff_engine import GhidraDiffEngine
+if __package__ is None or __package__ == '':
+    # run directly
+    from ghidra_diff_engine import GhidraDiffEngine
+else:
+    # run from package module
+    from .ghidra_diff_engine import GhidraDiffEngine
 
 if TYPE_CHECKING:
     import ghidra
@@ -406,7 +411,7 @@ if __name__ == "__main__":
 
     project_name = f'{args.project_name}-{binary_paths[0].name}-{binary_paths[1].name}'
 
-    d = GhidraStructualDiff(True, MAX_MEM=True, threaded=True)
+    d = GhidraStructualGraphDiff(args, True, MAX_MEM=True, threaded=True)
 
     d.setup_project(binary_paths, args.project_location, project_name, args.symbols_path)
 

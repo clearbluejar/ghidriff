@@ -6,7 +6,12 @@ from time import time
 
 from typing import List, Tuple, TYPE_CHECKING
 
-from .ghidra_diff_engine import GhidraDiffEngine
+if __package__ is None or __package__ == '':
+    # run directly
+    from ghidra_diff_engine import GhidraDiffEngine
+else:
+    # run from package module
+    from .ghidra_diff_engine import GhidraDiffEngine
 
 
 if TYPE_CHECKING:
@@ -211,13 +216,7 @@ if __name__ == "__main__":
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
-    group = parser.add_argument_group('Diff Markdown Options')
-    group.add_argument('--sxs', dest='side_by_side', action=argparse.BooleanOptionalAction,
-                       help='Diff Markdown includes side by side diff', default=False)
-
     args = parser.parse_args()
-
-    print(args)
 
     output_path = pathlib.Path(args.output_path)
     output_path.mkdir(exist_ok=True)
@@ -228,7 +227,7 @@ if __name__ == "__main__":
 
     project_name = f'{args.project_name}-{binary_paths[0].name}-{binary_paths[1].name}'
 
-    d = VersionTrackingDiff(True, MAX_MEM=True, threaded=True)
+    d = VersionTrackingDiff(args, True, MAX_MEM=True, threaded=True)
 
     d.setup_project(binary_paths, args.project_location, project_name, args.symbols_path)
 
