@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import ABCMeta, abstractmethod
 import json
 import pathlib
 import difflib
@@ -10,6 +10,8 @@ from collections import Counter
 import concurrent.futures
 from textwrap import dedent
 from typing import List, Tuple, Union, TYPE_CHECKING
+from argparse import Namespace
+import importlib
 
 import pyhidra
 from mdutils.tools.Table import Table
@@ -23,12 +25,12 @@ if TYPE_CHECKING:
     from ghidra_builtins import *
 
 
-class GhidraDiffEngine:
+class GhidraDiffEngine(metaclass=ABCMeta):
     """
     Base Ghidra Diff Engine
     """
 
-    def __init__(self, verbose: bool = False, MAX_MEM=None, threaded=False, max_workers=multiprocessing.cpu_count(), max_ram_percent: float = 75.0, debug_jvm: bool = False) -> None:
+    def __init__(self, args: Namespace = None, verbose: bool = False, MAX_MEM=None, threaded=False, max_workers=multiprocessing.cpu_count(), max_ram_percent: float = 60.0, debug_jvm: bool = False) -> None:
 
         # Init Pyhidra
         if not MAX_MEM:
@@ -51,13 +53,14 @@ class GhidraDiffEngine:
             # Match ghidra launch support script
 
             if debug_jvm:
-
                 launcher.add_vmargs('-XX:+PrintFlagsFinal')
 
             launcher.start()
 
         self.threaded: bool = threaded
         self.max_workers = max_workers
+
+        self.cmd_line = self.gen_cmd_line(args)
 
         # Setup decompiler interface
         self.decompilers = {}
@@ -79,6 +82,10 @@ class GhidraDiffEngine:
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='.ghidra_projects')
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='diff_project')
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='.symbols')
+
+        group = parser.add_argument_group('Diff Markdown Options')
+        group.add_argument('--sxs', dest='side_by_side', action=argparse.BooleanOptionalAction,
+                           help='Diff Markdown includes side by side diff', default=False)
 
     def gen_credits(self) -> str:
         """
@@ -610,7 +617,8 @@ class GhidraDiffEngine:
     def syms_need_diff(
         self,
         sym: 'ghidra.program.model.symbol.Symbol',
-        sym2: 'ghidra.program.model.listing.Function'
+        sym2: 'ghidra.program.model.listing.Function',
+        match_types: list
     ) -> bool:
         """
         Determine quickly if a function match requires a deeper diff
@@ -627,8 +635,8 @@ class GhidraDiffEngine:
 
         if func.body.numAddresses != func2.body.numAddresses:
             need_diff = True
-        # elif sym.referenceCount != sym2.referenceCount:
-        #     need_diff = True
+        elif sym.referenceCount != sym2.referenceCount:
+            need_diff = True
 
         return need_diff
 
@@ -736,7 +744,7 @@ class GhidraDiffEngine:
 
             for sym, sym2, match_types in matched:
 
-                if not self.syms_need_diff(sym, sym2):
+                if not self.syms_need_diff(sym, sym2, match_types):
                     continue
 
                 esym_lookups.append(sym)
@@ -783,7 +791,7 @@ class GhidraDiffEngine:
             first_match = match_types[0]
             all_match_types.append(first_match)
 
-            if not self.syms_need_diff(sym, sym2):
+            if not self.syms_need_diff(sym, sym2, match_types):
                 continue
 
             diff_type = []
@@ -917,14 +925,34 @@ class GhidraDiffEngine:
 
         return pdiff
 
-    def get_command_line(self, pdiff) -> str:
+    def gen_cmd_line(self, args: Namespace) -> str:
+        """
+        Return command line used to start engine implementation
+        """
 
-        # create command line to generate current diff
+        cmd_line = []
 
-        # assert len(pdiff) > 1, 'Pdiff needs to exist to create command line!'
+        m = importlib.import_module(self.__module__)
+        subclass_name = m.__file__.split('/')[-1]
 
-        # cmd = f"{file} "
-        pass
+        cmd_line.append(subclass_name)
+
+        for arg in vars(args):
+            # handle positional args (assumed to be lists...)
+            if isinstance(getattr(args, arg), list):
+                bins = []
+                for items in getattr(args, arg):
+                    if isinstance(items, list):
+                        for item in items:
+                            bins.append(item)
+                    else:
+                        bins.append(items)
+                cmd_line.append(' '.join(bins))
+            else:
+                cmd_line.append(f'--{arg}')
+                cmd_line.append(f'{getattr(args, arg)}')
+
+        return ' '.join(cmd_line)
 
     def validate_diff_json(
         self,
@@ -1198,7 +1226,7 @@ pie showData
         md.new_header(2, 'Ghidra Diff Engine')
 
         md.new_header(3, 'Command Line')
-        # md.new_paragraph(self.get_command_line(pdiff))
+        md.new_paragraph(f'`{self.cmd_line}`')
 
         md.new_header(3, 'Ghidra Analysis Options', add_table_of_contents='n')
         md.new_paragraph(self._wrap_with_details(self.gen_table_from_dict(
@@ -1254,10 +1282,15 @@ pie showData
 
             diff = None
 
+            if modified['old']['external']:
+                old_func_name = modified['old']['name']
+            else:
+                old_func_name = modified['old']['fullname']
+
             # selectively include matches
             if 'code' in modified['diff_type']:
 
-                md.new_header(2, modified['old']['name'])
+                md.new_header(2, old_func_name)
 
                 md.new_header(3, "Match Info", add_table_of_contents='n')
                 md.new_paragraph(self.gen_esym_table_diff_meta(old_name, new_name, modified))
@@ -1272,12 +1305,12 @@ pie showData
                     md.new_header(3, "Calling Diff", add_table_of_contents='n')
                     md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'calling', n=0))
 
-                md.new_header(3, f"{modified['old']['name']} Diff", add_table_of_contents='n')
+                md.new_header(3, f"{old_func_name} Diff", add_table_of_contents='n')
                 md.new_paragraph(self._wrap_with_diff(modified['diff']))
 
                 # only include side by side diff if requested (this adds html to markdown and considerable size)
                 if side_by_side:
-                    md.new_header(3, f"{modified['old']['name']} Side By Side Diff", add_table_of_contents='n')
+                    md.new_header(3, f"{old_func_name} Side By Side Diff", add_table_of_contents='n')
                     html_diff = self.gen_code_table_diff_html(
                         modified['old']['code'], modified['new']['code'], old_name, new_name)
                     md.new_paragraph(self._wrap_with_details(html_diff))
@@ -1296,7 +1329,14 @@ pie showData
 
             if 'code' not in modified['diff_type'] and len(mods) > 0:
 
-                if modified['old']['name'].startswith('FUN_') or modified['new']['name'].startswith('FUN_'):
+                if modified['old']['external']:
+                    old_func_name = modified['old']['fullname']
+                    new_func_name = modified['old']['fullname']
+                else:
+                    old_func_name = modified['old']['name']
+                    new_func_name = modified['old']['name']
+
+                if old_func_name.startswith('FUN_') or new_func_name.startswith('FUN_'):
 
                     ignore_called = False
                     ignore_calling = False
@@ -1320,8 +1360,7 @@ pie showData
                     elif 'called' in modified['diff_type'] and called_set:
                         continue
 
-                # only include in TOC if code change
-                md.new_header(2, modified['old']['name'])
+                md.new_header(2, old_func_name)
 
                 md.new_header(3, "Match Info", add_table_of_contents='n')
                 md.new_paragraph(self.gen_esym_table_diff_meta(old_name, new_name, modified))
