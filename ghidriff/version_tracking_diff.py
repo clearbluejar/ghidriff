@@ -87,11 +87,16 @@ class VersionTrackingDiff(GhidraDiffEngine):
             p1, p1.getMemory(), p2, p2.getMemory(), min_sym_name_len, one_to_one, include_externals, monitor)
 
         start = time()
-
-        hasher = StructuralGraphHasher()
         name = 'SymbolsHash'
+        skipped = 0
         for match in matchedSymbols:
             if match.matchType == SymbolType.FUNCTION:
+                # sanity check symbolmatch
+                func = p1.functionManager.getFunctionAt(match.aSymbolAddress)
+                func2 = p2.functionManager.getFunctionAt(match.bSymbolAddress)
+                if func.getName(True) != func2.getName(True):
+                    skipped += 1
+                    continue
                 p1_matches.add(match.aSymbolAddress)
                 p2_matches.add(match.bSymbolAddress)
                 matches.setdefault((match.aSymbolAddress, match.bSymbolAddress), {}).setdefault(name, 0)
@@ -102,7 +107,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         p2_unmatched = p2_unmatched.subtract(p2_matches)
 
         print(f'Exec time MatchSymbol: {end-start:.4f} secs')
-        print(matchedSymbols.size())
+        print(matchedSymbols.size() - skipped)
         print(Counter([tuple(x) for x in matches.values()]))
 
         # Run Function Correlators
@@ -118,7 +123,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
             end = time()
 
-            # p1.functionManager.getFunctionContaining(match.aFunctionAddress).getBody() TODO
             for match in func_matches:
                 p1_matches.add(match.aFunctionAddress)
                 p2_matches.add(match.bFunctionAddress)
