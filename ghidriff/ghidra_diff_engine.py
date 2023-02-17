@@ -1126,14 +1126,15 @@ end
 
         for func in pdiff['functions']['added']:
             if func['external']:
-                name = func['fullname']
+                # remove :: from external names
+                name = func['fullname'].replace('::', '-')
             else:
                 name = func['name']
             added.append(self._clean_md_header(name))
 
         for func in pdiff['functions']['deleted']:
             if func['external']:
-                name = func['fullname']
+                name = func['fullname'].replace('::', '-')
             else:
                 name = func['name']
             deleted.append(self._clean_md_header(name))
