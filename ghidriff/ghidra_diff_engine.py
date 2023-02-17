@@ -1383,6 +1383,14 @@ pie showData
 
         return md.get_md_text()
 
+    def minimize_pdiff(self, pdiff: dict):
+        """
+        Function to allow subclasses to modify pdiff before writing to disk.
+        Simply override this method. It will be called in `dump_pdiff_to_dir`
+        """
+
+        return pdiff
+
     def dump_pdiff_to_dir(
         self,
         name: str,
@@ -1396,6 +1404,8 @@ pie showData
 
         if isinstance(pdiff, str):
             pdiff = json.loads(pdiff)
+
+        pdiff = self.minimize_pdiff(pdiff)
 
         dir = pathlib.Path(dir)
 
