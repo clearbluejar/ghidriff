@@ -11,13 +11,14 @@ import concurrent.futures
 from textwrap import dedent
 from typing import List, Tuple, Union, TYPE_CHECKING
 from argparse import Namespace
-import importlib
+import logging
 
-import pyhidra
+from pyhidra.launcher import PyhidraLauncher
 from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
 import multiprocessing
 
+import ghidriff
 from ghidriff import __version__
 
 if TYPE_CHECKING:
@@ -25,39 +26,72 @@ if TYPE_CHECKING:
     from ghidra_builtins import *
 
 
+class HeadlessLoggingPyhidraLauncher(PyhidraLauncher):
+    """
+    Headless pyhidra launcher
+    Slightly Modified from Pyhidra to allow the Ghidra log path to be set
+    """
+
+    def __init__(self, verbose=False, log_path=None):
+        super().__init__(verbose)
+        self.log_path = log_path
+
+    def _launch(self):
+        from pyhidra.launcher import _silence_java_output
+        from ghidra.framework import Application, HeadlessGhidraApplicationConfiguration
+        from java.io import File
+        with _silence_java_output(not self.verbose, not self.verbose):
+            config = HeadlessGhidraApplicationConfiguration()
+            if self.log_path:
+                log = File(self.log_path)
+                config.setApplicationLogFile(log)
+
+            Application.initializeApplication(self.layout, config)
+
+
 class GhidraDiffEngine(metaclass=ABCMeta):
     """
     Base Ghidra Diff Engine
     """
 
-    def __init__(self, args: Namespace = None, verbose: bool = False, MAX_MEM=None, threaded=False, max_workers=multiprocessing.cpu_count(), max_ram_percent: float = 60.0, debug_jvm: bool = False) -> None:
+    def __init__(
+            self,
+            args: Namespace = None,
+            verbose: bool = False,
+            threaded: bool = False,
+            max_workers=multiprocessing.cpu_count(),
+            max_ram_percent: float = 60.0,
+            print_jvm_flags: bool = False,
+            force_analysis: bool = False,
+            force_diff: bool = False,
+            output_path: pathlib.Path = None,
+            engine_log_path: pathlib.Path = None,
+            engine_log_level: int = logging.INFO) -> None:
 
         # Init Pyhidra
-        if not MAX_MEM:
-            pyhidra.start(verbose)
-        else:
+        ghidra_app_log_path = output_path / 'ghidra.application.log'
+        launcher = HeadlessLoggingPyhidraLauncher(verbose=verbose, log_path=ghidra_app_log_path)
 
-            launcher = pyhidra.HeadlessPyhidraLauncher(verbose)
+        # Set Ghidra Heap Max
+        # Ghidra/RuntimeScripts/Linux/support/analyzeHeadless#L7
+        # MAX_MEM = "16G"
+        # launcher.add_vmargs(f"-Xmx{MAX_MEM}")
 
-            # Set Ghidra Heap Max
-            # Ghidra/RuntimeScripts/Linux/support/analyzeHeadless#L7
-            # MAX_MEM = "16G"
-            # launcher.add_vmargs(f"-Xmx{MAX_MEM}")
+        # max % if RAM
+        launcher.add_vmargs(f'-XX:MaxRAMPercentage={max_ram_percent}')
 
-            # max % if RAM
-            launcher.add_vmargs(f'-XX:MaxRAMPercentage={max_ram_percent}')
-            # want JVM to crash if we run out of memory (otherwise no error it propagated)
-            launcher.add_vmargs('-XX:+CrashOnOutOfMemoryError')
-            launcher.add_vmargs('-XX:+HeapDumpOnOutOfMemoryError')
+        # want JVM to crash if we run out of memory (otherwise no error it propagated)
+        launcher.add_vmargs('-XX:+CrashOnOutOfMemoryError')
+        launcher.add_vmargs('-XX:+HeapDumpOnOutOfMemoryError')
 
-            # Match ghidra launch support script
+        # Match ghidra launch support script
 
-            if debug_jvm:
-                launcher.add_vmargs('-XX:+PrintFlagsFinal')
+        if print_jvm_flags:
+            launcher.add_vmargs('-XX:+PrintFlagsFinal')
 
-            launcher.start()
+        launcher.start()
 
-        self.threaded: bool = threaded
+        self.threaded = threaded
         self.max_workers = max_workers
 
         self.cmd_line = self.gen_cmd_line(args)
@@ -72,20 +106,58 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         # Global instance var to store symbol lookup results
         self.esym_memo = {}
 
+        # set instance preferences
+        self.force_analysis = force_analysis
+        self.force_diff = force_diff
+
+        # setup engine logging
+        logging.basicConfig(level=engine_log_level)
+        logger = logging.getLogger(__package__)
+        self.logger = logger
+
+        if engine_log_path:
+            self.add_log_to_path(engine_log_path, engine_log_level)
+
+        logger.log(logging.INFO, 'asdfs')
+
     @staticmethod
     def add_ghidra_args_to_parser(parser: argparse.ArgumentParser) -> None:
         """
         Add required Ghidra args to a parser
         """
 
-        group = parser.add_argument_group('Ghidra options')
+        group = parser.add_argument_group('Ghidra Project Options')
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='.ghidra_projects')
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='diff_project')
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='.symbols')
+        group.add_argument('-o', '--output-path', help='Output path for resulting diff', default='.diffs')
+
+        group = parser.add_argument_group('Engine Analysis Options')
+        group.add_argument('--threaded', help='Use threading during import,analysis, and diffing. Recommended',
+                           default=True,  action=argparse.BooleanOptionalAction)
+        group.add_argument('--force-analysis', help='Force a new binary analysis each run (slow)',
+                           default=False,  action=argparse.BooleanOptionalAction)
+        group.add_argument('--force-diff', help='Force binary diff (even if arch,symbols do not match)',
+                           default=False,  action=argparse.BooleanOptionalAction,)
+        group.add_argument('--log-level', help='Set log level', default='INFO', choices=logging._nameToLevel.keys())
+
+        group = parser.add_argument_group('JVM Options')
+        group.add_argument('--max-ram-percent', help='Set Max Ram %% of all RAM', default=0.60)
+        group.add_argument('--print-flags', help='Print JVM flags at start',
+                           default=False, action=argparse.BooleanOptionalAction)
+        group.add_argument('--jvm-args', nargs='?', help='JVM args to add at start', default=None)
 
         group = parser.add_argument_group('Diff Markdown Options')
         group.add_argument('--sxs', dest='side_by_side', action=argparse.BooleanOptionalAction,
                            help='Diff Markdown includes side by side diff', default=False)
+
+    def add_log_to_path(self, log_path: pathlib.Path, level: int = logging.INFO):
+        """
+        Directory to write log to
+        """
+        fh = logging.FileHandler(log_path)
+        fh.setLevel(level)
+        self.logger.addHandler(fh)
 
     def gen_credits(self) -> str:
         """
@@ -150,7 +222,6 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
                 # instruction and mnemonic bulker
                 for code in code_units:
-                    # print(code)
                     instructions.append(str(code))
                     mnemonics.append(str(code.mnemonicString))
 
@@ -382,7 +453,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             from ghidra.program.util import GhidraProgramUtilities
             from ghidra.app.script import GhidraScriptUtil
 
-            if GhidraProgramUtilities.shouldAskToAnalyze(program) or force_analysis:
+            if GhidraProgramUtilities.shouldAskToAnalyze(program) or force_analysis or self.force_analysis:
                 GhidraScriptUtil.acquireBundleHostReference()
 
                 from ghidra.app.plugin.core.analysis import PdbAnalyzer
@@ -412,7 +483,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         return df_or_prog
 
-    def analyze_project(self, require_symbols=True) -> None:
+    def analyze_project(self, require_symbols: bool = True, force_analysis: bool = False) -> None:
         """
         Analyzes all files found within the project
         """
@@ -420,16 +491,15 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         if self.threaded:
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = (executor.submit(self.analyze_program, *[domainFile, require_symbols])
+                futures = (executor.submit(self.analyze_program, *[domainFile, require_symbols, force_analysis])
                            for domainFile in self.project.getRootFolder().getFiles())
                 for future in concurrent.futures.as_completed(futures):
-
                     prog = future.result()
                     print(prog)
 
         else:
             for domainFile in self.project.getRootFolder().getFiles():
-                self.analyze_program(domainFile, require_symbols)
+                self.analyze_program(domainFile, require_symbols, force_analysis)
 
     def get_metadata(
         self,
@@ -655,8 +725,6 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         start = time()
 
-        print(len(self.esym_memo))
-
         # reset pdiff
         pdiff = {}
 
@@ -673,7 +741,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         print("Loaded old program: {}".format(p1.getName()))
         print("Loaded new program: {}".format(p2.getName()))
 
-        if not force_diff:
+        if not force_diff and not self.force_diff:
             # ensure architectures match
             assert p1.languageID == p2.languageID, 'p1: {} != p2: {}. The arch or processor does not match.'
 
@@ -932,10 +1000,10 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         cmd_line = []
 
-        m = importlib.import_module(self.__module__)
-        subclass_name = m.__file__.split('/')[-1]
-
-        cmd_line.append(subclass_name)
+        # m = importlib.import_module(self.__module__)
+        # subclass_name = m.__file__.split('/')[-1]
+        cmd_line.append('python')
+        cmd_line.append(__package__)
 
         for arg in vars(args):
             # handle positional args (assumed to be lists...)

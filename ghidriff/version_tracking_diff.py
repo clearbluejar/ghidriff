@@ -1,18 +1,10 @@
-import argparse
 from collections import Counter
-import json
-import pathlib
 from time import time
+import logging
 
 from typing import List, Tuple, TYPE_CHECKING
 
-if __package__ is None or __package__ == '':
-    # run directly
-    from ghidra_diff_engine import GhidraDiffEngine
-else:
-    # run from package module
-    from .ghidra_diff_engine import GhidraDiffEngine
-
+from .ghidra_diff_engine import GhidraDiffEngine
 
 if TYPE_CHECKING:
     import ghidra
@@ -203,54 +195,3 @@ class VersionTrackingDiff(GhidraDiffEngine):
                       'ExactBytesFunctionHasher', 'ExactMnemonicsFunctionHasher']
 
         return [unmatched, matched, skip_types]
-
-
-if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description='Ghidra Version Tracking Style Binary Diffing Tool')
-
-    parser.add_argument('old', nargs=1, help='Path to older version of binary "/somewhere/bin.old"')
-    parser.add_argument('new', action='append', nargs='+',
-                        help="Path to new version of binary '/somewhere/bin.new'. For multiple binaries add oldest to newest")
-    parser.add_argument('-o', '--output-path', help='Output path for resulting diff', default='.output_diffs')
-
-    GhidraDiffEngine.add_ghidra_args_to_parser(parser)
-
-    args = parser.parse_args()
-
-    output_path = pathlib.Path(args.output_path)
-    output_path.mkdir(exist_ok=True)
-
-    binary_paths = args.old + [bin for sublist in args.new for bin in sublist]
-
-    binary_paths = [pathlib.Path(path) for path in binary_paths]
-
-    project_name = f'{args.project_name}-{binary_paths[0].name}-{binary_paths[1].name}'
-
-    d = VersionTrackingDiff(args, True, MAX_MEM=True, threaded=True)
-
-    d.setup_project(binary_paths, args.project_location, project_name, args.symbols_path)
-
-    d.analyze_project()
-
-    diffs = []
-
-    # pair up binaries with the n-1 version
-    for i in range(len(binary_paths)-1):
-        diffs.append((binary_paths[i], binary_paths[i+1]))
-
-    # add a diff of the first and last binary for full coverage
-    if not binary_paths[1] == binary_paths[-1]:
-        diffs.append((binary_paths[0], binary_paths[-1]))
-
-    for diff in diffs:
-        pdiff = d.diff_bins(diff[0], diff[1])
-        pdiff_json = json.dumps(pdiff)
-
-        print(pdiff['stats'])
-        assert d.validate_diff_json(pdiff_json) is True
-
-        assert pdiff['stats']['items_to_process'] < 5000, 'Diff too large to write'
-
-        diff_name = f"{pathlib.Path(diff[0]).name}_to_{pathlib.Path(diff[1]).name}_diff"
-        d.dump_pdiff_to_dir(diff_name, pdiff, args.output_path, side_by_side=args.side_by_side)
