@@ -14,11 +14,6 @@ class StructualGraphDiff(GhidraDiffEngine):
     An Ghidra Diff implementation using simple comparison mechanisms
     """
 
-    # def __init__(self, verbose: bool = False, output_dir: str = '.diffs', MAX_MEM=None, threaded=False, max_workers=...) -> None:
-    #     super().__init__(verbose, output_dir, MAX_MEM, threaded, max_workers)
-    #     self.name = 'GhidraSimpleDiff'
-    #     self.file = __file__
-
     def find_matches(
         self,
         p1: "ghidra.program.model.listing.Program",
@@ -37,13 +32,6 @@ class StructualGraphDiff(GhidraDiffEngine):
             """
             Builds tuple from symbol (parent, name, refcount, length, paramcount)
             """
-            # from ghidra.app.plugin.match import ExactBytesFunctionHasher
-            # from ghidra.app.plugin.match import FunctionHasher
-            # from ghidra.util.task import ConsoleTaskMonitor
-
-            # hasher = FunctionHasher
-
-            # fhash = hasher.hash(func2,ConsoleTaskMonitor())
             key = f'{sym.getID()}-{sym.getProgram().getName()}'
 
             if compare_key_memo.get(key) is None:
@@ -56,7 +44,7 @@ class StructualGraphDiff(GhidraDiffEngine):
 
                     mnemonics = []
 
-                    # print("\nMnemonic Bulker")
+                    # Mnemonic Bulker
                     for code in code_units:
                         mnemonics.append(code.getMnemonicString())
                         cu_count += 1
@@ -66,7 +54,6 @@ class StructualGraphDiff(GhidraDiffEngine):
                 compare_key_memo[key] = (cu_count, sym.getReferenceCount(),
                                          func.body.numAddresses, func.parameterCount, fhash)
 
-            # return (sym.getParentNamespace().toString().split('@')[0], sym.getName(), sym.getReferenceCount(), func.body.numAddresses, func.parameterCount, fhash)
             return compare_key_memo[key]
 
         def _get_compare_key2(sym: 'ghidra.program.model.symbol.Symbol', func: 'ghidra.program.model.listing.Function') -> tuple:
@@ -88,7 +75,6 @@ class StructualGraphDiff(GhidraDiffEngine):
 
                 basic_model = BasicBlockModel(func.getProgram(), True)
                 basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
-                blocks = []
 
                 for block in basic_blocks:
                     num_edges_of_blocks += block.getNumDestinations(monitor)
@@ -112,9 +98,7 @@ class StructualGraphDiff(GhidraDiffEngine):
             elif '$' in fname:
                 fname = fname.split('$')[0]
 
-            # return (sym.getParentNamespace().toString().split('@')[0], fname, num_basic_blocks, num_edges_of_blocks, num_call_subfunctions, sym.getReferenceCount(), func.body.numAddresses, func.parameterCount)
             return (fname, num_basic_blocks, num_edges_of_blocks, num_call_subfunctions, func.body.numAddresses, func.parameterCount)
-            # return (num_basic_blocks, num_edges_of_blocks, num_call_subfunctions)
 
         def _syms_match(esym, esym2) -> Tuple[bool, str]:
             found = False
@@ -122,26 +106,26 @@ class StructualGraphDiff(GhidraDiffEngine):
             min_func_length = 15
 
             if esym2['name'] == esym['name'] and esym2['paramcount'] == esym['paramcount']:
-                print("Name + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
+                self.logger.info("Name + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Name:Param'
             # elif esym2['address'] == esym2['address'] and esym2['paramcount']== esym['paramcount']:
-            #     print("Address + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
+            #     self.logger.info("Address + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
             #     found = True
             if esym2['name'] == esym['name'] and esym2['length'] == esym['length']:
-                print("Name + length {} {}".format(sym.getName(True), sym2.getName(True)))
+                self.logger.info("Name + length {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Name:Length'
             # elif esym2['address'] == esym2['address'] and esym2['length'] == esym['length'] and min([esym['length'], esym2['length']]) > min_func_length:
-            #     print("Address + Length {} {}".format(sym.getName(True), sym2.getName(True)))
+            #     self.logger.info("Address + Length {} {}".format(sym.getName(True), sym2.getName(True)))
             #     found = True
             #     match_type = 'Address:Length'
             # elif esym2['paramcount'] == esym['paramcount'] and esym2['length'] == esym['length']:
-            #     print("param count + func len {} {}".format(sym.getName(True), sym2.getName(True)))
+            #     self.logger.info("param count + func len {} {}".format(sym.getName(True), sym2.getName(True)))
             #     found = True
             #     match_type = 'Param:Length'
             elif esym2['fullname'] == esym['fullname']:
-                print("Name Exact {} {}".format(sym.getName(True), sym2.getName(True)))
+                self.logger.info("Name Exact {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Fullname'
 
@@ -149,7 +133,7 @@ class StructualGraphDiff(GhidraDiffEngine):
 
         from ghidra.program.model.symbol import SymbolType
 
-        print(f'Calculating initial structural signature for all ')
+        self.logger.info(f'Calculating initial structural signature for all ')
         p1_funcs = {}
         p2_funcs = {}
 
@@ -167,8 +151,8 @@ class StructualGraphDiff(GhidraDiffEngine):
                 p2_funcs[func] = _get_compare_key2(sym, func)
         end_p2 = time()
 
-        print(f'p1 structural signature time: {end_p1 - start_p1}')
-        print(f'p2 structural signature time: {end_p2 - end_p1}')
+        self.logger.info(f'p1 structural signature time: {end_p1 - start_p1}')
+        self.logger.info(f'p2 structural signature time: {end_p2 - end_p1}')
 
         from collections import Counter
 
@@ -179,14 +163,14 @@ class StructualGraphDiff(GhidraDiffEngine):
         for key, val in p1_funcs_vals.items():
             if val > 1:
                 count_non_unique += 1
-                print(key, val)
-        print(f'non-unique p1: {count_non_unique}')
+                self.logger.debug(f'{key, val}')
+        self.logger.info(f'non-unique p1: {count_non_unique}')
         count_non_unique = 0
         for key, val in p2_funcs_vals.items():
             if val > 1:
                 count_non_unique += 1
-                print(key, val)
-        print(f'non-unique p2: {count_non_unique}')
+                self.logger.debug(f'{key, val}')
+        self.logger.info(f'non-unique p2: {count_non_unique}')
 
         old_func_set = set(p1_funcs.values())
         new_func_set = set(p2_funcs.values())
@@ -195,9 +179,9 @@ class StructualGraphDiff(GhidraDiffEngine):
         modified_new = sorted(new_func_set.difference(old_func_set))
 
         matching_compare_keys = sorted(old_func_set.intersection(new_func_set))
-        print(f'modified_old: {len(modified_old)}')
-        print(f'modified_new: {len(modified_new)}')
-        print(f'matching_compare_keys: {len(matching_compare_keys)}')
+        self.logger.info(f'modified_old: {len(modified_old)}')
+        self.logger.info(f'modified_new: {len(modified_new)}')
+        self.logger.info(f'matching_compare_keys: {len(matching_compare_keys)}')
 
         p1_modified = []
         p2_modified = []
@@ -217,13 +201,13 @@ class StructualGraphDiff(GhidraDiffEngine):
                 key = (func.getName(True), func.parameterCount)
                 p2_name_to_func.setdefault(key, []).append(func)
 
-        print("\nmodified_old_modified")
+        self.logger.info("\nmodified_old_modified")
         for sym in p1_modified:
-            print(sym)
+            self.logger.info(sym)
 
-        print("\nmodified_new_modified")
+        self.logger.info("\nmodified_new_modified")
         for sym in p2_modified:
-            print(sym)
+            self.logger.info(sym)
 
         # Find modified functions based on compare_key
         for sym in p1.getSymbolTable().getDefinedSymbols():
@@ -244,7 +228,7 @@ class StructualGraphDiff(GhidraDiffEngine):
         unmatched = []
         matches = []
 
-        print("\nMatching functions...")
+        self.logger.info("\nMatching functions...")
 
         # match by name and paramcount
         for sym in p1_modified:
@@ -279,7 +263,8 @@ class StructualGraphDiff(GhidraDiffEngine):
                             if func2_num_calls == func_num_calls:
                                 sym = func.getSymbol()
                                 sym2 = func2.getSymbol()
-                                print(f"FullName + Paramcount + NumCalls {sym.getName(True)} {sym2.getName(True)}")
+                                self.logger.info(
+                                    f"FullName + Paramcount + NumCalls {sym.getName(True)} {sym2.getName(True)}")
                                 match_type = 'FullName:Param:NumCalls'
                                 matched.append(sym)
                                 matched.append(sym2)
@@ -287,7 +272,7 @@ class StructualGraphDiff(GhidraDiffEngine):
 
                 else:
                     sym2 = func2.getSymbol()
-                    print(f"FullName + Paramcount {sym.getName(True)} {sym2.getName(True)}")
+                    self.logger.info(f"FullName + Paramcount {sym.getName(True)} {sym2.getName(True)}")
                     match_type = 'FullName:Param'
                     matched.append(sym)
                     matched.append(sym2)
@@ -304,7 +289,7 @@ class StructualGraphDiff(GhidraDiffEngine):
             if sym2 and sym.getName(True) == sym2.getName(True):
                 found = True
                 match_type = 'Direct'
-                print(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
+                self.logger.info(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
             else:
                 for sym2 in p2_modified:
                     if sym2 in matched:
@@ -318,8 +303,8 @@ class StructualGraphDiff(GhidraDiffEngine):
 
                     if ck1[4] == ck2[4]:
                         found = True
-                        match_type = 'MneumonicOrdered:Hash'
-                        print(f"{match_type} match {sym.getName(True)} {sym2.getName(True)}")
+                        match_type = 'MnemonicOrdered:Hash'
+                        self.logger.info(f"{match_type} match {sym.getName(True)} {sym2.getName(True)}")
 
                     if found:
                         break
@@ -329,8 +314,8 @@ class StructualGraphDiff(GhidraDiffEngine):
                 matched.append(sym2)
                 matches.append([sym, sym2, match_type])
             else:
-                print(f"Deleted func found: {sym}")
-                print(
+                self.logger.info(f"Deleted func found: {sym}")
+                self.logger.info(
                     f"Deleted func found: {_get_compare_key(sym,sym.getProgram().functionManager.getFunctionAt(sym.getAddress()))}")
                 unmatched.append(sym)
                 # matched.append(sym)  # TODO check this
@@ -347,7 +332,7 @@ class StructualGraphDiff(GhidraDiffEngine):
             if sym2 and sym.getName(True) == sym2.getName(True):
                 found = True
                 match_type = 'Direct'
-                print(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
+                self.logger.info(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
             else:
                 for sym2 in p1_modified:
                     if sym2 in matched:
@@ -365,11 +350,11 @@ class StructualGraphDiff(GhidraDiffEngine):
                 matched.append(sym2)
                 matches.append([sym, sym2, match_type])
             else:
-                print(f"Added func found: {sym}")
+                self.logger.info(f"Added func found: {sym}")
                 unmatched.append(sym)
 
-        print(len(p1_modified))
-        print(len(p2_modified))
+        self.logger.info(len(p1_modified))
+        self.logger.info(len(p2_modified))
 
         matches = sorted(matches, key=lambda x: str(x[0]))
 

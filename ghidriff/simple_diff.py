@@ -35,14 +35,6 @@ class SimpleDiff(GhidraDiffEngine):
             """
             Builds tuple from symbol (parent, name, refcount, length, paramcount)
             """
-            # from ghidra.app.plugin.match import ExactBytesFunctionHasher
-            # from ghidra.app.plugin.match import FunctionHasher
-            # from ghidra.util.task import ConsoleTaskMonitor
-
-            # hasher = FunctionHasher
-
-            # fhash = hasher.hash(func2,ConsoleTaskMonitor())
-
             fhash = ''
             cu_count = 0
             if (not func.isThunk() and func.getBody().getNumAddresses() >= 10):
@@ -51,7 +43,7 @@ class SimpleDiff(GhidraDiffEngine):
 
                 mnemonics = []
 
-                # print("\nMnemonic Bulker")
+                # Mnemonic Bulker
                 for code in code_units:
                     mnemonics.append(code.getMnemonicString())
                     cu_count += 1
@@ -59,7 +51,6 @@ class SimpleDiff(GhidraDiffEngine):
                 fhash = hashlib.sha256(''.join(mnemonics).encode('UTF-8')).hexdigest()
 
             return (sym.getParentNamespace().toString().split('@')[0], sym.getName(True), sym.getReferenceCount(), func.body.numAddresses, func.parameterCount, fhash)
-            # return (cu_count, sym.getReferenceCount(), func.body.numAddresses, func.parameterCount, fhash)
 
         def _syms_match(esym, esym2) -> Tuple[bool, str]:
             found = False
@@ -67,26 +58,26 @@ class SimpleDiff(GhidraDiffEngine):
             min_func_length = 15
 
             # if esym2['name'] == esym['name'] and esym2['paramcount'] == esym['paramcount']:
-            #     print("Name + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
+            #     self.logger.info("Name + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
             #     found = True
             #     match_type = 'Name:Param'
             # elif esym2['address'] == esym2['address'] and esym2['paramcount']== esym['paramcount']:
-            #     print("Address + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
+            #     self.logger.info("Address + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
             #     found = True
             if esym2['name'] == esym['name'] and esym2['length'] == esym['length']:
-                print("Name + length {} {}".format(sym.getName(True), sym2.getName(True)))
+                self.logger.info("Name + length {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Name:Length'
             elif esym2['address'] == esym2['address'] and esym2['length'] == esym['length'] and min([esym['length'], esym2['length']]) > min_func_length:
-                print("Address + Length {} {}".format(sym.getName(True), sym2.getName(True)))
+                self.logger.info("Address + Length {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Address:Length'
             elif esym2['paramcount'] == esym['paramcount'] and esym2['length'] == esym['length']:
-                print("param count + func len {} {}".format(sym.getName(True), sym2.getName(True)))
+                self.logger.info("param count + func len {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Param:Length'
             elif esym2['fullname'] == esym['fullname']:
-                print("Name Exact {} {}".format(sym.getName(True), sym2.getName(True)))
+                self.logger.info("Name Exact {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Fullname'
 
@@ -96,49 +87,6 @@ class SimpleDiff(GhidraDiffEngine):
         new_funcs = []
         old_symbols = []
         new_symbols = []
-
-        sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
-
-        # if sym_count_diff > 4000 and not last_attempt:
-        #     # this can occur if analysis fails silenty, or the pdb was not applied
-        #     # try to recover with reanalysis
-
-        #     if p1.getSymbolTable().numSymbols > p2.getSymbolTable().numSymbols:
-        #         program_to_fix = p2
-        #         # delete file
-        #         name = p1.getName()
-        #         self.project.close(p1)
-        #         self.project.getRootFolder().getFile(p2.getName()).delete()
-        #         program_to_fix = self.project.importProgram(new)
-        #     else:
-        #         program_to_fix = p1
-        #         name = p1.getName()
-        #         self.project.close(p1)
-        #         self.project.getRootFolder().getFile(name).delete()
-        #         program_to_fix = self.project.importProgram(old)
-        #         # self.project.saveAs(program_to_fix, "/", program_to_fix.getName(), True)
-        #         # program_to_fix = self.project.openProgram("/", name, False)
-
-        #     # clear current PDB loaded Ghidra/Features/PDB/src/main/java/ghidra/app/util/pdb/PdbProgramAttributes.java#L132
-        #     # from ghidra.app.util.bin.format.pdb import PdbParserConstants
-        #     # self.set_proginfo_option_bool(program_to_fix, PdbParserConstants.PDB_LOADED, False)
-
-        #     self.analyze_program(program_to_fix, require_symbols=True, force_analysis=True)
-
-        # #     from ghidra.app.util.bin.format.pdb import PdbParserConstants
-        # #     self.set_proginfo_option_bool(p1, PdbParserConstants.PDB_LOADED, False)
-        # #     self.analyze_program(p1, require_symbols=True, force_analysis=True)
-
-        # #     self.set_proginfo_option_bool(p2, PdbParserConstants.PDB_LOADED, False)
-        # #     self.analyze_program(p2, require_symbols=True, force_analysis=True)
-
-        # #     self.project.close(p1)
-        # #     self.project.close(p2)
-
-        # #     # try one more time
-        #     return self.diff_bins(old, new, last_attempt=True)
-
-        assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or missing symbols! Check Ghidra analysis or pdb!'
 
         # first pass detect added and deleted symbols
         common_sym_prefix = ['switch', 'FUN_', 'caseD', 'local_']
@@ -157,14 +105,14 @@ class SimpleDiff(GhidraDiffEngine):
         news = set(new_symbols)
 
         deleted_symbols = olds.difference(news)
-        print("\ndeleted symbols\n")
+        self.logger.info("\ndeleted symbols\n")
         for sym in deleted_symbols:
-            print(sym)
+            self.logger.info(sym)
 
         added_symbols = news.difference(olds)
-        print("\nadded symbols\n")
+        self.logger.info("\nadded symbols\n")
         for sym in added_symbols:
-            print(sym)
+            self.logger.info(sym)
 
         # Next pass
         # 1. remove false positives from symbols
@@ -173,11 +121,11 @@ class SimpleDiff(GhidraDiffEngine):
         for sym in p1.getSymbolTable().getDefinedSymbols():
             key = sym.getName()
             if key in deleted_symbols:
-                print("{} {} {}".format(sym.getName(), sym.getAddress(), sym.getParentNamespace()))
+                self.logger.info("{} {} {}".format(sym.getName(), sym.getAddress(), sym.getParentNamespace()))
                 sym2 = DiffUtility.getSymbol(sym, p2)
 
                 if sym2 and sym.getName(True) == sym2.getName(True):
-                    print(f"Removing {sym} from deleted, found match {sym2} in p2")
+                    self.logger.info(f"Removing {sym} from deleted, found match {sym2} in p2")
                     deleted_symbols.remove(key)
 
             if "function".lower() in sym.getSymbolType().toString().lower():
@@ -191,11 +139,11 @@ class SimpleDiff(GhidraDiffEngine):
         for sym in p2.getSymbolTable().getDefinedSymbols():
             key = sym.getName()
             if key in added_symbols:
-                print("{} {}".format(sym.getName(), sym.getAddress()))
+                self.logger.info("{} {}".format(sym.getName(), sym.getAddress()))
                 sym2 = DiffUtility.getSymbol(sym, p1)
 
                 if sym2 and sym.getName(True) == sym2.getName(True):
-                    print(f"Removing {sym} from deleted, found match {sym2} in p1")
+                    self.logger.info(f"Removing {sym} from deleted, found match {sym2} in p1")
                     added_symbols.remove(key)
 
             if "function".lower() in sym.getSymbolType().toString().lower():
@@ -213,14 +161,14 @@ class SimpleDiff(GhidraDiffEngine):
         # for f in funcs1:
         #     count += 1
         #     funcs1_check.append(_get_compare_key(f.getSymbol(),f))
-        # print(count)
+        # self.logger.info(count)
 
-        # print(len(old_funcs))
+        # self.logger.info(len(old_funcs))
         # check = set(funcs1_check)
 
         # modified = sorted(check.difference(old))
         # for sym in modified:
-        #     print(sym)
+        #     self.logger.info(sym)
 
         old_func_set = set(old_funcs)
         new_func_set = set(new_funcs)
@@ -251,13 +199,13 @@ class SimpleDiff(GhidraDiffEngine):
 
         # for key in
 
-        print("\nmodified_old_modified")
+        self.logger.info("\nmodified_old_modified")
         for sym in modified_old:
-            print(sym)
+            self.logger.info(sym)
 
-        print("\nmodified_new_modified")
+        self.logger.info("\nmodified_new_modified")
         for sym in modified_new:
-            print(sym)
+            self.logger.info(sym)
 
         p1_modified = []
         p2_modified = []
@@ -277,53 +225,21 @@ class SimpleDiff(GhidraDiffEngine):
                 if (_get_compare_key(sym, func)) in modified_new:
                     p2_modified.append(sym)
 
-        print("\nmodified_old_modified")
+        self.logger.info("\nmodified_old_modified")
         for sym in p1_modified:
-            print(sym)
+            self.logger.info(sym)
 
-        print("\nmodified_new_modified")
+        self.logger.info("\nmodified_new_modified")
         for sym in p2_modified:
-            print(sym)
+            self.logger.info(sym)
 
         matched = []
         unmatched = []
         matches = []
 
-        print("\nMatching functions...")
+        self.logger.info("\nMatching functions...")
 
         hashes = []
-
-        # for sym in p1_modified:
-        #     for sym2 in p2_modified:
-
-        #         if sym2 in matched:
-        #                 continue
-
-        #         func = p1.functionManager.getFunctionAt(sym.getAddress())
-        #         func2 = p2.functionManager.getFunctionAt(sym2.getAddress())
-
-        #         # reset iterator
-        #         mnemonics = []
-        #         mnemonics2 = []
-
-        #         code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
-        #         code_units2 = func2.getProgram().getListing().getCodeUnits(func2.getBody(), True)
-
-        #         #print("\nMnemonic Bulker")
-        #         for code in code_units:
-        #             mnemonics.append(code.getMnemonicString())
-
-        #         for code in code_units2:
-        #             mnemonics2.append(code.getMnemonicString())
-
-        #         fhash = hashlib.sha256(''.join(mnemonics).encode('UTF-8')).hexdigest()
-        #         fhash2 = hashlib.sha256(''.join(mnemonics2).encode('UTF-8')).hexdigest()
-
-        #         hashes.append(fhash)
-        #         hashes.append(fhash2)
-
-        #         if fhash ==  fhash2:
-        # print("whata!?!")
 
         # match by name and paramcount
         for sym in p1_modified:
@@ -335,13 +251,8 @@ class SimpleDiff(GhidraDiffEngine):
                 func = p1.functionManager.getFunctionAt(sym.getAddress())
                 func2 = p2.functionManager.getFunctionAt(sym2.getAddress())
 
-                # esym = self.enhance_sym(sym)
-                # esym2 = self.enhance_sym(sym2)
-
-                # if esym2['fullname'] == esym['fullname'] and esym2['paramcount']== esym['paramcount']:
-
                 if sym.getName(True) == sym2.getName(True) and func.parameterCount == func2.parameterCount:
-                    print("FullName + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
+                    self.logger.info("FullName + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
                     match_type = 'FullName:Param'
                     matched.append(sym)
                     matched.append(sym2)
@@ -358,7 +269,7 @@ class SimpleDiff(GhidraDiffEngine):
             if sym2 and sym.getName(True) == sym2.getName(True):
                 found = True
                 match_type = 'Direct'
-                print(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
+                self.logger.info(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
             else:
                 for sym2 in p2_modified:
                     if sym2 in matched:
@@ -376,7 +287,7 @@ class SimpleDiff(GhidraDiffEngine):
                 matched.append(sym2)
                 matches.append([sym, sym2, match_type])
             else:
-                print(f"Deleted func found: {sym}")
+                self.logger.info(f"Deleted func found: {sym}")
                 unmatched.append(sym)
 
         for sym in p2_modified:
@@ -391,7 +302,7 @@ class SimpleDiff(GhidraDiffEngine):
             if sym2 and sym.getName(True) == sym2.getName(True):
                 found = True
                 match_type = 'Direct'
-                print(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
+                self.logger.info(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
             else:
                 for sym2 in p1_modified:
                     if sym2 in matched:
@@ -409,17 +320,17 @@ class SimpleDiff(GhidraDiffEngine):
                 matched.append(sym2)
                 matches.append([sym, sym2, match_type])
             else:
-                print(f"Added func found: {sym}")
+                self.logger.info(f"Added func found: {sym}")
                 unmatched.append(sym)
 
-        print(len(p1_modified))
-        print(len(p2_modified))
+        self.logger.info(len(p1_modified))
+        self.logger.info(len(p2_modified))
 
         matches = sorted(matches, key=lambda x: str(x[0]))
 
         # Update symbols using match knowledge
         for match in matches:
-            print(f"{match[0].getName(True)} {match[1].getName(True)} {match[2]}")
+            self.logger.info(f"{match[0].getName(True)} {match[1].getName(True)} {match[2]}")
 
             if match[0].getName() in deleted_symbols:
                 deleted_symbols.remove(match[0].getName())

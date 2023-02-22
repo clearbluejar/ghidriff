@@ -57,37 +57,57 @@ class GhidraDiffEngine(metaclass=ABCMeta):
     def __init__(
             self,
             args: Namespace = None,
-            verbose: bool = False,
+            verbose: bool = True,
             threaded: bool = False,
             max_workers=multiprocessing.cpu_count(),
             max_ram_percent: float = 60.0,
             print_jvm_flags: bool = False,
             force_analysis: bool = False,
             force_diff: bool = False,
-            output_path: pathlib.Path = None,
+            output_path: pathlib.Path = pathlib.Path('.'),
             engine_log_path: pathlib.Path = None,
-            engine_log_level: int = logging.INFO) -> None:
+            engine_log_level: int = logging.INFO,
+            engine_file_log_level: int = logging.DEBUG) -> None:
+
+        # setup engine logging
+        self.logger = self.setup_logger(engine_log_level)
+
+        if engine_log_path is None:
+            engine_log_path = output_path / 'ghidriff.log'
+
+        if engine_log_path:
+            self.add_log_to_path(engine_log_path, engine_file_log_level)
+
+        self.logger.info('Init Ghidra Diff Engine..')
+        self.logger.info(f'Engine Console Log: {engine_log_level}')
+
+        # send application log to output path
+        self.logger.info(f'Engine File Log:  {engine_log_path} {engine_file_log_level}')
 
         # Init Pyhidra
-        ghidra_app_log_path = output_path / 'ghidra.application.log'
-        launcher = HeadlessLoggingPyhidraLauncher(verbose=verbose, log_path=ghidra_app_log_path)
+        launcher = HeadlessLoggingPyhidraLauncher(verbose=verbose, log_path=engine_log_path)
 
         # Set Ghidra Heap Max
         # Ghidra/RuntimeScripts/Linux/support/analyzeHeadless#L7
         # MAX_MEM = "16G"
         # launcher.add_vmargs(f"-Xmx{MAX_MEM}")
 
-        # max % if RAM
+        # max % of host RAM
         launcher.add_vmargs(f'-XX:MaxRAMPercentage={max_ram_percent}')
 
         # want JVM to crash if we run out of memory (otherwise no error it propagated)
         launcher.add_vmargs('-XX:+CrashOnOutOfMemoryError')
         launcher.add_vmargs('-XX:+HeapDumpOnOutOfMemoryError')
 
-        # Match ghidra launch support script
+        # Match ghidra launch support script (do not do this.. so slow when enabled)
+        # Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat#L22
+        # launcher.add_vmargs('-XX:ParallelGCThreads=2')
+        # launcher.add_vmargs('-XX:CICompilerCount=2')
 
         if print_jvm_flags:
             launcher.add_vmargs('-XX:+PrintFlagsFinal')
+
+        self.logger.debug(f'Starting JVM with args: {launcher.vm_args}')
 
         launcher.start()
 
@@ -110,15 +130,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         self.force_analysis = force_analysis
         self.force_diff = force_diff
 
-        # setup engine logging
-        logging.basicConfig(level=engine_log_level)
-        logger = logging.getLogger(__package__)
-        self.logger = logger
-
-        if engine_log_path:
-            self.add_log_to_path(engine_log_path, engine_log_level)
-
-        logger.log(logging.INFO, 'asdfs')
+        self.logger.debug(f'{vars(self)}')
 
     @staticmethod
     def add_ghidra_args_to_parser(parser: argparse.ArgumentParser) -> None:
@@ -142,7 +154,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         group.add_argument('--log-level', help='Set log level', default='INFO', choices=logging._nameToLevel.keys())
 
         group = parser.add_argument_group('JVM Options')
-        group.add_argument('--max-ram-percent', help='Set Max Ram %% of all RAM', default=0.60)
+        group.add_argument('--max-ram-percent', help='Set Max Ram %% of all RAM', default=60.0)
         group.add_argument('--print-flags', help='Print JVM flags at start',
                            default=False, action=argparse.BooleanOptionalAction)
         group.add_argument('--jvm-args', nargs='?', help='JVM args to add at start', default=None)
@@ -151,13 +163,30 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         group.add_argument('--sxs', dest='side_by_side', action=argparse.BooleanOptionalAction,
                            help='Diff Markdown includes side by side diff', default=False)
 
+    def setup_logger(self, level: int = logging.INFO) -> logging.Logger:
+        """
+        Setup Class Instance Logger
+        """
+        logging.basicConfig(
+            format='%(levelname)-5s | %(name)-s | %(message)s',
+            datefmt='%H:%M:%S'
+        )
+
+        logger = logging.getLogger(__package__)
+        logger.setLevel(level)
+
+        return logger
+
     def add_log_to_path(self, log_path: pathlib.Path, level: int = logging.INFO):
         """
         Directory to write log to
         """
-        fh = logging.FileHandler(log_path)
-        fh.setLevel(level)
-        self.logger.addHandler(fh)
+        file_handler = logging.FileHandler(log_path)
+        formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)-8s %(message)s')
+
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(level)
+        self.logger.addHandler(file_handler)
 
     def gen_credits(self) -> str:
         """
@@ -300,7 +329,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
             # Import binary if they don't already exist
             if not project.getRootFolder().getFile(program_path.name):
-                print(f'\nImporting {program_path}')
+                self.logger.info(f'Importing {program_path}')
                 program = project.importProgram(program_path)
                 project.saveAs(program, "/", program.getName(), True)
             else:
@@ -310,7 +339,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             project.close(program)
 
             if pdb is None:
-                print(f"PDB not found for {program.getName()}!")
+                self.logger.warn(f"PDB not found for {program.getName()}!")
 
             imported = program is not None
             has_pdb = pdb is not None
@@ -344,7 +373,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             self.decompilers[p1.name][0].openProgram(p1)
             self.decompilers[p2.name][0].openProgram(p2)
 
-        print(f'Setup {decompiler_count} decompliers')
+        self.logger.info(f'Setup {decompiler_count} decompliers')
 
         return True
 
@@ -403,7 +432,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
             if pdb is not None:
                 pdb = pathlib.Path(pdb.absoluteFile.toString())
-                print(f"PDB {pdb} found for {prog_name}")
+                self.logger.info(f"PDB {pdb} found for {prog_name}")
 
             pdb_list.append([prog_name, pdb])
 
@@ -445,7 +474,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         elif isinstance(df_or_prog, Program):
             program = df_or_prog
 
-        print(f"\n Analyzing: {program}")
+        self.logger.info(f"Analyzing: {program}")
 
         try:
             flat_api = FlatProgramAPI(program)
@@ -475,11 +504,11 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                     GhidraScriptUtil.releaseBundleHostReference()
                     self.project.save(program)
             else:
-                print(f"analysis already complete.. skipping {program}!")
+                self.logger.info(f"analysis already complete.. skipping {program}!")
         finally:
             self.project.close(program)
 
-        print(f"Analysis for {df_or_prog} complete")
+        self.logger.info(f"Analysis for {df_or_prog} complete")
 
         return df_or_prog
 
@@ -495,7 +524,6 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                            for domainFile in self.project.getRootFolder().getFiles())
                 for future in concurrent.futures.as_completed(futures):
                     prog = future.result()
-                    print(prog)
 
         else:
             for domainFile in self.project.getRootFolder().getFiles():
@@ -585,11 +613,11 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         new_name = new_meta['Program Name']
 
         for i in old_meta:
-            # print(f"{i}: {old_meta[i]}")
+            self.logger.debug(f"{i}: {old_meta[i]}")
             old_text += f"{i}: {old_meta[i]}\n"
 
         for i in new_meta:
-            # print(f"{i}: {new_meta[i]}")
+            self.logger.debug(f"{i}: {new_meta[i]}")
             new_text += f"{i}: {new_meta[i]}\n"
 
         diff = ''.join(list(difflib.unified_diff(old_text.splitlines(True), new_text.splitlines(
@@ -652,7 +680,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                             clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
                             all_p1_syms[clean_name] = sym
 
-        print(f'p1 sym count: reported: {p1.symbolTable.numSymbols} analyzed: {len(all_p1_syms)}')
+        self.logger.info(f'p1 sym count: reported: {p1.symbolTable.numSymbols} analyzed: {len(all_p1_syms)}')
 
         for sym in p2.getSymbolTable().getAllSymbols(True):
             if not sym.referenceCount == 0:
@@ -666,7 +694,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                             clean_name = SymbolUtilities.getCleanSymbolName(sym.getName(), sym.address)
                             all_p2_syms[clean_name] = sym
 
-        print(f'p2 sym count: reported: {p2.symbolTable.numSymbols} analyzed: {len(all_p2_syms)}')
+        self.logger.info(f'p2 sym count: reported: {p2.symbolTable.numSymbols} analyzed: {len(all_p2_syms)}')
 
         deleted_sym_keys = list(set(all_p1_syms.keys()).difference(all_p2_syms.keys()))
         added_syms_keys = list(set(all_p2_syms.keys()).difference(all_p1_syms.keys()))
@@ -680,7 +708,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         unmatched.extend([all_p2_syms[key] for key in added_syms_keys])
         matched = [all_p1_syms[key] for key in matching_sym_keys]
 
-        print(f'Found unmatched: {len(unmatched)} matched: {len(matched)}')
+        self.logger.info(f'Found unmatched: {len(unmatched)} matched: {len(matched)}')
 
         return [unmatched, matched]
 
@@ -738,8 +766,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         # setup decompilers
         self.setup_decompliers(p1, p2)
 
-        print("Loaded old program: {}".format(p1.getName()))
-        print("Loaded new program: {}".format(p2.getName()))
+        self.logger.info(f"Loaded old program: {p1.name}")
+        self.logger.info(f"Loaded new program: {p2.name}")
 
         if not force_diff and not self.force_diff:
             # ensure architectures match
@@ -821,7 +849,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             # there can be duplicate multiple function matches, just do this once
             esym_lookups = list(set(esym_lookups))
 
-            print(f'Starting esym lookups for {len(esym_lookups)} symbols using {self.max_workers} threads')
+            self.logger.info(f'Starting esym lookups for {len(esym_lookups)} symbols using {self.max_workers} threads')
 
             completed = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -831,7 +859,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                     result = future.result()
                     completed += 1
                     if (completed % 100) == 0:
-                        print(f'Completed {completed} and {int(completed/len(esym_lookups)*100)}%')
+                        self.logger.info(f'Completed {completed} and {int(completed/len(esym_lookups)*100)}%')
 
         for sym in deleted_symbols:
             symbols['deleted'].append(self.enhance_sym(sym))
@@ -853,7 +881,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                 deleted_funcs.append(elost)
             else:
                 added_funcs.append(elost)
-        tracker = {}
+
         for sym, sym2, match_types in matched:
 
             first_match = match_types[0]
@@ -935,7 +963,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             # if no differences were found, there should not be a match (see modified func ident)
             # assert len(diff_type) > 0
             if len(diff_type) == 0:
-                print(f'no diff: {sym} {sym2} {match_types}')
+                self.logger.debug(f'no diff: {sym} {sym2} {match_types}')
                 continue
 
             ematch_min_1 = ematch_1.copy()
@@ -945,15 +973,6 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                 ematch_min_1[field] = hash(tuple(ematch_min_1[field]))
                 ematch_min_2[field] = hash(tuple(ematch_min_2[field]))
 
-            if tracker.get(sym.iD) is not None:
-                print(sym)
-                print(match_types)
-            if tracker.get(sym2.iD) is not None:
-                print(sym2)
-                print(match_types)
-
-            tracker[sym.iD] = 1
-            tracker[sym2.iD] = 1
             modified_funcs.append({'old': ematch_min_1, 'new': ematch_min_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
                                   'i_ratio': instructions_ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_types': match_types})
 
@@ -988,8 +1007,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         self.project.close(p1)
         self.project.close(p2)
 
-        print("Finished diffing old program: {}".format(p1.getName()))
-        print("Finished diffing program: {}".format(p2.getName()))
+        self.logger.info("Finished diffing old program: {}".format(p1.getName()))
+        self.logger.info("Finished diffing program: {}".format(p2.getName()))
 
         return pdiff
 
@@ -1020,7 +1039,11 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                 cmd_line.append(f'--{arg}')
                 cmd_line.append(f'{getattr(args, arg)}')
 
-        return ' '.join(cmd_line)
+        cmd_line = ' '.join(cmd_line)
+
+        self.logger.debug('Command line: %s', cmd_line)
+
+        return cmd_line
 
     def validate_diff_json(
         self,
@@ -1032,7 +1055,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             json.loads(results)
             is_valid = True
         except ValueError as err:
-            print(err)
+            self.logger.error(err)
 
         return is_valid
 
@@ -1488,5 +1511,5 @@ pie showData
         with json_path.open('w') as f:
             json.dump(pdiff, f, indent=4)
 
-        print(f'Wrote {md_path}')
-        print(f'Wrote {json_path}')
+        self.logger.info(f'Wrote {md_path}')
+        self.logger.info(f'Wrote {json_path}')

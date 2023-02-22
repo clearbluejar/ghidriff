@@ -1,6 +1,6 @@
 from collections import Counter
 from time import time
-import logging
+
 
 from typing import List, Tuple, TYPE_CHECKING
 
@@ -103,17 +103,20 @@ class VersionTrackingDiff(GhidraDiffEngine):
         p1_unmatched = p1_unmatched.subtract(p1_matches)
         p2_unmatched = p2_unmatched.subtract(p2_matches)
 
-        print(f'Exec time MatchSymbol: {end-start:.4f} secs')
-        print(matchedSymbols.size() - skipped)
-        print(Counter([tuple(x) for x in matches.values()]))
+        self.logger.info(f'Exec time: {end-start:.4f} secs')
+        self.logger.info(f'Match count {matchedSymbols.size() - skipped}')
+        self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
         # Run Function Correlators
 
         for cor in func_correlators:
-            print(cor)
+
             start = time()
 
             name, hasher, one_to_one, one_to_many = cor
+
+            self.logger.info(f'Running correlator: {name}')
+            self.logger.debug(f'name: {name} hasher: {hasher} one_to_one: {one_to_one} one_to_many: {one_to_many}')
 
             func_matches = MatchFunctions.matchFunctions(
                 p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
@@ -129,9 +132,9 @@ class VersionTrackingDiff(GhidraDiffEngine):
             p1_unmatched = p1_unmatched.subtract(p1_matches)
             p2_unmatched = p2_unmatched.subtract(p2_matches)
 
-            print(f'Exec time {name}: {end-start:.4f} secs')
-            print(func_matches.size())
-            print(Counter([tuple(x) for x in matches.values()]))
+        self.logger.info(f'Exec time: {end-start:.4f} secs')
+        self.logger.info(f'Match count {matchedSymbols.size() - skipped}')
+        self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
         # Find unmatched functions
 
@@ -145,8 +148,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
             if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
                 p2_missing.append(func)
 
-        print(f'p1 missing = {len(p1_missing)}')
-        print(f'p2 missing = {len(p2_missing)}')
+        self.logger.info(f'p1 missing = {len(p1_missing)}')
+        self.logger.info(f'p2 missing = {len(p2_missing)}')
 
         unmatched.extend([func.getSymbol() for func in p1_missing])
         unmatched.extend([func.getSymbol() for func in p2_missing])
