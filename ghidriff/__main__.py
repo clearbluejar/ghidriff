@@ -26,6 +26,7 @@ def main():
                         help="Path to new version of binary '/somewhere/bin.new'. For multiple new binaries add oldest to newest")
     parser.add_argument('--engine', help='The diff implementation to use.',
                         default='VersionTrackingDiff', choices=engines.keys())
+    parser.add_argument('-o', '--output-path', help='Output path for resulting diffs', default='.ghidriffs')
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
@@ -34,27 +35,31 @@ def main():
     output_path = Path(args.output_path)
     output_path.mkdir(exist_ok=True)
 
+    if args.log_path == parser.get_default('log_path'):
+        engine_log_path = output_path / parser.get_default('log_path')
+    else:
+        engine_log_path = Path(args.log_path)
+
     binary_paths = args.old + [bin for sublist in args.new for bin in sublist]
 
     binary_paths = [Path(path) for path in binary_paths]
 
     project_name = f'{args.project_name}-{binary_paths[0].name}-{binary_paths[-1].name}'
 
-    log_path = output_path / f'{project_name}.log'
-
     DiffEngine: GhidraDiffEngine = engines[args.engine]
 
-    d = DiffEngine(args=args,
-                   verbose=True,
-                   threaded=args.threaded,
-                   max_ram_percent=args.max_ram_percent,
-                   print_jvm_flags=args.print_flags,
-                   force_analysis=args.force_analysis,
-                   force_diff=args.force_diff,
-                   output_path=output_path,
-                   engine_log_path=log_path,
-                   engine_log_level=args.log_level
-                   )
+    d: GhidraDiffEngine = DiffEngine(args=args,
+                                     verbose=True,
+                                     threaded=args.threaded,
+                                     max_ram_percent=args.max_ram_percent,
+                                     print_jvm_flags=args.print_flags,
+                                     jvm_args=args.jvm_args,
+                                     force_analysis=args.force_analysis,
+                                     force_diff=args.force_diff,
+                                     engine_log_path=engine_log_path,
+                                     engine_log_level=args.log_level,
+                                     engine_file_log_level=args.file_log_level
+                                     )
 
     d.setup_project(binary_paths, args.project_location, project_name, args.symbols_path)
 
@@ -74,13 +79,15 @@ def main():
         pdiff = d.diff_bins(diff[0], diff[1])
         pdiff_json = json.dumps(pdiff)
 
-        print(pdiff['stats'])
-        assert d.validate_diff_json(pdiff_json) is True
+        d.validate_diff_json(pdiff_json)
 
-        assert pdiff['stats']['items_to_process'] < 5000, 'Diff too large to write'
+        diff_name = f"{Path(diff[0]).name}-{Path(diff[1]).name}_diff"
 
-        diff_name = f"{Path(diff[0]).name}_to_{Path(diff[1]).name}_diff"
-        d.dump_pdiff_to_dir(diff_name, pdiff, args.output_path, side_by_side=args.side_by_side)
+        d.dump_pdiff_to_dir(diff_name,
+                            pdiff,
+                            output_path,
+                            side_by_side=args.side_by_side,
+                            max_section_funcs=args.max_section_funcs)
 
 
 if __name__ == "__main__":

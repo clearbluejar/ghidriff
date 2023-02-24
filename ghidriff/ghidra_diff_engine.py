@@ -62,21 +62,19 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             max_workers=multiprocessing.cpu_count(),
             max_ram_percent: float = 60.0,
             print_jvm_flags: bool = False,
+            jvm_args: List[str] = [],
             force_analysis: bool = False,
             force_diff: bool = False,
-            output_path: pathlib.Path = pathlib.Path('.'),
             engine_log_path: pathlib.Path = None,
             engine_log_level: int = logging.INFO,
-            engine_file_log_level: int = logging.DEBUG) -> None:
+            engine_file_log_level: int = logging.INFO,
+            max_section_funcs: int = 200) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
 
-        if engine_log_path is None:
-            engine_log_path = output_path / 'ghidriff.log'
-
         if engine_log_path:
-            self.add_log_to_path(engine_log_path, engine_file_log_level)
+            self.add_log_to_path(engine_log_path, engine_log_level)
 
         self.logger.info('Init Ghidra Diff Engine..')
         self.logger.info(f'Engine Console Log: {engine_log_level}')
@@ -87,10 +85,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         # Init Pyhidra
         launcher = HeadlessLoggingPyhidraLauncher(verbose=verbose, log_path=engine_log_path)
 
-        # Set Ghidra Heap Max
-        # Ghidra/RuntimeScripts/Linux/support/analyzeHeadless#L7
-        # MAX_MEM = "16G"
-        # launcher.add_vmargs(f"-Xmx{MAX_MEM}")
+        # JVM Settings
 
         # max % of host RAM
         launcher.add_vmargs(f'-XX:MaxRAMPercentage={max_ram_percent}')
@@ -104,8 +99,18 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         # launcher.add_vmargs('-XX:ParallelGCThreads=2')
         # launcher.add_vmargs('-XX:CICompilerCount=2')
 
+        # Set Ghidra Heap Max
+        # Ghidra/RuntimeScripts/Linux/support/analyzeHeadless#L7
+        # MAX_MEM = "16G"
+        # launcher.add_vmargs(f"-Xmx{MAX_MEM}")
+
         if print_jvm_flags:
             launcher.add_vmargs('-XX:+PrintFlagsFinal')
+
+        if jvm_args:
+            for jvm_arg in jvm_args:
+                self.logger.info('Adding JVM arg {jvm_arg}')
+                launcher.add_vmargs(jvm_arg)
 
         self.logger.debug(f'Starting JVM with args: {launcher.vm_args}')
 
@@ -113,6 +118,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         self.threaded = threaded
         self.max_workers = max_workers
+        self.max_section_funcs = max_section_funcs
 
         self.cmd_line = self.gen_cmd_line(args)
 
@@ -142,16 +148,19 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='.ghidra_projects')
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='diff_project')
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='.symbols')
-        group.add_argument('-o', '--output-path', help='Output path for resulting diff', default='.diffs')
 
-        group = parser.add_argument_group('Engine Analysis Options')
+        group = parser.add_argument_group('Engine Options')
         group.add_argument('--threaded', help='Use threading during import,analysis, and diffing. Recommended',
                            default=True,  action=argparse.BooleanOptionalAction)
         group.add_argument('--force-analysis', help='Force a new binary analysis each run (slow)',
                            default=False,  action=argparse.BooleanOptionalAction)
         group.add_argument('--force-diff', help='Force binary diff (even if arch,symbols do not match)',
                            default=False,  action=argparse.BooleanOptionalAction,)
-        group.add_argument('--log-level', help='Set log level', default='INFO', choices=logging._nameToLevel.keys())
+        group.add_argument('--log-level', help='Set console log level',
+                           default='INFO', choices=logging._nameToLevel.keys())
+        group.add_argument('--file-log-level', help='Set log file level',
+                           default='INFO', choices=logging._nameToLevel.keys())
+        group.add_argument('--log-path', help='Set ghidriff log path.', default='ghidriff.log')
 
         group = parser.add_argument_group('JVM Options')
         group.add_argument('--max-ram-percent', help='Set Max Ram %% of all RAM', default=60.0)
@@ -159,16 +168,18 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                            default=False, action=argparse.BooleanOptionalAction)
         group.add_argument('--jvm-args', nargs='?', help='JVM args to add at start', default=None)
 
-        group = parser.add_argument_group('Diff Markdown Options')
+        group = parser.add_argument_group('Markdown Options')
         group.add_argument('--sxs', dest='side_by_side', action=argparse.BooleanOptionalAction,
                            help='Diff Markdown includes side by side diff', default=False)
+        group.add_argument('--max-section-funcs',
+                           help='Max number of functions to display per section.', type=int, default=200)
 
     def setup_logger(self, level: int = logging.INFO) -> logging.Logger:
         """
         Setup Class Instance Logger
         """
         logging.basicConfig(
-            format='%(levelname)-5s | %(name)-s | %(message)s',
+            format='%(levelname)-5s | %(name)s | %(message)s',
             datefmt='%H:%M:%S'
         )
 
@@ -494,9 +505,11 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                 # handle large binaries more efficiently
                 # see ghidra/issues/4573 (turn off feature Shared Return Calls )
                 if program and program.getFunctionManager().getFunctionCount() > 1000:
+                    self.logger.warn(f"Turning off 'Shared Return Calls' for {program}")
                     self.set_analysis_option_bool(
                         program, 'Shared Return Calls.Assume Contiguous Functions Only', False)
 
+                self.logger.info(f'Starting Ghidra analysis of {program}...')
                 try:
                     flat_api.analyzeAll(program)
                     GhidraProgramUtilities.setAnalyzedFlag(program, True)
@@ -504,7 +517,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                     GhidraScriptUtil.releaseBundleHostReference()
                     self.project.save(program)
             else:
-                self.logger.info(f"analysis already complete.. skipping {program}!")
+                self.logger.info(f"Analysis already complete.. skipping {program}!")
         finally:
             self.project.close(program)
 
@@ -516,15 +529,14 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         """
         Analyzes all files found within the project
         """
+        self.logger.info(f'Starting analysis for {len(self.project.getRootFolder().getFiles())} binaries')
 
         if self.threaded:
-
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = (executor.submit(self.analyze_program, *[domainFile, require_symbols, force_analysis])
                            for domainFile in self.project.getRootFolder().getFiles())
                 for future in concurrent.futures.as_completed(futures):
                     prog = future.result()
-
         else:
             for domainFile in self.project.getRootFolder().getFiles():
                 self.analyze_program(domainFile, require_symbols, force_analysis)
@@ -585,7 +597,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
     ) -> None:
         """
         Set boolean program info options
-        Inspired by: Ghidra/Features/Base/src/main/java/ghidra/app/script/GhidraScript.java#L1272
+        See: Ghidra/Features/Base/src/main/java/ghidra/app/script/GhidraScript.java#L1272
         """
 
         from ghidra.program.model.listing import Program
@@ -632,7 +644,11 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             p2: "ghidra.program.model.listing.Program"
     ) -> list:
         """
-        Find matching and unmatched functions between p1 and p2
+        Find matching and unmatched functions between `p1` and `p2`
+        return `[unmatched, matched, skip_types]`
+        `unmatched` : list of symbols that have not been matched
+        `matched` : list of symbols that have been matched
+        `skip_types`: list of match combinations that should not be considered for diffing. skip types will undergo less processing
         """
         raise NotImplementedError
 
@@ -708,18 +724,20 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         unmatched.extend([all_p2_syms[key] for key in added_syms_keys])
         matched = [all_p1_syms[key] for key in matching_sym_keys]
 
-        self.logger.info(f'Found unmatched: {len(unmatched)} matched: {len(matched)}')
+        self.logger.info(f'Found unmatched: {len(unmatched)} matched: {len(matched)} symbols')
 
         return [unmatched, matched]
 
     def syms_need_diff(
         self,
         sym: 'ghidra.program.model.symbol.Symbol',
-        sym2: 'ghidra.program.model.listing.Function',
-        match_types: list
+        sym2: 'ghidra.program.model.symbol.Symbol',
+        match_types: list,
+        skip_types: list = []
     ) -> bool:
         """
         Determine quickly if a function match requires a deeper diff
+        If the the match type == any of the skip types. Return false.
         """
 
         from ghidra.program.model.symbol import SourceType
@@ -731,10 +749,11 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         need_diff = False
 
-        if func.body.numAddresses != func2.body.numAddresses:
-            need_diff = True
-        elif sym.referenceCount != sym2.referenceCount:
-            need_diff = True
+        if not any(skip_type == match_types for skip_type in skip_types):
+            if func.body.numAddresses != func2.body.numAddresses:
+                need_diff = True
+            elif sym.referenceCount != sym2.referenceCount:
+                need_diff = True
 
         return need_diff
 
@@ -784,6 +803,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         unmatched, matched, skip_types = self.find_matches(p1, p2)
 
         # dedupe unmatched funcs with syms by names (rare but somtimes Ghidra symbol types get crossed, or pdb parsing issues)
+        self.logger.info('Deduping symbols and functions...')
+
         dupes = []
         for func in unmatched:
             for sym in unmatched_syms:
@@ -796,8 +817,10 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         for dupe in dupes:
             if dupe in unmatched:
+                self.logger.debug(f'Removing function dupe: {dupe}')
                 unmatched.remove(dupe)
             if dupe in unmatched_syms:
+                self.logger.debug(f'Removing symbol dupe: {dupe}')
                 unmatched_syms.remove(dupe)
 
         deleted_symbols = []
@@ -805,14 +828,18 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         deleted_strings = []
         added_strings = []
 
+        self.logger.info('Sorting symbols and strings...')
+
         for sym in unmatched_syms:
             if sym.program == p1:
                 if self.is_sym_string(sym):
+                    self.logger.debug(f'Found deleted string: {sym}')
                     deleted_strings.append(sym)
                 else:
                     deleted_symbols.append(sym)
             else:
                 if self.is_sym_string(sym):
+                    self.logger.debug(f'Found added string: {sym}')
                     added_strings.append(sym)
                 else:
                     added_symbols.append(sym)
@@ -829,18 +856,23 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         added_funcs = []
         modified_funcs = []
         all_match_types = []
+        all_diff_types = []
+
+        self.logger.info('Sorting functions...')
 
         # thread the symbol lookups
         #   esyms are memoized and can be later just read from memory
         if self.threaded:
 
             esym_lookups = []
+
+            esym_lookups.extend(deleted_strings)
+            esym_lookups.extend(added_strings)
             esym_lookups.extend(unmatched)
-            esym_lookups.extend(unmatched_syms)
 
             for sym, sym2, match_types in matched:
 
-                if not self.syms_need_diff(sym, sym2, match_types):
+                if not self.syms_need_diff(sym, sym2, match_types, skip_types):
                     continue
 
                 esym_lookups.append(sym)
@@ -862,10 +894,10 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                         self.logger.info(f'Completed {completed} and {int(completed/len(esym_lookups)*100)}%')
 
         for sym in deleted_symbols:
-            symbols['deleted'].append(self.enhance_sym(sym))
+            symbols['deleted'].append(sym.name)
 
         for sym in added_symbols:
-            symbols['added'].append(self.enhance_sym(sym))
+            symbols['added'].append(sym.name)
 
         for sym in deleted_strings:
             strings['deleted'].append(self.enhance_sym(sym))
@@ -876,18 +908,23 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         for lost in unmatched:
             elost = self.enhance_sym(lost)
 
+            elost_min = elost.copy()
+            # reduce size of esym with hash
+            for field in ['instructions', 'mnemonics', 'blocks']:
+                elost_min[field] = hash(tuple(elost_min[field]))
+
             # deleted func
             if lost.getProgram().getName() == p1.getName():
-                deleted_funcs.append(elost)
+                deleted_funcs.append(elost_min)
             else:
-                added_funcs.append(elost)
+                added_funcs.append(elost_min)
 
         for sym, sym2, match_types in matched:
 
             first_match = match_types[0]
             all_match_types.append(first_match)
 
-            if not self.syms_need_diff(sym, sym2, match_types):
+            if not self.syms_need_diff(sym, sym2, match_types, skip_types):
                 continue
 
             diff_type = []
@@ -922,7 +959,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             ratio = difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio()
 
             diff = ''.join(list(difflib.unified_diff(old_code, new_code, lineterm='\n',
-                           fromfile=sym.getProgram().getName(), tofile=sym2.getProgram().getName())))
+                                                     fromfile=sym.getProgram().getName(), tofile=sym2.getProgram().getName())))
             only_code_diff = ''.join(list(difflib.unified_diff(old_code_no_sig, new_code_no_sig, lineterm='\n', fromfile=sym.getProgram(
             ).getName(), tofile=sym2.getProgram().getName())))  # ignores name changes
 
@@ -963,7 +1000,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             # if no differences were found, there should not be a match (see modified func ident)
             # assert len(diff_type) > 0
             if len(diff_type) == 0:
-                self.logger.debug(f'no diff: {sym} {sym2} {match_types}')
+                self.logger.warn(f'no diff: {sym} {sym2} {match_types}')
                 continue
 
             ematch_min_1 = ematch_1.copy()
@@ -972,6 +1009,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             for field in ['instructions', 'mnemonics', 'blocks']:
                 ematch_min_1[field] = hash(tuple(ematch_min_1[field]))
                 ematch_min_2[field] = hash(tuple(ematch_min_2[field]))
+
+            all_diff_types.extend(diff_type)
 
             modified_funcs.append({'old': ematch_min_1, 'new': ematch_min_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
                                   'i_ratio': instructions_ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_types': match_types})
@@ -987,8 +1026,13 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         elapsed = time() - start
         items_to_process = len(added_funcs) + len(deleted_funcs) + len(modified_funcs) + \
             len(symbols['added']) + len(symbols['deleted'])
+        unmatched_funcs_len = len(added_funcs) + len(deleted_funcs)
+        total_funcs_len = p1.functionManager.functionCount + p2.functionManager.functionCount
+        matched_funcs_len = total_funcs_len - unmatched_funcs_len
         pdiff['stats'] = {'added_funcs_len': len(added_funcs), 'deleted_funcs_len': len(deleted_funcs), 'modified_funcs_len': len(modified_funcs), 'added_symbols_len': len(
-            symbols['added']), 'deleted_symbols_len': len(symbols['deleted']), 'diff_time': elapsed, 'match_types': Counter(all_match_types), 'items_to_process': items_to_process}
+            symbols['added']), 'deleted_symbols_len': len(symbols['deleted']), 'diff_time': elapsed, 'deleted_strings_len': len(deleted_strings), 'added_strings_len': len(added_strings),
+            'match_types': Counter(all_match_types), 'items_to_process': items_to_process, 'diff_types': Counter(all_diff_types), 'unmatched_funcs_len': unmatched_funcs_len,
+            'total_funcs_len': total_funcs_len, 'matched_funcs_len': matched_funcs_len}
         pdiff['symbols'] = symbols
         pdiff['strings'] = strings
         pdiff['functions'] = funcs
@@ -1009,6 +1053,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         self.logger.info("Finished diffing old program: {}".format(p1.getName()))
         self.logger.info("Finished diffing program: {}".format(p2.getName()))
+
+        self.logger.info(json.dumps(pdiff['stats'], indent=2))
 
         return pdiff
 
@@ -1056,6 +1102,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             is_valid = True
         except ValueError as err:
             self.logger.error(err)
+            raise err
 
         return is_valid
 
@@ -1185,7 +1232,18 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         return table
 
-    def gen_mermaid_diff_flowchart(self, pdiff: dict) -> str:
+    def gen_strings_diff(self, deleted_strings: dict, added_strings: dict):
+
+        added = [item['name'] for item in added_strings]
+
+        deleted = [item['name'] for item in deleted_strings]
+
+        diff = '\n'.join(list(difflib.unified_diff(deleted, added,
+                                                   lineterm='\n', fromfile='deleted strings', tofile='added strings')))
+
+        return self._wrap_with_diff(diff)
+
+    def gen_mermaid_diff_flowchart(self, pdiff: dict, max_section_funcs: int = 25) -> str:
 
         diff_flow = '''
 ```mermaid
@@ -1215,7 +1273,7 @@ end
         old_bin = pdiff['old_meta']['Program Name']
         new_bin = pdiff['new_meta']['Program Name']
 
-        for func in pdiff['functions']['added']:
+        for i, func in enumerate(pdiff['functions']['added']):
             if func['external']:
                 # remove :: from external names
                 name = func['fullname'].replace('::', '-')
@@ -1223,22 +1281,38 @@ end
                 name = func['name']
             added.append(self._clean_md_header(name))
 
-        for func in pdiff['functions']['deleted']:
+            if max_section_funcs and i > max_section_funcs:
+                msg = f"{len(pdiff['functions']['added']) - max_section_funcs}_more_added_funcs_omitted..."
+                added.append(self._clean_md_header(msg))
+                break
+
+        for i, func in enumerate(pdiff['functions']['deleted']):
             if func['external']:
                 name = func['fullname'].replace('::', '-')
             else:
                 name = func['name']
             deleted.append(self._clean_md_header(name))
 
-        for modified in pdiff['functions']['modified']:
+            if max_section_funcs and i > max_section_funcs:
+                msg = f"{len(pdiff['functions']['deleted']) - max_section_funcs}_more_deleted_funcs_omitted..."
+                deleted.append(self._clean_md_header(msg))
+                break
 
-            if 'code' in modified['diff_type']:
-                old_modified.append(self._clean_md_header(
-                    f"{modified['old']['name']}-{modified['old']['paramcount']}-old"))
-                new_modified.append(self._clean_md_header(
-                    f"{modified['new']['name']}-{modified['old']['paramcount']}-new"))
+        modified_code_funcs = [func for func in pdiff['functions']['modified'] if 'code' in func['diff_type']]
+
+        for i, modified in enumerate(modified_code_funcs):
+
+            if max_section_funcs and i > max_section_funcs:
                 modified_links.append(
-                    f"{self._clean_md_header(modified['old']['name'])}-{modified['old']['paramcount']}-old<--Match {int(modified['b_ratio']*100)}%-->{self._clean_md_header(modified['new']['name'])}-{modified['old']['paramcount']}-new")
+                    f"{old_bin}<--{len(modified_code_funcs) - max_section_funcs}ommited-->{new_bin}")
+                break
+
+            old_modified.append(self._clean_md_header(
+                f"{modified['old']['name']}-{modified['old']['paramcount']}-old"))
+            new_modified.append(self._clean_md_header(
+                f"{modified['new']['name']}-{modified['old']['paramcount']}-new"))
+            modified_links.append(
+                f"{self._clean_md_header(modified['old']['name'])}-{modified['old']['paramcount']}-old<--Match {int(modified['b_ratio']*100)}%-->{self._clean_md_header(modified['new']['name'])}-{modified['old']['paramcount']}-new")
 
         deleted_sub = ''
         added_sub = ''
@@ -1294,10 +1368,19 @@ pie showData
         self,
         pdiff: Union[str, dict],
         side_by_side: bool = False,
+        max_section_funcs: int = None,
     ) -> str:
         """
         Generate Markdown Diff from pdiff match results
         """
+
+        self.logger.info(f"Generating markdown from {pdiff['stats']}")
+
+        # use max passed into function, revert to class if it exists
+        if not max_section_funcs:
+            max_section_funcs = self.max_section_funcs
+
+        self.logger.info(f"max_section_funcs: {max_section_funcs}")
 
         if isinstance(pdiff, str):
             pdiff = json.loads(pdiff)
@@ -1307,10 +1390,12 @@ pie showData
         old_name = pdiff['old_meta']['Program Name']
         new_name = pdiff['new_meta']['Program Name']
 
-        md = MdUtils('example', f"{old_name}-{new_name} Diff")
+        md = MdUtils('diff md', f"{old_name}-{new_name} Diff")
 
         md.new_header(1, 'Visual Chart Diff')
         md.new_paragraph(self.gen_mermaid_diff_flowchart(pdiff))
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(
+            pdiff['stats'], 'Function Similarity', include_keys=['matched_funcs_len', 'unmatched_funcs_len']))
 
         # Create Metadata section
         md.new_header(1, 'Metadata')
@@ -1331,46 +1416,83 @@ pie showData
         md.new_paragraph(self.gen_table_from_dict(['Stat', 'Value'], pdiff['stats']))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats']['match_types'], 'Match Types'))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats'], 'Diff Stats', skip_keys=[
-                         'match_types', 'diff_time', 'added_symbols_len', 'deleted_symbols_len']))
+                         'match_types', 'diff_time', 'added_symbols_len', 'deleted_symbols_len', 'items_to_process',
+                         'diff_types', 'total_funcs_len', 'matched_funcs_len']))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(
             pdiff['stats'], 'Symbols', include_keys=['added_symbols_len', 'deleted_symbols_len']))
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(
+            pdiff['stats'], 'Strings', include_keys=['added_strings_len', 'deleted_strings_len']))
+
+        # Create Strings Section
+        md.new_header(1, 'Strings')
+        md.new_header(2, 'Strings Diff', add_table_of_contents='n')
+        md.new_paragraph(self.gen_strings_diff(pdiff['strings']['deleted'], pdiff['strings']['added']))
 
         # Create Deleted section
         md.new_header(1, 'Deleted')
 
-        for esym in funcs['deleted']:
-            old_code = esym['code'].splitlines(True)
-            new_code = ''.splitlines(True)
-            diff = ''.join(list(difflib.unified_diff(old_code, new_code,
-                                                     lineterm='\n', fromfile=old_name, tofile=new_name)))
+        for i, esym in enumerate(funcs['deleted']):
+
+            if i > max_section_funcs:
+                md.new_header(2, 'Max Deleted Section Functions Reached Error')
+                md.new_line(f"{len(funcs['deleted']) - max_section_funcs} Deleted Functions Ommited...")
+                self.logger.warn(f'Max Deleted Section Functions {max_section_funcs} Reached')
+                self.logger.warn(f"{len(funcs['deleted']) - max_section_funcs} Functions Ommited...")
+                break
+
             if esym['external']:
                 md.new_header(2, esym['fullname'])
             else:
                 md.new_header(2, esym['name'])
             md.new_header(3, "Function Meta", add_table_of_contents='n')
             md.new_paragraph(self.gen_esym_table(old_name, esym))
-            md.new_paragraph(self._wrap_with_diff(diff))
+
+            # only show code if not above section max
+            if len(funcs['deleted']) < max_section_funcs:
+                old_code = esym['code'].splitlines(True)
+                new_code = ''.splitlines(True)
+                diff = ''.join(list(difflib.unified_diff(old_code, new_code,
+                                                         lineterm='\n', fromfile=old_name, tofile=new_name)))
+                md.new_paragraph(self._wrap_with_diff(diff))
 
         # Create Added section
         md.new_header(1, 'Added')
 
-        for esym in funcs['added']:
-            old_code = ''.splitlines(True)
-            new_code = esym['code'].splitlines(True)
-            diff = ''.join(list(difflib.unified_diff(old_code, new_code,
-                                                     lineterm='\n', fromfile=old_name, tofile=new_name)))
+        for i, esym in enumerate(funcs['added']):
+
+            if i > max_section_funcs:
+                md.new_header(2, 'Max Added Section Functions Reached Error')
+                md.new_line(f"{len(funcs['added']) - max_section_funcs} Added Functions Ommited...")
+                self.logger.warn(f'Max Added Section Functions {max_section_funcs} Reached')
+                self.logger.warn(f"{len(funcs['added']) - max_section_funcs} Functions Ommited...")
+                break
+
             if esym['external']:
                 md.new_header(2, esym['fullname'])
             else:
                 md.new_header(2, esym['name'])
             md.new_header(3, "Function Meta", add_table_of_contents='n')
             md.new_paragraph(self.gen_esym_table(new_name, esym))
-            md.new_paragraph(self._wrap_with_diff(diff))
+
+            # only show code if not above section max
+            if len(funcs['added']) < max_section_funcs:
+                old_code = ''.splitlines(True)
+                new_code = esym['code'].splitlines(True)
+                diff = ''.join(list(difflib.unified_diff(old_code, new_code,
+                                                         lineterm='\n', fromfile=old_name, tofile=new_name)))
+                md.new_paragraph(self._wrap_with_diff(diff))
 
         # Create Modified section
         md.new_header(1, 'Modified')
         md.new_paragraph(f"*Modified functions contain code changes*")
-        for modified in funcs['modified']:
+        for i, modified in enumerate(funcs['modified']):
+
+            if i > max_section_funcs:
+                md.new_header(2, 'Max Modified Section Functions Reached Error')
+                md.new_line(f"{len(funcs['modified']) - max_section_funcs} Functions Ommited...")
+                self.logger.warn(f'Max Modified Section Functions {max_section_funcs} Reached')
+                self.logger.warn(f"{len(funcs['modified']) - max_section_funcs} Functions Ommited...")
+                break
 
             diff = None
 
@@ -1415,57 +1537,64 @@ pie showData
         md.new_paragraph(f"*Slightly modified functions have no code changes, rather differnces in:*")
         md.new_list(slight_mods)
 
-        for modified in funcs['modified']:
+        # skip this section (as it is mostly a bonus) if this markdown is already too big
+        too_big = max_section_funcs < (len(funcs['added']) + len(funcs['deleted']) + len(funcs['modified']))
 
-            mods = set(slight_mods).intersection(set(modified['diff_type']))
+        if too_big:
+            md.new_paragraph(f"*Slightly modified functions have no code changes, rather differnces in:*")
 
-            if 'code' not in modified['diff_type'] and len(mods) > 0:
+        else:
+            for modified in funcs['modified']:
 
-                if modified['old']['external']:
-                    old_func_name = modified['old']['fullname']
-                    new_func_name = modified['old']['fullname']
-                else:
-                    old_func_name = modified['old']['name']
-                    new_func_name = modified['old']['name']
+                mods = set(slight_mods).intersection(set(modified['diff_type']))
 
-                if old_func_name.startswith('FUN_') or new_func_name.startswith('FUN_'):
+                if 'code' not in modified['diff_type'] and len(mods) > 0:
 
-                    ignore_called = False
-                    ignore_calling = False
+                    if modified['old']['external']:
+                        old_func_name = modified['old']['fullname']
+                        new_func_name = modified['old']['fullname']
+                    else:
+                        old_func_name = modified['old']['name']
+                        new_func_name = modified['old']['name']
 
-                    if len(modified['old']['called']) > 0 and len(modified['new']['called']) > 0:
-                        called_set = set(modified['old']['called']).difference(modified['new']['called'])
-                        ignore_called = all('FUN_' in name for name in list(called_set))
+                    if old_func_name.startswith('FUN_') or new_func_name.startswith('FUN_'):
 
-                    if len(modified['old']['calling']) > 0 and len(modified['new']['calling']) > 0:
-                        calling_set = set(modified['old']['calling']).difference(modified['new']['calling'])
-                        ignore_calling = all('FUN_' in name for name in list(calling_set))
+                        ignore_called = False
+                        ignore_calling = False
 
-                    # skip name and fullname changes
-                    if len(mods.difference(['name', 'fullname'])) == 0:
-                        continue
-                    # if all called are FUN_ skip
-                    elif 'called' in modified['diff_type'] and 'calling' in modified['diff_type'] and ignore_called and ignore_calling:
-                        continue
-                    elif 'calling' in modified['diff_type'] and ignore_calling:
-                        continue
-                    elif 'called' in modified['diff_type'] and called_set:
-                        continue
+                        if len(modified['old']['called']) > 0 and len(modified['new']['called']) > 0:
+                            called_set = set(modified['old']['called']).difference(modified['new']['called'])
+                            ignore_called = all('FUN_' in name for name in list(called_set))
 
-                md.new_header(2, old_func_name)
+                        if len(modified['old']['calling']) > 0 and len(modified['new']['calling']) > 0:
+                            calling_set = set(modified['old']['calling']).difference(modified['new']['calling'])
+                            ignore_calling = all('FUN_' in name for name in list(calling_set))
 
-                md.new_header(3, "Match Info", add_table_of_contents='n')
-                md.new_paragraph(self.gen_esym_table_diff_meta(old_name, new_name, modified))
+                        # skip name and fullname changes
+                        if len(mods.difference(['name', 'fullname'])) == 0:
+                            continue
+                        # if all called are FUN_ skip
+                        elif 'called' in modified['diff_type'] and 'calling' in modified['diff_type'] and ignore_called and ignore_calling:
+                            continue
+                        elif 'calling' in modified['diff_type'] and ignore_calling:
+                            continue
+                        elif 'called' in modified['diff_type'] and called_set:
+                            continue
 
-                md.new_header(3, "Function Meta Diff", add_table_of_contents='n')
-                md.new_paragraph(self.gen_esym_table_diff(old_name, new_name, modified))
+                    md.new_header(2, old_func_name)
 
-                if 'called' in modified['diff_type']:
-                    md.new_header(3, "Called Diff", add_table_of_contents='n')
-                    md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'called', n=0))
-                if 'calling' in modified['diff_type']:
-                    md.new_header(3, "Calling Diff", add_table_of_contents='n')
-                    md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'calling', n=0))
+                    md.new_header(3, "Match Info", add_table_of_contents='n')
+                    md.new_paragraph(self.gen_esym_table_diff_meta(old_name, new_name, modified))
+
+                    md.new_header(3, "Function Meta Diff", add_table_of_contents='n')
+                    md.new_paragraph(self.gen_esym_table_diff(old_name, new_name, modified))
+
+                    if 'called' in modified['diff_type']:
+                        md.new_header(3, "Called Diff", add_table_of_contents='n')
+                        md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'called', n=0))
+                    if 'calling' in modified['diff_type']:
+                        md.new_header(3, "Calling Diff", add_table_of_contents='n')
+                        md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'calling', n=0))
 
         # add credit
         md.new_paragraph(self.gen_credits())
@@ -1488,6 +1617,7 @@ pie showData
         pdiff: Union[str, dict],
         dir: Union[str, pathlib.Path],
         side_by_side: bool = False,
+        max_section_funcs: int = None
     ) -> None:
         """
         Dump pdiff result to directory
@@ -1503,7 +1633,7 @@ pie showData
         md_path = dir / pathlib.Path(name + '.md')
         json_path = dir / pathlib.Path(name + '.json')
 
-        diff_text = self.gen_diff_md(pdiff, side_by_side=side_by_side)
+        diff_text = self.gen_diff_md(pdiff, side_by_side=side_by_side, max_section_funcs=max_section_funcs)
 
         with md_path.open('w') as f:
             f.write(diff_text)
