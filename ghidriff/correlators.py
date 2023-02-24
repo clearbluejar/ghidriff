@@ -50,7 +50,8 @@ class StructuralGraphHasher:
 
             code_units = func.getProgram().getListing().getCodeUnits(block, True)
             for code in code_units:
-                if code.mnemonicString == 'CALL':
+                # TODO verify BL instruction for ARM https://developer.arm.com/documentation/den0013/d/Application-Binary-Interfaces/Procedure-Call-Standard?lang=en
+                if code.mnemonicString == 'CALL' or code.mnemonicString == 'BL':
                     num_call_subfunctions += 1
 
         return hash((fname, num_basic_blocks, num_edges_of_blocks, num_call_subfunctions, func.body.numAddresses, func.parameterCount, sym.referenceCount))
