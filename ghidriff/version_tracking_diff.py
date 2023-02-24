@@ -25,7 +25,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         p1: "ghidra.program.model.listing.Program",
         p2: "ghidra.program.model.listing.Program",
         ignore_FUN: bool = False,
-    ) -> dict:
+    ) -> list:
         """
         Find matching and unmatched functions between p1 and p2
         """
@@ -64,12 +64,11 @@ class VersionTrackingDiff(GhidraDiffEngine):
             ('ExactInstructionsFunctionHasher', ExactInstructionsFunctionHasher.INSTANCE, True, False),
             (StructuralGraphExactHasher.MATCH_TYPE, StructuralGraphExactHasher(), True, False),
             ('ExactMnemonicsFunctionHasher', ExactMnemonicsFunctionHasher.INSTANCE, True, False),
+            (BulkInstructionsHasher.MATCH_TYPE, BulkInstructionsHasher(), True, False),
             # WARN: one_to_many=True flag allows for false negatives is structal graph matching. Mitgated by added references, func name in hash
             (StructuralGraphHasher.MATCH_TYPE, StructuralGraphHasher(), True, True),
-            (NamespaceNameParamHasher.MATCH_TYPE, NamespaceNameParamHasher(), True, False),
-            # WARN: one_to_many=True flag allows for false negatives is structal graph matching. Mitgated by added references, func name in hash
+            # WARN: one_to_many=True flag allows for false negatives
             (BulkBasicBlockMnemonicHasher.MATCH_TYPE, BulkBasicBlockMnemonicHasher(), True, True),
-            # (NameParamHasher.MATCH_TYPE, NameParamHasher(), True, True)
         ]
 
         unmatched = []
@@ -132,9 +131,9 @@ class VersionTrackingDiff(GhidraDiffEngine):
             p1_unmatched = p1_unmatched.subtract(p1_matches)
             p2_unmatched = p2_unmatched.subtract(p2_matches)
 
-        self.logger.info(f'Exec time: {end-start:.4f} secs')
-        self.logger.info(f'Match count {matchedSymbols.size() - skipped}')
-        self.logger.info(Counter([tuple(x) for x in matches.values()]))
+            self.logger.info(f'{name} Exec time: {end-start:.4f} secs')
+            self.logger.info(f'Match count: {func_matches.size()}')
+            self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
         # Find unmatched functions
 
@@ -194,7 +193,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
             matched.append([func.getSymbol(), func2.getSymbol(), list(match_types.keys())])
 
         # skip types will undergo less processing
-        skip_types = ['ExternalsName', 'ExactInstructionsFunctionHasher',
-                      'ExactBytesFunctionHasher', 'ExactMnemonicsFunctionHasher']
+        skip_types = [['BulkBasicBlockMnemonicHash']]
 
         return [unmatched, matched, skip_types]
