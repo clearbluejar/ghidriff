@@ -18,7 +18,6 @@ from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
 import multiprocessing
 
-import ghidriff
 from ghidriff import __version__
 
 if TYPE_CHECKING:
@@ -150,12 +149,12 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='.symbols')
 
         group = parser.add_argument_group('Engine Options')
-        group.add_argument('--threaded', help='Use threading during import,analysis, and diffing. Recommended',
+        group.add_argument('--threaded', help='Use threading during import, analysis, and diffing. Recommended',
                            default=True,  action=argparse.BooleanOptionalAction)
-        group.add_argument('--force-analysis', help='Force a new binary analysis each run (slow)',
-                           default=False,  action=argparse.BooleanOptionalAction)
-        group.add_argument('--force-diff', help='Force binary diff (even if arch,symbols do not match)',
-                           default=False,  action=argparse.BooleanOptionalAction,)
+        group.add_argument('--force-analysis', help='Force a new binary analysis each run (slow)', action='store_true')
+        group.add_argument('--force-diff', help='Force binary diff (ignore arch/symbols mismatch)', action='store_true')
+        # TODO add following option
+        # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
         group.add_argument('--log-level', help='Set console log level',
                            default='INFO', choices=logging._nameToLevel.keys())
         group.add_argument('--file-log-level', help='Set log file level',
@@ -163,14 +162,13 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         group.add_argument('--log-path', help='Set ghidriff log path.', default='ghidriff.log')
 
         group = parser.add_argument_group('JVM Options')
-        group.add_argument('--max-ram-percent', help='Set Max Ram %% of all RAM', default=60.0)
-        group.add_argument('--print-flags', help='Print JVM flags at start',
-                           default=False, action=argparse.BooleanOptionalAction)
+        group.add_argument('--max-ram-percent', help='Set JVM Max Ram %% of host RAM', default=60.0)
+        group.add_argument('--print-flags', help='Print JVM flags at start', action='store_true')
         group.add_argument('--jvm-args', nargs='?', help='JVM args to add at start', default=None)
 
         group = parser.add_argument_group('Markdown Options')
-        group.add_argument('--sxs', dest='side_by_side', action=argparse.BooleanOptionalAction,
-                           help='Diff Markdown includes side by side diff', default=False)
+        group.add_argument('--sxs', dest='side_by_side', action='store_true',
+                           help='Include side by side code diff')
         group.add_argument('--max-section-funcs',
                            help='Max number of functions to display per section.', type=int, default=200)
 
@@ -1065,8 +1063,6 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         cmd_line = []
 
-        # m = importlib.import_module(self.__module__)
-        # subclass_name = m.__file__.split('/')[-1]
         cmd_line.append('python')
         cmd_line.append(__package__)
 
@@ -1082,8 +1078,19 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                         bins.append(items)
                 cmd_line.append(' '.join(bins))
             else:
-                cmd_line.append(f'--{arg}')
-                cmd_line.append(f'{getattr(args, arg)}')
+                opt = arg.replace("_", "-")
+                val = getattr(args, arg)
+
+                if val is None:
+                    continue
+
+                # handle bool options
+                if isinstance(val, bool):
+                    if val:
+                        cmd_line.append(f'--{opt}')
+                else:
+                    cmd_line.append(f'--{opt}')
+                    cmd_line.append(f'{val}')
 
         cmd_line = ' '.join(cmd_line)
 
