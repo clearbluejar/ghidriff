@@ -24,7 +24,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
         self,
         p1: "ghidra.program.model.listing.Program",
         p2: "ghidra.program.model.listing.Program",
-        ignore_FUN: bool = False,
     ) -> list:
         """
         Find matching and unmatched functions between p1 and p2
