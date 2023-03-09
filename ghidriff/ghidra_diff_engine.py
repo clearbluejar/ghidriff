@@ -967,6 +967,9 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                 # potential decompile jumptable issue ghidra/issues/2452
                 if not "Could not recover jumptable" in diff:
                     diff_type.append('code')
+                else:
+                    self.logger.warn(
+                        f"Code diff type not appended for {ematch_1['name']} due to jumptable decomp issue")
 
             if ematch_1['name'] != ematch_2['name']:
                 diff_type.append('name')
@@ -996,7 +999,6 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                 diff_type.append('parent')
 
             # if no differences were found, there should not be a match (see modified func ident)
-            # assert len(diff_type) > 0
             if len(diff_type) == 0:
                 self.logger.warn(f'no diff: {sym} {sym2} {match_types}')
                 continue
@@ -1422,17 +1424,16 @@ pie showData
         md.new_header(2, 'Diff Stats')
         md.new_paragraph(self.gen_table_from_dict(['Stat', 'Value'], pdiff['stats']))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats']['match_types'], 'Match Types'))
-        md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats'], 'Diff Stats', skip_keys=[
-                         'match_types', 'diff_time', 'added_symbols_len', 'deleted_symbols_len', 'items_to_process',
-                         'diff_types', 'total_funcs_len', 'matched_funcs_len']))
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats'], 'Diff Stats', include_keys=[
+                         'added_funcs_len', 'deleted_funcs_len', 'modified_funcs_len']))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(
             pdiff['stats'], 'Symbols', include_keys=['added_symbols_len', 'deleted_symbols_len']))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(
             pdiff['stats'], 'Strings', include_keys=['added_strings_len', 'deleted_strings_len']))
 
         # Create Strings Section
-        md.new_header(1, 'Strings')
-        md.new_header(2, 'Strings Diff', add_table_of_contents='n')
+        md.new_header(2, 'Strings')
+        md.new_header(3, 'Strings Diff', add_table_of_contents='n')
         md.new_paragraph(self.gen_strings_diff(pdiff['strings']['deleted'], pdiff['strings']['added']))
 
         # Create Deleted section
@@ -1548,8 +1549,9 @@ pie showData
         too_big = max_section_funcs < (len(funcs['added']) + len(funcs['deleted']) + len(funcs['modified']))
 
         if too_big:
-            md.new_paragraph(f"*Slightly modified functions have no code changes, rather differnces in:*")
-
+            md.new_header(2, 'Section Skipped')
+            md.new_paragraph(
+                f"**This section was skipped because markdown was too big. Adjust max_section_funcs: {max_section_funcs} to a higher number.**")
         else:
             for modified in funcs['modified']:
 
