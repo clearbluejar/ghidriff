@@ -9,21 +9,17 @@ It's primary use case is for patch diffing. It is written in Python 3 using `pyh
 ```mermaid
 flowchart LR
 
-
 a(old binary - rpcrt4.dll-v1) --> b[GhidraDiffEngine]
 c(new binary - rpcrt4.dll-v2) --> b
-
 
 b --> e(Ghidra Project Files)
 b --> diffs_output_dir
 
-
 subgraph diffs_output_dir
     direction LR
     i(rpcrt4.dll-v1-v2.diff.md)
-    h(rpcrt4.dll-v1-v2.diff.json)    
+    h(rpcrt4.dll-v1-v2.diff.json)
 end
-
 ```
 
 ## Features
@@ -40,11 +36,9 @@ The heavy lifting of the binary analysis is done by Ghidra.  This library is jus
 
 ## About
 
-
 > An "engine" is a self-contained, but externally-controllable, piece of code that encapsulates powerful logic designed to perform a specific type of work.
 
-
-`ghidriff` is provides a core [GhidraDiffEngine](ghidriff/ghidra_diff_engine.py), a base class, that can be extended to create your own binary diffing [implementations](#implementations).
+`ghidriff` is provides a core base class, [GhidraDiffEngine](ghidriff/ghidra_diff_engine.py), that can be extended to create your own binary diffing [implementations](#implementations).
 
 The base class implements first 3 steps of the Ghidra [headless workflow](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#steps):
 >1. **Create Ghidra Project** - Directory and collection of Ghidra project files and data
@@ -73,13 +67,15 @@ class NewDiffTool(GhidraDiffEngine):
 
         # find added, deleted, and modified functions
         # <code goes here>
+
+        return [unmatched, matched]
 ```
 
 ## Implementations
 
 There are currently 3 differs, which display the evolution of diffing for the project.
 
-1. [SimpleDiff](simple_diff.py) - A simple diff finding implementation. "Simple" as in it relies mostly on known symbols to find the differences between functions.
+1. [SimpleDiff](ghidriff/simple_diff.py) - A simple diff finding implementation. "Simple" as in it relies mostly on known symbols to find the differences between functions.
 2. [StructualGraphDiff](ghidriff/structural_graph_diff.py) - A slightly more advanced differ, begining to perform some more advanced hashing (such as Halvar's Structural Graph Comparison)
 3. [VersionTrackingDiff](ghidriff/version_tracking_diff.py) - The latest differ, with several [correlators](ghidriff/correlators.py) (an algorithm used to score specific associations based on code, program flow, or any observable aspect of comparison) for function matching. **This one is fast.**
 
@@ -91,22 +87,23 @@ Each implementation leverags the base class, and implements `find_changes`. Let'
 #### Usage
 
 ```bash
-usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-p PROJECT_LOCATION] [-n PROJECT_NAME]
-                [-s SYMBOLS_PATH] [-o OUTPUT_PATH] [--threaded | --no-threaded] [--force-analysis | --no-force-analysis]
-                [--force-diff | --no-force-diff] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                [--max-ram-percent MAX_RAM_PERCENT] [--print-flags | --no-print-flags] [--jvm-args [JVM_ARGS]] [--sxs | --no-sxs]
+usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--threaded | --no-threaded]
+                [--force-analysis] [--force-diff] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                [--log-path LOG_PATH] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags] [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS]
                 old new [new ...]
 
 ghidriff - A Command Line Ghidra Binary Diffing Engine
 
 positional arguments:
-  old                   Path to older version of binary "/somewhere/bin.old"
-  new                   Path to new version of binary '/somewhere/bin.new'. For multiple new binaries add oldest to newest
+  old                   Path to old version of binary '/somewhere/bin.old'
+  new                   Path to new version of binary '/somewhere/bin.new'. (For multiple new binaries add oldest to newest)
 
 options:
   -h, --help            show this help message and exit
   --engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}
                         The diff implementation to use. (default: VersionTrackingDiff)
+  -o OUTPUT_PATH, --output-path OUTPUT_PATH
+                        Output path for resulting diffs (default: .ghidriffs)
 
 Ghidra Project Options:
   -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
@@ -115,29 +112,29 @@ Ghidra Project Options:
                         Ghidra Project Name (default: diff_project)
   -s SYMBOLS_PATH, --symbols-path SYMBOLS_PATH
                         Ghidra local symbol store directory (default: .symbols)
-  -o OUTPUT_PATH, --output-path OUTPUT_PATH
-                        Output path for resulting diff (default: .diffs)
 
-Engine Analysis Options:
+Engine Options:
   --threaded, --no-threaded
-                        Use threading during import,analysis, and diffing. Recommended (default: True)
-  --force-analysis, --no-force-analysis
-                        Force a new binary analysis each run (slow) (default: False)
-  --force-diff, --no-force-diff
-                        Force binary diff (even if arch,symbols do not match) (default: False)
+                        Use threading during import, analysis, and diffing. Recommended (default: True)
+  --force-analysis      Force a new binary analysis each run (slow) (default: False)
+  --force-diff          Force binary diff (ignore arch/symbols mismatch) (default: False)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
-                        Set log level (default: INFO)
+                        Set console log level (default: INFO)
+  --file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
+                        Set log file level (default: INFO)
+  --log-path LOG_PATH   Set ghidriff log path. (default: ghidriff.log)
 
 JVM Options:
   --max-ram-percent MAX_RAM_PERCENT
-                        Set Max Ram % of all RAM (default: 0.6)
-  --print-flags, --no-print-flags
-                        Print JVM flags at start (default: False)
+                        Set JVM Max Ram % of host RAM (default: 60.0)
+  --print-flags         Print JVM flags at start (default: False)
   --jvm-args [JVM_ARGS]
                         JVM args to add at start (default: None)
 
-Diff Markdown Options:
-  --sxs, --no-sxs       Diff Markdown includes side by side diff (default: False)
+Markdown Options:
+  --sxs                 Include side by side code diff (default: False)
+  --max-section-funcs MAX_SECTION_FUNCS
+                        Max number of functions to display per section. (default: 200)
 ```
 
 ## Quick Start Environment Setup
