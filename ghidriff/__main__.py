@@ -21,9 +21,9 @@ def main():
     parser = argparse.ArgumentParser(description='ghidriff - A Command Line Ghidra Binary Diffing Engine',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    parser.add_argument('old', nargs=1, help='Path to older version of binary "/somewhere/bin.old"')
+    parser.add_argument('old', nargs=1, help="Path to old version of binary '/somewhere/bin.old'")
     parser.add_argument('new', action='append', nargs='+',
-                        help="Path to new version of binary '/somewhere/bin.new'. For multiple new binaries add oldest to newest")
+                        help="Path to new version of binary '/somewhere/bin.new'. (For multiple new binaries add oldest to newest)")
     parser.add_argument('--engine', help='The diff implementation to use.',
                         default='VersionTrackingDiff', choices=engines.keys())
     parser.add_argument('-o', '--output-path', help='Output path for resulting diffs', default='.ghidriffs')
