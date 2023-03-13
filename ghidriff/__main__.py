@@ -1,10 +1,20 @@
 import argparse
 from pathlib import Path
-import inspect
 import json
+import inspect
 
 import ghidriff
 from ghidriff import GhidraDiffEngine
+
+
+def get_engine_classes() -> dict:
+    engines = {}
+
+    for name, klass in inspect.getmembers(ghidriff, inspect.isclass):
+        if name.endswith('Diff'):
+            engines[name] = klass
+
+    return engines
 
 
 def main():
@@ -12,20 +22,19 @@ def main():
     ghidriff - GhidraDiffEngine module main function
     """
 
-    # setup engines
-    engines = {}
-    for name, klass in inspect.getmembers(ghidriff, inspect.isclass):
-        if name.endswith('Diff'):
-            engines[name] = klass
-
     parser = argparse.ArgumentParser(description='ghidriff - A Command Line Ghidra Binary Diffing Engine',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('old', nargs=1, help="Path to old version of binary '/somewhere/bin.old'")
     parser.add_argument('new', action='append', nargs='+',
                         help="Path to new version of binary '/somewhere/bin.new'. (For multiple new binaries add oldest to newest)")
+
+    # setup Engine class options
+    engines = get_engine_classes()
+
     parser.add_argument('--engine', help='The diff implementation to use.',
                         default='VersionTrackingDiff', choices=engines.keys())
+
     parser.add_argument('-o', '--output-path', help='Output path for resulting diffs', default='.ghidriffs')
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
@@ -35,6 +44,8 @@ def main():
     output_path = Path(args.output_path)
     output_path.mkdir(exist_ok=True)
 
+    if args.log_path == 'None':
+        engine_log_path = None
     if args.log_path == parser.get_default('log_path'):
         engine_log_path = output_path / parser.get_default('log_path')
     else:
@@ -87,7 +98,8 @@ def main():
                             pdiff,
                             output_path,
                             side_by_side=args.side_by_side,
-                            max_section_funcs=args.max_section_funcs)
+                            max_section_funcs=args.max_section_funcs,
+                            md_title=args.md_title)
 
 
 if __name__ == "__main__":
