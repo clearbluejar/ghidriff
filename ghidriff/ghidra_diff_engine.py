@@ -16,6 +16,7 @@ import logging
 from pyhidra.launcher import PyhidraLauncher
 from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
+from mdutils.tools.TableOfContents import TableOfContents
 import multiprocessing
 
 from ghidriff import __version__
@@ -72,14 +73,15 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
 
-        if engine_log_path:
-            self.add_log_to_path(engine_log_path, engine_log_level)
-
         self.logger.info('Init Ghidra Diff Engine..')
         self.logger.info(f'Engine Console Log: {engine_log_level}')
 
-        # send application log to output path
-        self.logger.info(f'Engine File Log:  {engine_log_path} {engine_file_log_level}')
+        if engine_log_path:
+            # send application log to output path
+            self.add_log_to_path(engine_log_path, engine_log_level)
+            self.logger.info(f'Engine File Log:  {engine_log_path} {engine_file_log_level}')
+        else:
+            self.logger.warn('Engine File Log: {engine_log_path}')
 
         # Init Pyhidra
         launcher = HeadlessLoggingPyhidraLauncher(verbose=verbose, log_path=engine_log_path)
@@ -119,7 +121,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         self.max_workers = max_workers
         self.max_section_funcs = max_section_funcs
 
-        self.cmd_line = self.gen_cmd_line(args)
+        # store args used from init
+        self.args = args
 
         # Setup decompiler interface
         self.decompilers = {}
@@ -171,6 +174,20 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                            help='Include side by side code diff')
         group.add_argument('--max-section-funcs',
                            help='Max number of functions to display per section.', type=int, default=200)
+        group.add_argument('--md-title', help='Overwrite default title for markdown diff', type=str, default=None)
+
+    def get_default_args(self) -> list:
+        """
+        Return list of default args for engine
+        """
+
+        parser = argparse.ArgumentParser()
+
+        self.add_ghidra_args_to_parser(parser)
+
+        defaults = vars(parser.parse_args([]))
+
+        return defaults
 
     def setup_logger(self, level: int = logging.INFO) -> logging.Logger:
         """
@@ -317,12 +334,17 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         project_location = pathlib.Path(project_location) / project_name
         project_location.mkdir(exist_ok=True, parents=True)
 
+        self.logger.info(f'Setting Up Ghidra Project {project_location} {project_name}')
+
         # Open/Create project
         project = None
+
         try:
             project = GhidraProject.openProject(project_location, project_name, True)
+            self.logger.info(f'Opened {project}')
         except IOException:
             project = GhidraProject.createProject(project_location, project_name, False)
+            self.logger.info(f'Created {project}')
 
         self.project = project
 
@@ -1058,33 +1080,53 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         return pdiff
 
-    def gen_cmd_line(self, args: Namespace) -> str:
+    def gen_diff_cmd_line(self, old_name: str, new_name: str) -> list:
         """
         Return command line used to start engine implementation
         """
 
-        cmd_line = []
+        known_cmd_line = []
+        extra_cmd_line = []
+        full_cmd_line = []
 
-        cmd_line.append('python')
-        cmd_line.append(__package__)
+        known_skip_args = ['old', 'new']
 
-        for arg in vars(args):
-            # handle positional args (assumed to be lists...)
-            if isinstance(getattr(args, arg), list):
-                bins = []
-                for items in getattr(args, arg):
-                    if isinstance(items, list):
-                        for item in items:
-                            bins.append(item)
-                    else:
-                        bins.append(items)
-                cmd_line.append(' '.join(bins))
-            else:
+        if not self.args:
+            err = 'Could not generate command line. No args passed to init of GhidraDiffEngine.'
+            known_cmd_line.append(err)
+            extra_cmd_line.append(err)
+            full_cmd_line.append(err)
+            self.logger.error(err)
+        else:
+            args = self.args
+            defaults = self.get_default_args()
+
+            self.logger.debug(f'Engine Args {args}')
+            self.logger.debug(f'Engine Arg Defaults {defaults}')
+
+            known_cmd_line.append('python')
+            known_cmd_line.append(__package__)
+
+            for arg in vars(args):
+
                 opt = arg.replace("_", "-")
                 val = getattr(args, arg)
 
+                full_cmd_line.append(f'--{opt}')
+                full_cmd_line.append(f'{val}')
+
+                if arg in known_skip_args:
+                    self.logger.debug(f'Skipping known_skip_arg: {arg}')
+                    continue
+
                 if val is None:
                     continue
+
+                # which cmd_line
+                if arg not in defaults:
+                    cmd_line = extra_cmd_line
+                else:
+                    cmd_line = known_cmd_line
 
                 # handle bool options
                 if isinstance(val, bool):
@@ -1094,11 +1136,19 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                     cmd_line.append(f'--{opt}')
                     cmd_line.append(f'{val}')
 
-        cmd_line = ' '.join(cmd_line)
+            # add binary names
+            known_cmd_line.append(old_name)
+            known_cmd_line.append(new_name)
 
-        self.logger.debug('Command line: %s', cmd_line)
+        known_cmd_line = ' '.join(known_cmd_line)
+        extra_cmd_line = ' '.join(extra_cmd_line)
+        full_cmd_line = ' '.join(full_cmd_line)
 
-        return cmd_line
+        self.logger.info('Known Command line: %s', known_cmd_line)
+        self.logger.info('Extra Command line: %s', extra_cmd_line)
+        self.logger.debug('Extra Command line: %s', extra_cmd_line)
+
+        return [known_cmd_line, extra_cmd_line, full_cmd_line]
 
     def validate_diff_json(
         self,
@@ -1120,6 +1170,15 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         text = ''
         text += "```diff\n"
         text += diff
+        text += "\n```\n"
+        text += "\n"
+
+        return text
+
+    def _wrap_with_code(self, code: str, style='') -> str:
+        text = ''
+        text += f"```{style}" + "\n"
+        text += code
         text += "\n```\n"
         text += "\n"
 
@@ -1376,6 +1435,7 @@ pie showData
     def gen_diff_md(
         self,
         pdiff: Union[str, dict],
+        title=None,
         side_by_side: bool = False,
         max_section_funcs: int = None,
     ) -> str:
@@ -1399,7 +1459,15 @@ pie showData
         old_name = pdiff['old_meta']['Program Name']
         new_name = pdiff['new_meta']['Program Name']
 
-        md = MdUtils('diff md', f"{old_name}-{new_name} Diff")
+        if title:
+            title = title
+        else:
+            title = f"{old_name}-{new_name} Diff"
+
+        md = MdUtils('diff', title=title)
+
+        # change title to atx style
+        md.title = md.header.choose_header(level=1, title=title, style='atx')
 
         md.new_header(1, 'Visual Chart Diff')
         md.new_paragraph(self.gen_mermaid_diff_flowchart(pdiff))
@@ -1412,7 +1480,13 @@ pie showData
         md.new_header(2, 'Ghidra Diff Engine')
 
         md.new_header(3, 'Command Line')
-        md.new_paragraph(f'`{self.cmd_line}`')
+        known_cmd, extra_cmd, full_cmd = self.gen_diff_cmd_line(old_name, new_name)
+        md.new_header(4, 'Known Command Line', add_table_of_contents='n')
+        md.new_paragraph(self._wrap_with_code(known_cmd))
+        md.new_header(4, 'Extra Args', add_table_of_contents='n')
+        md.new_paragraph(self._wrap_with_code(extra_cmd))
+        md.new_header(4, 'All Args', add_table_of_contents='n')
+        md.new_paragraph(self._wrap_with_code(full_cmd))
 
         md.new_header(3, 'Ghidra Analysis Options', add_table_of_contents='n')
         md.new_paragraph(self._wrap_with_details(self.gen_table_from_dict(
@@ -1607,8 +1681,12 @@ pie showData
 
         # add credit
         md.new_paragraph(self.gen_credits())
-        # generate TOC
-        md.new_table_of_contents('TOC', 3)
+
+        # generate TOC and set style to atx
+        md.table_of_contents += md.header.choose_header(level=1, title='TOC', style='atx')
+        md.table_of_contents += TableOfContents().create_table_of_contents(md._table_titles, depth=3)
+
+        # md.new_table_of_contents('TOC', 3)
 
         return md.get_md_text()
 
@@ -1626,11 +1704,19 @@ pie showData
         pdiff: Union[str, dict],
         dir: Union[str, pathlib.Path],
         side_by_side: bool = False,
-        max_section_funcs: int = None
+        max_section_funcs: int = None,
+        md_title: str = None,
+        write_diff: bool = True,
+        write_json: bool = True
+
     ) -> None:
         """
         Dump pdiff result to directory
         """
+
+        if not write_diff and not write_json:
+            self.logger.warn('Not writing json or diff.md.')
+            return
 
         if isinstance(pdiff, str):
             pdiff = json.loads(pdiff)
@@ -1639,16 +1725,27 @@ pie showData
 
         dir = pathlib.Path(dir)
 
-        md_path = dir / pathlib.Path(name + '.md')
-        json_path = dir / pathlib.Path(name + '.json')
+        if write_diff:
+            md_path = dir / pathlib.Path(name + '.md')
+            self.logger.info(f'Writing md diff...')
 
-        diff_text = self.gen_diff_md(pdiff, side_by_side=side_by_side, max_section_funcs=max_section_funcs)
+            diff_text = self.gen_diff_md(
+                pdiff,
+                side_by_side=side_by_side,
+                max_section_funcs=max_section_funcs,
+                title=md_title)
 
-        with md_path.open('w') as f:
-            f.write(diff_text)
+            with md_path.open('w') as f:
+                f.write(diff_text)
 
-        with json_path.open('w') as f:
-            json.dump(pdiff, f, indent=4)
+        if write_json:
+            json_path = dir / pathlib.Path(name + '.json')
+            self.logger.info(f'Writing pdiff json...')
 
-        self.logger.info(f'Wrote {md_path}')
-        self.logger.info(f'Wrote {json_path}')
+            with json_path.open('w') as f:
+                json.dump(pdiff, f, indent=4)
+
+        if write_diff:
+            self.logger.info(f'Wrote {md_path}')
+        if write_json:
+            self.logger.info(f'Wrote {json_path}')
