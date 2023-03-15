@@ -109,21 +109,10 @@ class StructualGraphDiff(GhidraDiffEngine):
                 self.logger.info("Name + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Name:Param'
-            # elif esym2['address'] == esym2['address'] and esym2['paramcount']== esym['paramcount']:
-            #     self.logger.info("Address + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
-            #     found = True
             if esym2['name'] == esym['name'] and esym2['length'] == esym['length']:
                 self.logger.info("Name + length {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Name:Length'
-            # elif esym2['address'] == esym2['address'] and esym2['length'] == esym['length'] and min([esym['length'], esym2['length']]) > min_func_length:
-            #     self.logger.info("Address + Length {} {}".format(sym.getName(True), sym2.getName(True)))
-            #     found = True
-            #     match_type = 'Address:Length'
-            # elif esym2['paramcount'] == esym['paramcount'] and esym2['length'] == esym['length']:
-            #     self.logger.info("param count + func len {} {}".format(sym.getName(True), sym2.getName(True)))
-            #     found = True
-            #     match_type = 'Param:Length'
             elif esym2['fullname'] == esym['fullname']:
                 self.logger.info("Name Exact {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True

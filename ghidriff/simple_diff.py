@@ -14,11 +14,6 @@ class SimpleDiff(GhidraDiffEngine):
     An Ghidra Diff implementation using simple comparison mechanisms
     """
 
-    # def __init__(self, verbose: bool = False, output_dir: str = '.diffs', MAX_MEM=None, threaded=False, max_workers=...) -> None:
-    #     super().__init__(verbose, output_dir, MAX_MEM, threaded, max_workers)
-    #     self.name = 'GhidraSimpleDiff'
-    #     self.file = __file__
-
     def find_matches(
         self,
         p1: "ghidra.program.model.listing.Program",
@@ -57,13 +52,6 @@ class SimpleDiff(GhidraDiffEngine):
             match_type = None
             min_func_length = 15
 
-            # if esym2['name'] == esym['name'] and esym2['paramcount'] == esym['paramcount']:
-            #     self.logger.info("Name + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
-            #     found = True
-            #     match_type = 'Name:Param'
-            # elif esym2['address'] == esym2['address'] and esym2['paramcount']== esym['paramcount']:
-            #     self.logger.info("Address + Paramcount {} {}".format(sym.getName(True),sym2.getName(True)))
-            #     found = True
             if esym2['name'] == esym['name'] and esym2['length'] == esym['length']:
                 self.logger.info("Name + length {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
@@ -153,23 +141,6 @@ class SimpleDiff(GhidraDiffEngine):
                     continue
                 new_funcs.append(_get_compare_key(sym, func))
 
-        # TODO check to see if getFunctions returns a more accurate set
-        # Conside replacing with Ghidra/Features/Base/src/main/java/ghidra/app/plugin/match/MatchFunctions.java#L34
-        # count = 0
-        # funcs1 = p1.functionManager.getFunctions(True)
-        # funcs1_check = []
-        # for f in funcs1:
-        #     count += 1
-        #     funcs1_check.append(_get_compare_key(f.getSymbol(),f))
-        # self.logger.info(count)
-
-        # self.logger.info(len(old_funcs))
-        # check = set(funcs1_check)
-
-        # modified = sorted(check.difference(old))
-        # for sym in modified:
-        #     self.logger.info(sym)
-
         old_func_set = set(old_funcs)
         new_func_set = set(new_funcs)
 
@@ -177,27 +148,6 @@ class SimpleDiff(GhidraDiffEngine):
         modified_new = sorted(new_func_set.difference(old_func_set))
 
         matching_compare_keys = sorted(old_func_set.intersection(new_func_set))
-
-        # account for compare_key match types
-        # TODO account for hashes this!!
-        # for sym in matching_compare_keys:
-        #     all_match_types.append('Hash')
-
-        # FUNCTION_MINIMUM_SIZE_DEFAULT = 10
-
-        # from ghidra.app.plugin.match import FunctionHasher
-
-        # if (!func.isThunk() && func.getBody().getNumAddresses() >= minimumFunctionSize) {
-        # 		hashFunction(monitor, functionHashes, func, hasher, true);
-        # }
-
-        # hasher = FunctionHasher()
-
-        # for key in matching_compare_keys:
-
-        #     hasher.hash()
-
-        # for key in
 
         self.logger.info("\nmodified_old_modified")
         for sym in modified_old:
@@ -238,8 +188,6 @@ class SimpleDiff(GhidraDiffEngine):
         matches = []
 
         self.logger.info("\nMatching functions...")
-
-        hashes = []
 
         # match by name and paramcount
         for sym in p1_modified:
@@ -336,10 +284,5 @@ class SimpleDiff(GhidraDiffEngine):
                 deleted_symbols.remove(match[0].getName())
             if match[1].getName() in added_symbols:
                 added_symbols.remove(match[1].getName())
-
-        # translate matches to expected
-        expected_matched = []
-        for sym, sym2, match_type in matches:
-            expected_matched.append([sym, sym2, [match_type]])
 
         return [unmatched, matches, []]
