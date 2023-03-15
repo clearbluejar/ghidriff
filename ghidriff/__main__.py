@@ -36,13 +36,14 @@ def main():
                         default='VersionTrackingDiff', choices=engines.keys())
 
     parser.add_argument('-o', '--output-path', help='Output path for resulting diffs', default='.ghidriffs')
+    parser.add_argument('--summary', help='Add a summary diff if more than two bins are provided', default=False)
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
     args = parser.parse_args()
 
     output_path = Path(args.output_path)
-    output_path.mkdir(exist_ok=True)
+    output_path.mkdir(exist_ok=True, parents=True)
 
     if args.log_path == 'None':
         engine_log_path = None
@@ -54,6 +55,10 @@ def main():
     binary_paths = args.old + [bin for sublist in args.new for bin in sublist]
 
     binary_paths = [Path(path) for path in binary_paths]
+
+    if any([not path.exists() for path in binary_paths]):
+        missing_bins = [f'{path.name}' for path in binary_paths if not path.exists()]
+        raise FileNotFoundError(f"Missing Bins: {' '.join(missing_bins)}")
 
     project_name = f'{args.project_name}-{binary_paths[0].name}-{binary_paths[-1].name}'
 
@@ -83,7 +88,7 @@ def main():
         diffs.append((binary_paths[i], binary_paths[i+1]))
 
     # add a diff of the first and last binary for full coverage
-    if not binary_paths[1] == binary_paths[-1]:
+    if not binary_paths[1] == binary_paths[-1] and args.summary:
         diffs.append((binary_paths[0], binary_paths[-1]))
 
     for diff in diffs:
@@ -94,12 +99,12 @@ def main():
 
         diff_name = f"{Path(diff[0]).name}-{Path(diff[1]).name}_diff"
 
-        d.dump_pdiff_to_dir(diff_name,
-                            pdiff,
-                            output_path,
-                            side_by_side=args.side_by_side,
-                            max_section_funcs=args.max_section_funcs,
-                            md_title=args.md_title)
+        d.dump_pdiff_to_path(diff_name,
+                             pdiff,
+                             output_path,
+                             side_by_side=args.side_by_side,
+                             max_section_funcs=args.max_section_funcs,
+                             md_title=args.md_title)
 
 
 if __name__ == "__main__":

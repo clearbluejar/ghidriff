@@ -13,7 +13,7 @@ from typing import List, Tuple, Union, TYPE_CHECKING
 from argparse import Namespace
 import logging
 
-from pyhidra.launcher import PyhidraLauncher
+from pyhidra.launcher import PyhidraLauncher, GHIDRA_INSTALL_DIR, get_ghidra_version, get_current_application
 from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
 from mdutils.tools.TableOfContents import TableOfContents
@@ -73,8 +73,14 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
 
-        self.logger.info('Init Ghidra Diff Engine..')
+        self.logger.info('Init Ghidra Diff Engine...')
         self.logger.info(f'Engine Console Log: {engine_log_level}')
+        self.logger.info(f'GHIDRA_INSTALL_DIR: {GHIDRA_INSTALL_DIR}')
+        app_info = get_current_application()
+        self.logger.info(f'GHIDRA Version: {app_info.version} Build Date: {app_info.build_date}')
+        self.logger.info(f"Engine Args:")
+        for arg in vars(args):
+            self.logger.info('%-20s:\t%s', arg, vars(args)[arg])
 
         if engine_log_path:
             # send application log to output path
@@ -140,7 +146,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         self.logger.debug(f'{vars(self)}')
 
-    @staticmethod
+    @ staticmethod
     def add_ghidra_args_to_parser(parser: argparse.ArgumentParser) -> None:
         """
         Add required Ghidra args to a parser
@@ -148,14 +154,16 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         group = parser.add_argument_group('Ghidra Project Options')
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='.ghidra_projects')
-        group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='diff_project')
+        group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='ghidriff')
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='.symbols')
 
         group = parser.add_argument_group('Engine Options')
         group.add_argument('--threaded', help='Use threading during import, analysis, and diffing. Recommended',
                            default=True,  action=argparse.BooleanOptionalAction)
-        group.add_argument('--force-analysis', help='Force a new binary analysis each run (slow)', action='store_true')
-        group.add_argument('--force-diff', help='Force binary diff (ignore arch/symbols mismatch)', action='store_true')
+        group.add_argument('--force-analysis', help='Force a new binary analysis each run (slow)',
+                           action='store_true')
+        group.add_argument('--force-diff', help='Force binary diff (ignore arch/symbols mismatch)',
+                           action='store_true')
         # TODO add following option
         # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
         group.add_argument('--log-level', help='Set console log level',
@@ -334,19 +342,21 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         project_location = pathlib.Path(project_location) / project_name
         project_location.mkdir(exist_ok=True, parents=True)
 
-        self.logger.info(f'Setting Up Ghidra Project {project_location} {project_name}')
+        self.logger.info(f'Setting Up Ghidra Project...')
 
         # Open/Create project
         project = None
 
         try:
             project = GhidraProject.openProject(project_location, project_name, True)
-            self.logger.info(f'Opened {project}')
+            self.logger.info(f'Opened project: {project.project.name}')
         except IOException:
             project = GhidraProject.createProject(project_location, project_name, False)
-            self.logger.info(f'Created {project}')
+            self.logger.info(f'Created project: {project.project.name}')
 
         self.project = project
+
+        self.logger.info(f'Project Location: {project.project.projectLocator.location}')
 
         # Setup Symbols
         self.setup_symbols(symbols_path)
@@ -789,6 +799,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         ignore_FUN : skip nameless functions matching names containing "FUN_". Useful for increasing speed of diff.
         last_attempt : flag to prevent infinte loop on recursive instances
         """
+
+        self.logger.info(f'Diffing bins: {old} - {new}')
 
         start = time()
 
@@ -1449,7 +1461,7 @@ pie showData
         if not max_section_funcs:
             max_section_funcs = self.max_section_funcs
 
-        self.logger.info(f"max_section_funcs: {max_section_funcs}")
+        self.logger.debug(f"max_section_funcs: {max_section_funcs}")
 
         if isinstance(pdiff, str):
             pdiff = json.loads(pdiff)
@@ -1698,11 +1710,11 @@ pie showData
 
         return pdiff
 
-    def dump_pdiff_to_dir(
+    def dump_pdiff_to_path(
         self,
         name: str,
         pdiff: Union[str, dict],
-        dir: Union[str, pathlib.Path],
+        output_path: Union[str, pathlib.Path],
         side_by_side: bool = False,
         max_section_funcs: int = None,
         md_title: str = None,
@@ -1723,10 +1735,10 @@ pie showData
 
         pdiff = self.minimize_pdiff(pdiff)
 
-        dir = pathlib.Path(dir)
+        output_path = pathlib.Path(output_path)
 
         if write_diff:
-            md_path = dir / pathlib.Path(name + '.md')
+            md_path = output_path / pathlib.Path(name + '.md')
             self.logger.info(f'Writing md diff...')
 
             diff_text = self.gen_diff_md(
@@ -1739,7 +1751,7 @@ pie showData
                 f.write(diff_text)
 
         if write_json:
-            json_path = dir / pathlib.Path(name + '.json')
+            json_path = output_path / pathlib.Path(name + '.json')
             self.logger.info(f'Writing pdiff json...')
 
             with json_path.open('w') as f:
