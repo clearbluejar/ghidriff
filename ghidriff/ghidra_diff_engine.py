@@ -13,7 +13,7 @@ from typing import List, Tuple, Union, TYPE_CHECKING
 from argparse import Namespace
 import logging
 
-from pyhidra.launcher import PyhidraLauncher, GHIDRA_INSTALL_DIR, get_ghidra_version, get_current_application
+from pyhidra.launcher import PyhidraLauncher, GHIDRA_INSTALL_DIR
 from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
 from mdutils.tools.TableOfContents import TableOfContents
@@ -65,6 +65,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             jvm_args: List[str] = [],
             force_analysis: bool = False,
             force_diff: bool = False,
+            verbose_analysis: bool = False,
+            no_symbols: bool = False,
             engine_log_path: pathlib.Path = None,
             engine_log_level: int = logging.INFO,
             engine_file_log_level: int = logging.INFO,
@@ -75,12 +77,6 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         self.logger.info('Init Ghidra Diff Engine...')
         self.logger.info(f'Engine Console Log: {engine_log_level}')
-        self.logger.info(f'GHIDRA_INSTALL_DIR: {GHIDRA_INSTALL_DIR}')
-        app_info = get_current_application()
-        self.logger.info(f'GHIDRA Version: {app_info.version} Build Date: {app_info.build_date}')
-        self.logger.info(f"Engine Args:")
-        for arg in vars(args):
-            self.logger.info('%-20s:\t%s', arg, vars(args)[arg])
 
         if engine_log_path:
             # send application log to output path
@@ -101,11 +97,6 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         launcher.add_vmargs('-XX:+CrashOnOutOfMemoryError')
         launcher.add_vmargs('-XX:+HeapDumpOnOutOfMemoryError')
 
-        # Match ghidra launch support script (do not do this.. so slow when enabled)
-        # Ghidra/RuntimeScripts/Windows/support/analyzeHeadless.bat#L22
-        # launcher.add_vmargs('-XX:ParallelGCThreads=2')
-        # launcher.add_vmargs('-XX:CICompilerCount=2')
-
         # Set Ghidra Heap Max
         # Ghidra/RuntimeScripts/Linux/support/analyzeHeadless#L7
         # MAX_MEM = "16G"
@@ -119,10 +110,20 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                 self.logger.info('Adding JVM arg {jvm_arg}')
                 launcher.add_vmargs(jvm_arg)
 
+        self.logger.info(f'Starting Ghidra...')
         self.logger.debug(f'Starting JVM with args: {launcher.vm_args}')
 
         launcher.start()
 
+        self.logger.info(f'GHIDRA_INSTALL_DIR: {GHIDRA_INSTALL_DIR}')
+        app_prop = launcher.layout.getApplicationProperties()
+        self.logger.info(
+            f'GHIDRA {app_prop.applicationVersion}  Build Date: {app_prop.applicationBuildDate} Release: {app_prop.applicationReleaseName}')
+        self.logger.info(f"Engine Args:")
+        for arg in vars(args):
+            self.logger.info('\t%-20s%s', f'{arg}:', vars(args)[arg])
+
+        self.launcher = launcher
         self.threaded = threaded
         self.max_workers = max_workers
         self.max_section_funcs = max_section_funcs
@@ -143,6 +144,8 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         # set instance preferences
         self.force_analysis = force_analysis
         self.force_diff = force_diff
+        self.verbose_analysis = verbose_analysis
+        self.no_symbols = no_symbols
 
         self.logger.debug(f'{vars(self)}')
 
@@ -164,13 +167,17 @@ class GhidraDiffEngine(metaclass=ABCMeta):
                            action='store_true')
         group.add_argument('--force-diff', help='Force binary diff (ignore arch/symbols mismatch)',
                            action='store_true')
-        # TODO add following option
-        # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
+        group.add_argument('--no-symbols', help='Turn off symbols for analysis', action='store_true')
         group.add_argument('--log-level', help='Set console log level',
                            default='INFO', choices=logging._nameToLevel.keys())
         group.add_argument('--file-log-level', help='Set log file level',
                            default='INFO', choices=logging._nameToLevel.keys())
         group.add_argument('--log-path', help='Set ghidriff log path.', default='ghidriff.log')
+        group.add_argument('--va', '--verbose-analysis',
+                           help='Verbose logging for analysis step.', action='store_true')
+
+        # TODO add following option
+        # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
 
         group = parser.add_argument_group('JVM Options')
         group.add_argument('--max-ram-percent', help='Set JVM Max Ram %% of host RAM', default=60.0)
@@ -202,7 +209,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         Setup Class Instance Logger
         """
         logging.basicConfig(
-            format='%(levelname)-5s | %(name)s | %(message)s',
+            format='%(levelname)-5s| %(name)s | %(message)s',
             datefmt='%H:%M:%S'
         )
 
@@ -331,16 +338,23 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             binary_paths: List[Union[str, pathlib.Path]],
             project_location: Union[str, pathlib.Path],
             project_name: str,
-            symbols_path: Union[str, pathlib.Path]
+            symbols_path: Union[str, pathlib.Path],
+            symbol_urls: list = None,
     ):
         """
         Setup and verify Ghidra Project
+        1. Creat / Open Project
+        2. Import / Open Binaries
+        3. Configure and verify symbols
         """
         from ghidra.base.project import GhidraProject
         from java.io import IOException
+        from ghidra.app.plugin.core.analysis import PdbAnalyzer
+        from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
 
         project_location = pathlib.Path(project_location) / project_name
         project_location.mkdir(exist_ok=True, parents=True)
+        pdb = None
 
         self.logger.info(f'Setting Up Ghidra Project...')
 
@@ -358,29 +372,56 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         self.logger.info(f'Project Location: {project.project.projectLocator.location}')
 
-        # Setup Symbols
-        self.setup_symbols(symbols_path)
-
         bin_results = []
+        proj_programs = []
 
-        # Import binaries
+        # Import binaries and configure symbols
         for program_path in binary_paths:
 
             program_path = pathlib.Path(program_path)
 
-            # Import binary if they don't already exist
+            # Import binaries and configure symbols
             if not project.getRootFolder().getFile(program_path.name):
                 self.logger.info(f'Importing {program_path}')
                 program = project.importProgram(program_path)
                 project.saveAs(program, "/", program.getName(), True)
             else:
-                program = self.project.openProgram("/", program_path.name, True)
+                self.logger.info(f'Opening {program_path}')
+                program = self.project.openProgram("/", program_path.name, False)
 
-            pdb = self.get_pdb(program)
-            project.close(program)
+            proj_programs.append(program)
 
-            if pdb is None:
+        # Setup Symbols Server
+        if not self.no_symbols:
+            if any(self.prog_is_windows(prog) for prog in proj_programs):
+                # Windows level 1 symbol server location
+                level = 1
+            else:
+                # Symbols stored in specified symbols path
+                level = 0
+            self.setup_symbol_server(symbols_path, level, server_urls=symbol_urls)
+
+        for program in proj_programs:
+
+            if not self.no_symbols:
+                # Enable Remote Symbol Servers
+                PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
+                PdbAnalyzer.setAllowRemoteOption(program, True)
+
+                pdb = self.get_pdb(program)
+            else:
+                # Run get_pdb to make sure the symbols dont exist locally
+                pdb = self.get_pdb(program, allow_remote=False)
+
+                if pdb:
+                    err = f'Symbols are disabled, but the symbol is already downloaded {pdb}. Delete symbol or remove --no-symbol flag'
+                    self.logger.error(err)
+                    raise FileExistsError(err)
+
+            if pdb is None and not self.no_symbols:
                 self.logger.warn(f"PDB not found for {program.getName()}!")
+
+            project.close(program)
 
             imported = program is not None
             has_pdb = pdb is not None
@@ -437,20 +478,26 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         self.decompilers = {}
 
-    def get_pdb(self, prog: "ghidra.program.model.listing.Program") -> "java.io.File":
+    def get_pdb(self, prog: "ghidra.program.model.listing.Program", allow_remote=True) -> "java.io.File":
         """
         Searches the currently configured symbol server paths for a Pdb symbol file.
+        If remote is enabled, downloads pdb to saved SymbolService path
         """
 
         from pdb_.symbolserver import FindOption
-        from ghidra.util.task import TaskMonitor
+        from ghidra.util.task import ConsoleTaskMonitor
         from pdb_ import PdbPlugin
 
-        find_opts = FindOption.of(FindOption.ALLOW_REMOTE)
-        # find_opts = FindOption.NO_OPTIONS
+        if allow_remote:
+            find_opts = FindOption.of(FindOption.ALLOW_REMOTE)
+        else:
+            find_opts = FindOption.NO_OPTIONS
 
         # Ghidra/Features/PDB/src/main/java/pdb/PdbPlugin.java#L191
-        pdb = PdbPlugin.findPdb(prog, find_opts, TaskMonitor.DUMMY)
+        pdb = PdbPlugin.findPdb(prog, find_opts, ConsoleTaskMonitor())
+
+        if pdb is not None:
+            self.logger.info(f'Pdb stored at: {pdb}')
 
         return pdb
 
@@ -479,8 +526,19 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         return pdb_list
 
-    def setup_symbols(self, symbols_path: Union[str, pathlib.Path]) -> None:
-        """setup symbols to allow Ghidra to download as needed"""
+    # program: "ghidra.program.model.listing.Program",
+    def setup_symbol_server(self,  symbols_path: Union[str, pathlib.Path], level=0, server_urls=None) -> None:
+        """setup symbols to allow Ghidra to download as needed
+        1. Configures symbol_path as local symbol store path
+        2. Sets Index level for local symbol path                 
+        - Level 0 indexLevel is a special Ghidra construct that is just a user-friendlier plain directory with a collection of Pdb files
+        [symbol-store-folder-tree](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/symbol-store-folder-tree) (applies to 1 and 2)
+        - Level 1, with pdb files stored directly underthe root directory
+        - Level 2, using the first 2 characters of the pdb filename as a bucket to place each pdb file-directory in        
+        """
+
+        self.logger.info("Setting up Symbol Server for symbols...")
+        self.logger.info(f"path: {symbols_path} level: {level}")
 
         symbols_path = pathlib.Path(symbols_path).absolute()
 
@@ -488,27 +546,53 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         from pdb_.symbolserver import LocalSymbolStore
         from pdb_.symbolserver import HttpSymbolServer
         from pdb_.symbolserver import SymbolServerService
+        from ghidra.framework import Application
 
-        from java.util import List
         from java.io import File
         from java.net import URI
+        from java.util import ArrayList
 
-        # TODO support more than just Windows
+        # Configure local symbols directory
         symbolsDir = File(symbols_path)
         localSymbolStore = LocalSymbolStore(symbols_path)
 
-        # Creates a MS-compatible symbol server directory location. pdb/symbolserver/LocalSymbolStore.java#L67
-        localSymbolStore.create(symbolsDir, 1)
-        msSymbolServer = HttpSymbolServer(URI.create("https://msdl.microsoft.com/download/symbols/"))
-        symbolServerService = SymbolServerService(localSymbolStore, List.of(msSymbolServer))
+        # Create loacl symbold soCreates a MS-compatible symbol server directory location. pdb/symbolserver/LocalSymbolStore.java#L67
+        localSymbolStore.create(symbolsDir, level)
+
+        # Configure symbol urls
+        if server_urls is None:
+            # load wellknown servers
+            # Ghidra/Features/PDB/src/main/java/pdb/symbolserver/ui/WellKnownSymbolServerLocation.java#L89
+            known_urls = []
+            pdbUrlFiles = Application.findFilesByExtensionInApplication(".pdburl")
+            for pdbFile in pdbUrlFiles:
+                data = pathlib.Path(pdbFile.absolutePath).read_text()
+                self.logger.debug(f"Loaded well known {pdbFile.absolutePath}' length: {len(data)}'")
+                for line in data.splitlines(True):
+                    cat, location, warning = line.split('|')
+                    known_urls.append(location)
+            server_urls = known_urls
+        else:
+            if not isinstance(server_urls, list):
+                raise TypeError('server_urls must be a list of urls')
+
+        sym_servers = ArrayList()
+
+        for url in server_urls:
+            sym_servers.add(HttpSymbolServer(URI.create(url)))
+
+        symbolServerService = SymbolServerService(localSymbolStore, sym_servers)
 
         PdbPlugin.saveSymbolServerServiceConfig(symbolServerService)
 
-    def analyze_program(self, df_or_prog: Union["ghidra.framework.model.DomainFile", "ghidra.program.model.listing.Program"], require_symbols: bool, force_analysis: bool = False):
+        self.logger.info(f'Symbol Server Configured path: {symbolServerService.toString().strip()}')
+
+    def analyze_program(self, df_or_prog: Union["ghidra.framework.model.DomainFile", "ghidra.program.model.listing.Program"], require_symbols: bool, force_analysis: bool = False, verbose_analysis: bool = False):
 
         from ghidra.program.flatapi import FlatProgramAPI
         from ghidra.framework.model import DomainFile
         from ghidra.program.model.listing import Program
+        from ghidra.util.task import ConsoleTaskMonitor
 
         if isinstance(df_or_prog, DomainFile):
             program = self.project.openProgram("/", df_or_prog.getName(), False)
@@ -518,7 +602,12 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         self.logger.info(f"Analyzing: {program}")
 
         try:
-            flat_api = FlatProgramAPI(program)
+
+            if verbose_analysis or self.verbose_analysis:
+                monitor = ConsoleTaskMonitor()
+                flat_api = FlatProgramAPI(program, monitor)
+            else:
+                flat_api = FlatProgramAPI(program)
 
             from ghidra.program.util import GhidraProgramUtilities
             from ghidra.app.script import GhidraScriptUtil
@@ -526,18 +615,16 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             if GhidraProgramUtilities.shouldAskToAnalyze(program) or force_analysis or self.force_analysis:
                 GhidraScriptUtil.acquireBundleHostReference()
 
-                from ghidra.app.plugin.core.analysis import PdbAnalyzer
-                from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
-
-                PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
-                PdbAnalyzer.setAllowRemoteOption(program, True)
-
                 # handle large binaries more efficiently
                 # see ghidra/issues/4573 (turn off feature Shared Return Calls )
                 if program and program.getFunctionManager().getFunctionCount() > 1000:
                     self.logger.warn(f"Turning off 'Shared Return Calls' for {program}")
                     self.set_analysis_option_bool(
                         program, 'Shared Return Calls.Assume Contiguous Functions Only', False)
+
+                if self.no_symbols:
+                    self.logger.warn(f'Disabling symbols for analysis! --no-symbols flag: {self.no_symbols}')
+                    self.set_analysis_option_bool(program, 'PDB Universal', False)
 
                 self.logger.info(f'Starting Ghidra analysis of {program}...')
                 try:
@@ -555,7 +642,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         return df_or_prog
 
-    def analyze_project(self, require_symbols: bool = True, force_analysis: bool = False) -> None:
+    def analyze_project(self, require_symbols: bool = True, force_analysis: bool = False, verbose_analysis: bool = False) -> None:
         """
         Analyzes all files found within the project
         """
@@ -563,7 +650,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
 
         if self.threaded:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = (executor.submit(self.analyze_program, *[domainFile, require_symbols, force_analysis])
+                futures = (executor.submit(self.analyze_program, *[domainFile, require_symbols, force_analysis, verbose_analysis])
                            for domainFile in self.project.getRootFolder().getFiles())
                 for future in concurrent.futures.as_completed(futures):
                     prog = future.result()
@@ -635,6 +722,19 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         prog_options = prog.getOptions(Program.PROGRAM_INFO)
 
         prog_options.setBoolean(option_name, value)
+
+    def prog_is_windows(
+        self,
+        prog: "ghidra.program.model.listing.Program"
+    ) -> bool:
+        """
+        Determines if program is Windows
+        "Compiler ID" == "windows"
+        """
+
+        meta = self.get_metadata(prog)
+
+        return meta['Compiler ID'] == 'windows'
 
     def gen_metadata_diff(
         self,
@@ -792,7 +892,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             old: Union[str, pathlib.Path],
             new: Union[str, pathlib.Path],
             ignore_FUN: bool = False,
-            force_diff=True
+            force_diff=False
     ) -> dict:
         """
         Diff the old and new binary from the GhidraProject.

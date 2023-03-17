@@ -31,7 +31,6 @@ def main():
 
     # setup Engine class options
     engines = get_engine_classes()
-
     parser.add_argument('--engine', help='The diff implementation to use.',
                         default='VersionTrackingDiff', choices=engines.keys())
 
@@ -72,6 +71,8 @@ def main():
                                      jvm_args=args.jvm_args,
                                      force_analysis=args.force_analysis,
                                      force_diff=args.force_diff,
+                                     verbose_analysis=args.va,
+                                     no_symbols=args.no_symbols,
                                      engine_log_path=engine_log_path,
                                      engine_log_level=args.log_level,
                                      engine_file_log_level=args.file_log_level
