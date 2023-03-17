@@ -421,6 +421,7 @@ class GhidraDiffEngine(metaclass=ABCMeta):
             if pdb is None and not self.no_symbols:
                 self.logger.warn(f"PDB not found for {program.getName()}!")
 
+            project.save(program)
             project.close(program)
 
             imported = program is not None
@@ -593,6 +594,9 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         from ghidra.framework.model import DomainFile
         from ghidra.program.model.listing import Program
         from ghidra.util.task import ConsoleTaskMonitor
+        from ghidra.program.util import GhidraProgramUtilities
+        from ghidra.app.script import GhidraScriptUtil
+        from ghidra.app.util.pdb import PdbProgramAttributes
 
         if isinstance(df_or_prog, DomainFile):
             program = self.project.openProgram("/", df_or_prog.getName(), False)
@@ -602,17 +606,25 @@ class GhidraDiffEngine(metaclass=ABCMeta):
         self.logger.info(f"Analyzing: {program}")
 
         try:
-
             if verbose_analysis or self.verbose_analysis:
                 monitor = ConsoleTaskMonitor()
                 flat_api = FlatProgramAPI(program, monitor)
             else:
                 flat_api = FlatProgramAPI(program)
 
-            from ghidra.program.util import GhidraProgramUtilities
-            from ghidra.app.script import GhidraScriptUtil
+            pdbProgramAttributes = PdbProgramAttributes(program)
+            force_reload_for_symbols = not pdbProgramAttributes.isPdbLoaded(
+            ) and not self.no_symbols and pdbProgramAttributes.isProgramAnalyzed()
 
-            if GhidraProgramUtilities.shouldAskToAnalyze(program) or force_analysis or self.force_analysis:
+            if force_reload_for_symbols:
+                # GhidraProgramUtilities.setAnalyzedFlag(program, False)
+                self.set_analysis_option_bool(program, 'PDB Universal', True)
+                # self.project.save(program)
+                self.logger.warn('Re-analysis is required..')
+                self.logger.info(
+                    f'pdb loaded: {pdbProgramAttributes.isPdbLoaded()} prog analyzed: {pdbProgramAttributes.isProgramAnalyzed()} ')
+
+            if GhidraProgramUtilities.shouldAskToAnalyze(program) or force_analysis or self.force_analysis or force_reload_for_symbols:
                 GhidraScriptUtil.acquireBundleHostReference()
 
                 # handle large binaries more efficiently
