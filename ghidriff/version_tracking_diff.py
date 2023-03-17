@@ -38,7 +38,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         # Correlators
         from ghidra.app.plugin.match import ExactMnemonicsFunctionHasher, ExactBytesFunctionHasher, ExactInstructionsFunctionHasher
-        from .correlators import StructuralGraphExactHasher, StructuralGraphHasher, BulkInstructionsHasher, BulkMnemonicHasher, BulkBasicBlockMnemonicHasher, NamespaceNameParamHasher, NameParamHasher, NameParamRefHasher
+        from .correlators import StructuralGraphExactHasher, StructuralGraphHasher, BulkInstructionsHasher, BulkMnemonicHasher, BulkBasicBlockMnemonicHasher, NamespaceNameParamHasher, NameParamHasher, NameParamRefHasher, SigCallingCalledHasher
 
         monitor = ConsoleTaskMonitor()
 
@@ -68,6 +68,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             (StructuralGraphHasher.MATCH_TYPE, StructuralGraphHasher(), True, True),
             # WARN: one_to_many=True flag allows for false negatives
             (BulkBasicBlockMnemonicHasher.MATCH_TYPE, BulkBasicBlockMnemonicHasher(), True, True),
+            (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False)
         ]
 
         unmatched = []
@@ -114,7 +115,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             name, hasher, one_to_one, one_to_many = cor
 
             self.logger.info(f'Running correlator: {name}')
-            self.logger.debug(f'name: {name} hasher: {hasher} one_to_one: {one_to_one} one_to_many: {one_to_many}')
+            self.logger.info(f'name: {name} hasher: {hasher} one_to_one: {one_to_one} one_to_many: {one_to_many}')
 
             func_matches = MatchFunctions.matchFunctions(
                 p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)

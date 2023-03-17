@@ -196,7 +196,7 @@ class BulkBasicBlockMnemonicHasher:
 class NamespaceNameParamHasher:
     """
     Simply return Name with Namespace and Param Hash matches
-    DO NOT RUN THIS with one_to_many = TRUE    
+    DO NOT RUN THIS with one_to_many = TRUE
     """
 
     MIN_FUNC_LEN = 10
@@ -218,7 +218,7 @@ class NameParamHasher:
     """
     Simply return Name and Param Hash matches
     No namespace included
-    DO NOT RUN THIS with one_to_many = TRUE    
+    DO NOT RUN THIS with one_to_many = TRUE
     """
 
     MIN_FUNC_LEN = 10
@@ -240,7 +240,7 @@ class NameParamRefHasher:
     """
     Hash based on name param and number of refs
 
-    DO NOT RUN THIS with one_to_many = TRUE    
+    DO NOT RUN THIS with one_to_many = TRUE
     """
 
     MIN_FUNC_LEN = 10
@@ -251,6 +251,35 @@ class NameParamRefHasher:
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
 
         return hash((func.getName(True), func.parameterCount, func.symbol.referenceCount))
+
+    @ JOverride
+    def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
+        raise NotImplementedError
+
+
+@JImplements(FunctionHasher, deferred=True)
+class SigCallingCalledHasher:
+    """
+    Hash based on signature, called, and calling functions ignoring FUN_*
+
+    DO NOT RUN THIS with one_to_many = TRUE
+    This should be run very late in the game
+    """
+
+    MIN_FUNC_LEN = 10
+    MATCH_TYPE = 'SigCallingCalledHasher'
+    FIRST_RUN = True
+
+    @JOverride
+    def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
+
+        called = [called.toString() for called in func.getCalledFunctions(monitor) if "FUN_" not in called.toString()]
+        calling = [calling.toString() for calling in func.getCalledFunctions(monitor)
+                   if "FUN_" not in calling.toString()]
+
+        sig = func.getSignature().toString().replace(func.name, '')
+
+        return hash((tuple(sorted(called)), tuple(sorted(calling)), sig))
 
     @ JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
