@@ -309,7 +309,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 called_funcs = []
                 for f in func.getCalledFunctions(monitor):
-                    called_funcs.append(f.toString())
+                    count = 0
+                    for ref in f.symbol.references:
+                        if func.getBody().contains(ref.fromAddress, ref.fromAddress):
+                            count += 1
+                    called_funcs.append(f'{f}-{count}')
 
                 calling_funcs = []
                 for f in func.getCallingFunctions(monitor):
@@ -338,7 +342,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             project_name: str,
             symbols_path: Union[str, pathlib.Path],
             symbol_urls: list = None,
-    ):
+    ) -> list:
         """
         Setup and verify Ghidra Project
         1. Creat / Open Project
@@ -358,6 +362,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         # Open/Create project
         project = None
+
+        # remove duplicates, maintain order
+        binary_paths = list(dict.fromkeys(binary_paths))
 
         try:
             project = GhidraProject.openProject(project_location, project_name, True)
@@ -414,18 +421,27 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 if pdb:
                     err = f'Symbols are disabled, but the symbol is already downloaded {pdb}. Delete symbol or remove --no-symbol flag'
                     self.logger.error(err)
-                    raise FileExistsError(err)
+                    # raise FileExistsError(err)
 
             if pdb is None and not self.no_symbols:
                 self.logger.warn(f"PDB not found for {program.getName()}!")
 
-            project.save(program)
-            project.close(program)
+            from ghidra.app.util.pdb import PdbProgramAttributes
+
+            pdb_attr = PdbProgramAttributes(program)
 
             imported = program is not None
             has_pdb = pdb is not None
+            pdb_loaded = pdb_attr.pdbLoaded
+            prog_analyzed = pdb_attr.programAnalyzed
 
-            bin_results.append([program_path, imported, has_pdb])
+            project.save(program)
+            project.close(program)
+
+            bin_results.append([program.getExecutablePath(), imported, has_pdb, pdb_loaded, prog_analyzed])
+
+        for result in bin_results:
+            self.logger.info('Program: %s imported: %s has_pdb: %s pdb_loaded: %s analyzed %s', *result)
 
         return bin_results
 
@@ -529,11 +545,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
     def setup_symbol_server(self,  symbols_path: Union[str, pathlib.Path], level=0, server_urls=None) -> None:
         """setup symbols to allow Ghidra to download as needed
         1. Configures symbol_path as local symbol store path
-        2. Sets Index level for local symbol path                 
+        2. Sets Index level for local symbol path
         - Level 0 indexLevel is a special Ghidra construct that is just a user-friendlier plain directory with a collection of Pdb files
         [symbol-store-folder-tree](https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/symbol-store-folder-tree) (applies to 1 and 2)
         - Level 1, with pdb files stored directly underthe root directory
-        - Level 2, using the first 2 characters of the pdb filename as a bucket to place each pdb file-directory in        
+        - Level 2, using the first 2 characters of the pdb filename as a bucket to place each pdb file-directory in
         """
 
         self.logger.info("Setting up Symbol Server for symbols...")
@@ -610,17 +626,14 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             else:
                 flat_api = FlatProgramAPI(program)
 
-            pdbProgramAttributes = PdbProgramAttributes(program)
-            force_reload_for_symbols = not pdbProgramAttributes.isPdbLoaded(
-            ) and not self.no_symbols and pdbProgramAttributes.isProgramAnalyzed()
+            pdb_attr = PdbProgramAttributes(program)
+            force_reload_for_symbols = not pdb_attr.isPdbLoaded(
+            ) and not self.no_symbols and pdb_attr.isProgramAnalyzed()
 
             if force_reload_for_symbols:
-                # GhidraProgramUtilities.setAnalyzedFlag(program, False)
                 self.set_analysis_option_bool(program, 'PDB Universal', True)
-                # self.project.save(program)
-                self.logger.warn('Re-analysis is required..')
-                self.logger.info(
-                    f'pdb loaded: {pdbProgramAttributes.isPdbLoaded()} prog analyzed: {pdbProgramAttributes.isProgramAnalyzed()} ')
+                self.logger.info('Symbols missing. Re-analysis is required. Setting PDB Universal: True')
+                self.logger.debug(f'pdb loaded: {pdb_attr.isPdbLoaded()} prog analyzed: {pdb_attr.isProgramAnalyzed()}')
 
             if GhidraProgramUtilities.shouldAskToAnalyze(program) or force_analysis or self.force_analysis or force_reload_for_symbols:
                 GhidraScriptUtil.acquireBundleHostReference()
@@ -777,7 +790,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return diff
 
-    @abstractmethod
+    @ abstractmethod
     def find_matches(
             self,
             p1: "ghidra.program.model.listing.Program",
@@ -1101,7 +1114,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             ratio = difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio()
 
             diff = ''.join(list(difflib.unified_diff(old_code, new_code, lineterm='\n',
-                                                     fromfile=sym.getProgram().getName(), tofile=sym2.getProgram().getName())))
+                                                     fromfile=sym.getProgram().getName(), tofile=sym2.getProgram().getName(), n=100)))
             only_code_diff = ''.join(list(difflib.unified_diff(old_code_no_sig, new_code_no_sig, lineterm='\n', fromfile=sym.getProgram(
             ).getName(), tofile=sym2.getProgram().getName())))  # ignores name changes
 
@@ -1173,10 +1186,22 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         unmatched_funcs_len = len(added_funcs) + len(deleted_funcs)
         total_funcs_len = p1.functionManager.functionCount + p2.functionManager.functionCount
         matched_funcs_len = total_funcs_len - unmatched_funcs_len
+        matched_funcs_with_code_changes_len = len(
+            [mod_func for mod_func in modified_funcs if 'code' in mod_func['diff_type']])
+        matched_funcs_with_non_code_changes_len = len(
+            [mod_func for mod_func in modified_funcs if 'code' not in mod_func['diff_type']])
+        matched_funcs_no_changes_len = matched_funcs_len - \
+            matched_funcs_with_code_changes_len - matched_funcs_with_non_code_changes_len
+        match_func_similarity_percent = f'{((matched_funcs_no_changes_len / matched_funcs_len)*100):.4f}%'
+        func_match_overall_percent = f'{((matched_funcs_len / total_funcs_len)*100):.4f}%'
+
         pdiff['stats'] = {'added_funcs_len': len(added_funcs), 'deleted_funcs_len': len(deleted_funcs), 'modified_funcs_len': len(modified_funcs), 'added_symbols_len': len(
             symbols['added']), 'deleted_symbols_len': len(symbols['deleted']), 'diff_time': elapsed, 'deleted_strings_len': len(deleted_strings), 'added_strings_len': len(added_strings),
             'match_types': Counter(all_match_types), 'items_to_process': items_to_process, 'diff_types': Counter(all_diff_types), 'unmatched_funcs_len': unmatched_funcs_len,
-            'total_funcs_len': total_funcs_len, 'matched_funcs_len': matched_funcs_len}
+            'total_funcs_len': total_funcs_len, 'matched_funcs_len': matched_funcs_len, 'matched_funcs_with_code_changes_len': matched_funcs_with_code_changes_len,
+            'matched_funcs_with_non_code_changes_len': matched_funcs_with_non_code_changes_len, 'matched_funcs_no_changes_len': matched_funcs_no_changes_len,
+            'match_func_similarity_percent': match_func_similarity_percent, 'func_match_overall_percent': func_match_overall_percent}
+
         pdiff['symbols'] = symbols
         pdiff['strings'] = strings
         pdiff['functions'] = funcs
