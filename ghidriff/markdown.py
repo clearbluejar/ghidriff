@@ -58,7 +58,23 @@ class GhidriffMarkdown:
 
         return text
 
-    def gen_esym_table(self, old_name, esym) -> str:
+    def _wrap_list_with_details(self, items: list, max_items: int = 10) -> str:
+
+        data = None
+        if isinstance(items, list):
+            if len(items) > max_items:
+                show_items = [item for i, item in enumerate(items) if i <= max_items]
+                hide_itmes = [item for i, item in enumerate(items) if i > max_items]
+                data = f'<details><summary>Expand for full list:<br>{"<br>".join(show_items)}</summary>{"<br>".join(hide_itmes)}</details>'
+            else:
+                data = f'{"<br>".join(items)}'
+        else:
+            # do nothing
+            data = items
+
+        return data
+
+    def gen_esym_table(self, old_name, esym, max_items=10) -> str:
 
         table_list = []
         table_list.extend(['Key', old_name])
@@ -69,14 +85,20 @@ class GhidriffMarkdown:
         for key in esym:
             if key in skip_keys:
                 continue
-            table_list.extend([key, esym[key]])
+
+            if isinstance(esym[key], list):
+                data = self._wrap_list_with_details(esym[key], max_items)
+            else:
+                data = esym[key]
+
+            table_list.extend([key, data])
             count += 1
 
         diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
 
         return diff_table
 
-    def gen_esym_table_diff(self, old_name, new_name, modified) -> str:
+    def gen_esym_table_diff(self, old_name, new_name, modified, max_items=10) -> str:
         diff_table = ''
 
         table_list = []
@@ -93,7 +115,16 @@ class GhidriffMarkdown:
             else:
                 diff_key = f"{key}"
 
-            table_list.extend([diff_key, modified['old'][key], modified['new'][key]])
+            if isinstance(modified['old'][key], list):
+                data = self._wrap_list_with_details(modified['old'][key], max_items)
+                data2 = self._wrap_list_with_details(modified['new'][key], max_items)
+            else:
+                data = modified['old'][key]
+                data2 = modified['new'][key]
+
+            table_list.extend([diff_key, data, data2])
+
+            # table_list.extend([diff_key, modified['old'][key], modified['new'][key]])
             count += 1
 
         diff_table = Table().create_table(columns=column_len, rows=count,
@@ -118,14 +149,21 @@ class GhidriffMarkdown:
 
         return diff_table
 
-    def gen_esym_key_diff(self, esym: dict, esym2: dict, key: str, n=3) -> str:
+    def gen_esym_key_diff(self, esym: dict, esym2: dict, key: str, exclude=None, n=3) -> str:
         """
         Generate a difflib unified diff from two esyms and a key
         n is the number of context lines for diff lib to wrap around the found diff
         """
         diff = ''
 
-        diff += '\n'.join(difflib.unified_diff(esym[key], esym2[key],
+        if exclude:
+            items = [item for item in esym[key] if re.search(exclude, item) is None]
+            items2 = [item for item in esym2[key] if re.search(exclude, item) is None]
+        else:
+            items = esym[key]
+            items2 = esym2[key]
+
+        diff += '\n'.join(difflib.unified_diff(items, items2,
                           fromfile=f'old {key}', tofile=f'new {key}', lineterm='', n=n))
 
         return self._wrap_with_diff(diff)
@@ -140,7 +178,7 @@ class GhidriffMarkdown:
         if isinstance(new_code, str):
             new_code = new_code.splitlines(True)
 
-        diff_html = ''.join(list(difflib.HtmlDiff(tabsize=4).make_table(
+        diff_html = ''.join(list(difflib.HtmlDiff(tabsize=4).make_file(
             old_code, new_code, fromdesc=old_name, todesc=new_name)))
         diff_html = dedent(diff_html) + '\n'
 
@@ -335,7 +373,12 @@ pie showData
         md.new_header(1, 'Visual Chart Diff')
         md.new_paragraph(self.gen_mermaid_diff_flowchart(pdiff))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(
-            pdiff['stats'], 'Function Similarity', include_keys=['matched_funcs_len', 'unmatched_funcs_len']))
+            pdiff['stats'], f"Function Matches - {pdiff['stats']['func_match_overall_percent']}",
+            include_keys=['matched_funcs_len', 'unmatched_funcs_len']))
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(
+            pdiff['stats'],
+            f"Matched Function Similarity - {pdiff['stats']['match_func_similarity_percent']}",
+            include_keys=['matched_funcs_with_code_changes_len', 'matched_funcs_with_non_code_changes_len', 'matched_funcs_no_changes_len']))
 
         # Create Metadata section
         md.new_header(1, 'Metadata')
@@ -365,13 +408,17 @@ pie showData
                          'added_funcs_len', 'deleted_funcs_len', 'modified_funcs_len']))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(
             pdiff['stats'], 'Symbols', include_keys=['added_symbols_len', 'deleted_symbols_len']))
-        md.new_paragraph(self.gen_mermaid_pie_from_dict(
-            pdiff['stats'], 'Strings', include_keys=['added_strings_len', 'deleted_strings_len']))
 
         # Create Strings Section
         md.new_header(2, 'Strings')
-        md.new_header(3, 'Strings Diff', add_table_of_contents='n')
-        md.new_paragraph(self.gen_strings_diff(pdiff['strings']['deleted'], pdiff['strings']['added']))
+        if len(pdiff['strings']['deleted']) > 0 or len(pdiff['strings']['added']):
+            md.new_paragraph(self.gen_mermaid_pie_from_dict(
+                pdiff['stats'], 'Strings', include_keys=['added_strings_len', 'deleted_strings_len']))
+
+            md.new_header(3, 'Strings Diff', add_table_of_contents='n')
+            md.new_paragraph(self.gen_strings_diff(pdiff['strings']['deleted'], pdiff['strings']['added']))
+        else:
+            md.new_paragraph('*No string differences found*\n')
 
         # Create Deleted section
         md.new_header(1, 'Deleted')
