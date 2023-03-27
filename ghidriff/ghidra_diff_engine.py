@@ -246,6 +246,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         key = f'{sym.iD}-{sym.program.name}'
 
+        # decompile timeout in sec 0 = infinite
+        TIMEOUT = 0
+
         if key not in self.esym_memo:
 
             from ghidra.util.task import ConsoleTaskMonitor
@@ -319,7 +322,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 for f in func.getCallingFunctions(monitor):
                     calling_funcs.append(f.toString())
 
-                TIMEOUT = 1
                 results = self.decompilers[prog.name][thread_id].decompileFunction(
                     func, TIMEOUT, monitor).getDecompiledFunction()
                 code = results.getC() if results else ""
@@ -786,7 +788,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             new_text += f"{i}: {new_meta[i]}\n"
 
         diff = ''.join(list(difflib.unified_diff(old_text.splitlines(True), new_text.splitlines(
-            True), lineterm='\n', fromfile=old_name, tofile=new_name, n=10)))
+            True), lineterm='\n', fromfile=old_name, tofile=new_name, n=100)))
 
         return diff
 
@@ -1063,16 +1065,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         for lost in unmatched:
             elost = self.enhance_sym(lost)
 
-            elost_min = elost.copy()
-            # reduce size of esym with hash
-            for field in ['instructions', 'mnemonics', 'blocks']:
-                elost_min[field] = hash(tuple(elost_min[field]))
-
             # deleted func
             if lost.getProgram().getName() == p1.getName():
-                deleted_funcs.append(elost_min)
+                deleted_funcs.append(elost)
             else:
-                added_funcs.append(elost_min)
+                added_funcs.append(elost)
 
         for sym, sym2, match_types in matched:
 
@@ -1160,16 +1157,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 self.logger.warn(f'no diff: {sym} {sym2} {match_types}')
                 continue
 
-            ematch_min_1 = ematch_1.copy()
-            ematch_min_2 = ematch_2.copy()
-            # reduce size of esym with hash
-            for field in ['instructions', 'mnemonics', 'blocks']:
-                ematch_min_1[field] = hash(tuple(ematch_min_1[field]))
-                ematch_min_2[field] = hash(tuple(ematch_min_2[field]))
-
             all_diff_types.extend(diff_type)
 
-            modified_funcs.append({'old': ematch_min_1, 'new': ematch_min_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
+            modified_funcs.append({'old': ematch_1, 'new': ematch_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
                                   'i_ratio': instructions_ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_types': match_types})
 
         # Set funcs
@@ -1312,11 +1302,24 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return is_valid
 
-    def minimize_pdiff(self, pdiff: dict):
+    def minimise_pdiff(self, pdiff: dict):
         """
         Function to allow subclasses to modify pdiff before writing to disk.
         Simply override this method. It will be called in `dump_pdiff_to_dir`
         """
+
+        for func_type in ['added', 'deleted', 'modified']:
+
+            # reduce size of esym with hash
+            for field in ['instructions', 'mnemonics', 'blocks']:
+
+                for func in pdiff['functions'][func_type]:
+
+                    if func_type == 'modified':
+                        func['old'][field] = hash(tuple(func['old'][field]))
+                        func['new'][field] = hash(tuple(func['new'][field]))
+                    else:
+                        func[field] = hash(tuple(func[field]))
 
         return pdiff
 
@@ -1343,7 +1346,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         if isinstance(pdiff, str):
             pdiff = json.loads(pdiff)
 
-        pdiff = self.minimize_pdiff(pdiff)
+        pdiff = self.minimise_pdiff(pdiff)
 
         output_path = pathlib.Path(output_path)
 
