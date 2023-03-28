@@ -227,12 +227,15 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         file_handler.setLevel(level)
         self.logger.addHandler(file_handler)
 
-    def gen_credits(self) -> str:
+    def gen_credits(self, html: bool = False) -> str:
         """
         Generate script credits
         """
         now = datetime.now().replace(microsecond=0).isoformat()
-        text = f"\n<sub>Generated with `{__package__}` version: {self.version} on {now}</sub>"
+        if html:
+            text = f"\n<sub>Generated with <code>{__package__}</code> version: {self.version} on {now}</sub>"
+        else:
+            text = f"\n<sub>Generated with `{__package__}` version: {self.version} on {now}</sub>"
 
         return text
 
@@ -255,7 +258,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             monitor = ConsoleTaskMonitor()
             prog = sym.program
-            listing = prog.listing.getFunctionAt(sym.address)
             func: 'ghidra.program.model.listing.Function' = prog.functionManager.getFunctionAt(sym.address)
 
             if not sym.symbolType == SymbolType.FUNCTION:
@@ -320,7 +322,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 calling_funcs = []
                 for f in func.getCallingFunctions(monitor):
-                    calling_funcs.append(f.toString())
+                    count = 0
+                    for ref in func.symbol.references:
+                        if f.getBody().contains(ref.fromAddress, ref.fromAddress):
+                            count += 1
+                    called_funcs.append(f'{f}-{count}')
 
                 results = self.decompilers[prog.name][thread_id].decompileFunction(
                     func, TIMEOUT, monitor).getDecompiledFunction()
@@ -695,18 +701,41 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return dict(meta)
 
-    def get_analysis_options(
+    def get_all_program_options(self,
+                                prog: "ghidra.program.model.listing.Program"
+                                ) -> dict:
+        """
+        Retrieve all program options
+        Inspired by: Ghidra/Features/Base/src/main/java/ghidra/app/script/GhidraScript.java#L1272
+        """
+
+        all_options = {}
+
+        for opt_name in prog.getOptionsNames():
+            all_options[opt_name] = self.get_program_options(prog, opt_name)
+
+        return all_options
+
+    def get_program_options(
         self,
-        prog: "ghidra.program.model.listing.Program"
+        prog: "ghidra.program.model.listing.Program",
+        name: str
     ) -> dict:
         """
-        Generate dict from program analysis options
+        Generate dict program options
         Inspired by: Ghidra/Features/Base/src/main/java/ghidra/app/script/GhidraScript.java#L1272
         """
 
         from ghidra.program.model.listing import Program
 
-        prog_options = prog.getOptions(Program.ANALYSIS_PROPERTIES)
+        possible_props = prog.getOptionsNames()
+
+        if name not in possible_props:
+            err = f'Program property name not found: {name} in {possible_props}'
+            self.logger.error(err)
+            raise err
+
+        prog_options = prog.getOptions(name)
         options = {}
 
         for propName in prog_options.getOptionNames():
@@ -760,37 +789,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         meta = self.get_metadata(prog)
 
         return meta['Compiler ID'] == 'windows'
-
-    def gen_metadata_diff(
-        self,
-        pdiff: Union[str, dict]
-    ) -> str:
-        """Generate binary metadata diff"""
-
-        if isinstance(pdiff, str):
-            pdiff = json.loads(pdiff)
-
-        old_meta = pdiff['old_meta']
-        new_meta = pdiff['new_meta']
-
-        old_text = ''
-        old_name = old_meta['Program Name']
-
-        new_text = ''
-        new_name = new_meta['Program Name']
-
-        for i in old_meta:
-            self.logger.debug(f"{i}: {old_meta[i]}")
-            old_text += f"{i}: {old_meta[i]}\n"
-
-        for i in new_meta:
-            self.logger.debug(f"{i}: {new_meta[i]}")
-            new_text += f"{i}: {new_meta[i]}\n"
-
-        diff = ''.join(list(difflib.unified_diff(old_text.splitlines(True), new_text.splitlines(
-            True), lineterm='\n', fromfile=old_name, tofile=new_name, n=100)))
-
-        return diff
 
     @ abstractmethod
     def find_matches(
@@ -912,6 +910,28 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return need_diff
 
+    def normalize_ghidra_decomp(self, code: list):
+        """
+        Normalize some of the dynamic labels to simplify the diff
+        ie. Translate LAB_0003234 to LAB_0,LAB_1, etc.
+        Renames based on first appearance in decompilation        
+
+        """
+
+        default_labels = ['LAB', 'DAT', 'SUB', 'UNK', 'EXT', 'FUN_', 'OFF_']
+
+        matches = {}
+        for i, line in enumerate(code):
+
+            for label in default_labels:
+
+                match = re.search(fr'{label}_[0-9a-f]+', line)
+                if match is not None:
+                    if matches.get(match.group(0)) is None:
+                        prefix = match.group(0).split('_')[0]
+                        matches[match.group(0)] = f'{prefix}_{len(matches)}'
+                    code[i] = line.replace(match.group(0), matches[match.group(0)])
+
     def diff_bins(
             self,
             old: Union[str, pathlib.Path],
@@ -935,7 +955,19 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         old = pathlib.Path(old)
         new = pathlib.Path(new)
 
-        # open both programs read-only
+        # analysis options used (just check p1, same used for both)
+        # need RW program to get full options
+        p1 = self.project.openProgram("/", old.name, False)
+        p2 = self.project.openProgram("/", new.name, False)
+
+        pdiff['program_options'] = {}
+        pdiff['program_options'][p1.name] = self.get_all_program_options(p1)
+        pdiff['program_options'][p2.name] = self.get_all_program_options(p2)
+
+        self.project.close(p1)
+        self.project.close(p2)
+
+        # now open both programs read-only
         p1 = self.project.openProgram("/", old.name, True)
         p2 = self.project.openProgram("/", new.name, True)
 
@@ -947,11 +979,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         if not force_diff and not self.force_diff:
             # ensure architectures match
-            assert p1.languageID == p2.languageID, 'p1: {} != p2: {}. The arch or processor does not match.'
+            assert p1.languageID == p2.languageID, 'p1: {} != p2: {}. The arch or processor does not match. Add --force-diff to ignore this assert'
 
             # sanity check - ensure both programs have symbols, or both don't
             sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
-            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or only one binary has symbols! Check Ghidra analysis or pdb!'
+            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'
 
         # Find (non function) symbols
         unmatched_syms, _ = self.diff_symbols(p1, p2)
@@ -1110,6 +1142,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             # ignore signature for ratio
             ratio = difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio()
 
+            self.normalize_ghidra_decomp(old_code)
+            self.normalize_ghidra_decomp(new_code)
+
             diff = ''.join(list(difflib.unified_diff(old_code, new_code, lineterm='\n',
                                                      fromfile=sym.getProgram().getName(), tofile=sym2.getProgram().getName(), n=100)))
             only_code_diff = ''.join(list(difflib.unified_diff(old_code_no_sig, new_code_no_sig, lineterm='\n', fromfile=sym.getProgram(
@@ -1143,10 +1178,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             if ematch_1['address'] != ematch_2['address']:
                 diff_type.append('address')
 
-            if len(set(ematch_1['calling']).difference(set(ematch_2['calling']))) > 0:
+            if len(ematch_1['calling']) != len(ematch_2['calling']):
                 diff_type.append('calling')
 
-            if len(set(ematch_1['called']).difference(set(ematch_2['called']))) > 0:
+            if len(ematch_1['called']) != len(ematch_2['called']):
                 diff_type.append('called')
 
             if ematch_1['parent'] != ematch_2['parent']:
@@ -1199,8 +1234,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         pdiff['old_meta'] = self.get_metadata(p1)
         pdiff['new_meta'] = self.get_metadata(p2)
 
-        # analysis options used (just check p1, same used for both)
-        pdiff['analysis_options'] = self.get_analysis_options(p1)
+        pdiff['md_credits'] = self.gen_credits()
+        pdiff['html_credits'] = self.gen_credits(html=True)
 
         self.shutdown_decompilers(p1, p2)
 
@@ -1310,16 +1345,21 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         for func_type in ['added', 'deleted', 'modified']:
 
-            # reduce size of esym with hash
-            for field in ['instructions', 'mnemonics', 'blocks']:
+            for func in pdiff['functions'][func_type]:
 
-                for func in pdiff['functions'][func_type]:
+                # reduce size of esym with hash
+                for field in ['instructions', 'mnemonics', 'blocks']:
+
+                    if func.get(field) is None:
+                        continue
 
                     if func_type == 'modified':
-                        func['old'][field] = hash(tuple(func['old'][field]))
-                        func['new'][field] = hash(tuple(func['new'][field]))
+                        if isinstance(func[field], list):
+                            func['old'][field] = hash(tuple(func['old'][field]))
+                            func['new'][field] = hash(tuple(func['new'][field]))
                     else:
-                        func[field] = hash(tuple(func[field]))
+                        if isinstance(func[field], list):
+                            func[field] = hash(tuple(func[field]))
 
         return pdiff
 
@@ -1339,7 +1379,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         Dump pdiff result to directory
         """
 
-        if not write_diff and not write_json:
+        if not write_diff and not write_json and not side_by_side:
             self.logger.warn('Not writing json or diff.md.')
             return
 
@@ -1349,6 +1389,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         pdiff = self.minimise_pdiff(pdiff)
 
         output_path = pathlib.Path(output_path)
+        output_path.mkdir(exist_ok=True)
 
         if write_diff:
             md_path = output_path / pathlib.Path(name + '.md')
@@ -1364,13 +1405,29 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 f.write(diff_text)
 
         if write_json:
-            json_path = output_path / pathlib.Path(name + '.json')
+            json_base_path = output_path / 'json'
+            json_base_path.mkdir(exist_ok=True)
+            json_path = json_base_path / pathlib.Path(name + '.json')
             self.logger.info(f'Writing pdiff json...')
 
             with json_path.open('w') as f:
                 json.dump(pdiff, f, indent=4)
 
+        sxs_count = 0
+        if side_by_side:
+            sxs_output_path = output_path / pathlib.Path('sxs_html')
+            sxs_output_path.mkdir(exist_ok=True)
+
+            sxs_diff_htmls = GhidriffMarkdown.gen_sxs_html_from_pdiff(pdiff)
+
+            for func_name, sxs_diff_html in sxs_diff_htmls:
+
+                sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, func_name, 'html']))
+                sxs_diff_path.write_text(sxs_diff_html)
+
         if write_diff:
             self.logger.info(f'Wrote {md_path}')
         if write_json:
             self.logger.info(f'Wrote {json_path}')
+        if side_by_side:
+            self.logger.info(f'Wrote {len(sxs_diff_htmls)} sxs hmtl diffs to {sxs_output_path}')

@@ -3,6 +3,7 @@ import re
 from textwrap import dedent
 from typing import List, Tuple, Union, TYPE_CHECKING
 import logging
+import json
 
 from mdutils.tools.Table import Table
 from mdutils.mdutils import MdUtils
@@ -52,7 +53,7 @@ class GhidriffMarkdown:
         text = ''
         text += "<details>\n"
         if summary:
-            text += f"<summary>{summary}</summary>"
+            text += f"<summary>{summary}</summary>\n"
         text += diff
         text += "\n</details>\n"
 
@@ -168,9 +169,41 @@ class GhidriffMarkdown:
 
         return self._wrap_with_diff(diff)
 
-    def gen_code_table_diff_html(self, old_code, new_code, old_name, new_name) -> str:
+    @staticmethod
+    def gen_sxs_html_from_pdiff(pdiff: dict) -> list:
+        """
+        pdiff: Standard pdiff from ghidriff
+        """
+
+        sxs_diff_htmls = []
+
+        for mod in pdiff['functions']['modified']:
+
+            if 'code' not in mod['diff_type']:
+                continue
+
+            old_code = mod['old']['code']
+            new_code = mod['new']['code']
+            old_name = pdiff['old_meta']['Program Name']
+            new_name = pdiff['new_meta']['Program Name']
+            sxs_diff_html = GhidriffMarkdown.gen_code_table_diff_html(
+                old_code, new_code, old_name, new_name, bottom=pdiff['html_credits'])
+
+            sxs_diff_htmls.append([mod['old']['name'], sxs_diff_html])
+
+        return sxs_diff_htmls
+
+    @ staticmethod
+    def gen_code_table_diff_html(old_code,
+                                 new_code,
+                                 old_name,
+                                 new_name,
+                                 table_only=False,
+                                 dedent_table: bool = True,
+                                 bottom=None) -> str:
         """
         Generates side by side diff in HTML
+        dedent_table: True will dedent the indented table so it renders the html table in markdown
         """
 
         if isinstance(old_code, str):
@@ -178,11 +211,39 @@ class GhidriffMarkdown:
         if isinstance(new_code, str):
             new_code = new_code.splitlines(True)
 
-        diff_html = ''.join(list(difflib.HtmlDiff(tabsize=4).make_file(
-            old_code, new_code, fromdesc=old_name, todesc=new_name)))
-        diff_html = dedent(diff_html) + '\n'
+        if table_only:
+            diff_html = difflib.HtmlDiff(tabsize=4).make_table(old_code, new_code, fromdesc=old_name, todesc=new_name)
+        else:
+            diff_html = difflib.HtmlDiff(tabsize=4).make_file(old_code, new_code, fromdesc=old_name, todesc=new_name)
 
-        return diff_html
+        if dedent_table:
+            diff_html = diff_html.splitlines(True)
+
+            # handle dedent of table so that it renders in markdown
+            start_table = None
+            end_table = None
+            for i, line in enumerate(diff_html):
+                if line.find('<table class="diff"') != -1:
+                    start_table = i
+                if line.find('</table>') != -1:
+                    end_table = i
+
+                if start_table and end_table:
+                    break
+
+            pre_table = ''.join(diff_html[:start_table])
+            post_table = ''.join(diff_html[end_table+1:])
+
+            table = dedent(''.join(diff_html[start_table:end_table+1]))
+
+            diff_html = pre_table + table + post_table
+
+        if bottom:
+            needle = '</body>'
+            loc = diff_html.find(needle)
+            diff_html = diff_html[:loc] + bottom + diff_html[loc:]
+
+        return diff_html + '\n'
 
     def gen_table_from_dict(self, headers: list, items: dict):
 
@@ -211,6 +272,37 @@ class GhidriffMarkdown:
                                                    lineterm='\n', fromfile='deleted strings', tofile='added strings')))
 
         return self._wrap_with_diff(diff)
+
+    def gen_metadata_diff(
+        self,
+        pdiff: Union[str, dict]
+    ) -> str:
+        """Generate binary metadata diff"""
+
+        if isinstance(pdiff, str):
+            pdiff = json.loads(pdiff)
+
+        old_meta = pdiff['old_meta']
+        new_meta = pdiff['new_meta']
+
+        old_text = ''
+        old_name = old_meta['Program Name']
+
+        new_text = ''
+        new_name = new_meta['Program Name']
+
+        for i in old_meta:
+            self.logger.debug(f"{i}: {old_meta[i]}")
+            old_text += f"{i}: {old_meta[i]}\n"
+
+        for i in new_meta:
+            self.logger.debug(f"{i}: {new_meta[i]}")
+            new_text += f"{i}: {new_meta[i]}\n"
+
+        diff = ''.join(list(difflib.unified_diff(old_text.splitlines(True), new_text.splitlines(
+            True), lineterm='\n', fromfile=old_name, tofile=new_name, n=100)))
+
+        return diff
 
     def gen_mermaid_diff_flowchart(self, pdiff: dict, max_section_funcs: int = 25) -> str:
 
@@ -339,6 +431,7 @@ pie showData
         title=None,
         side_by_side: bool = False,
         max_section_funcs: int = None,
+        include_code: bool = False
     ) -> str:
         """
         Generate Markdown Diff from pdiff match results
@@ -394,12 +487,22 @@ pie showData
         md.new_header(4, 'All Args', add_table_of_contents='n')
         md.new_paragraph(self._wrap_with_code(full_cmd))
 
-        md.new_header(3, 'Ghidra Analysis Options', add_table_of_contents='n')
-        md.new_paragraph(self._wrap_with_details(self.gen_table_from_dict(
-            ['Analysis Option', 'Value'], pdiff['analysis_options'])))
-
         md.new_header(2, 'Binary Metadata Diff')
         md.new_paragraph(self._wrap_with_diff(self.gen_metadata_diff(pdiff)))
+
+        md.new_header(2, 'Program Options')
+        skip_options = 'Program Information'  # options duplicate metadta
+        for key in pdiff['program_options'].keys():
+            for opt_name in pdiff['program_options'][key]:
+                if opt_name in skip_options:
+                    continue
+                # md.new_header(3, f'Ghidra {key} {opt_name.capitalize()} Options', add_table_of_contents='n')
+                if pdiff['program_options'][key][opt_name] is not None:
+                    md.new_paragraph(self._wrap_with_details(self.gen_table_from_dict(
+                        [f'{opt_name.capitalize()} Option', 'Value'], pdiff['program_options'][key][opt_name]), f'Ghidra {key} {opt_name.capitalize()} Options'))
+
+                else:
+                    md.new_paragraph(f'*No {opt_name.capitalize()} set.*')
 
         md.new_header(2, 'Diff Stats')
         md.new_paragraph(self.gen_table_from_dict(['Stat', 'Value'], pdiff['stats']))
@@ -445,7 +548,10 @@ pie showData
                 new_code = ''.splitlines(True)
                 diff = ''.join(list(difflib.unified_diff(old_code, new_code,
                                                          lineterm='\n', fromfile=old_name, tofile=new_name)))
-                md.new_paragraph(self._wrap_with_diff(diff))
+                if len(diff) > 0:
+                    md.new_paragraph(self._wrap_with_diff(diff))
+                else:
+                    md.new_paragraph(f"*No code available for {esym['fullname']}*")
 
         # Create Added section
         md.new_header(1, 'Added')
@@ -472,7 +578,10 @@ pie showData
                 new_code = esym['code'].splitlines(True)
                 diff = ''.join(list(difflib.unified_diff(old_code, new_code,
                                                          lineterm='\n', fromfile=old_name, tofile=new_name)))
-                md.new_paragraph(self._wrap_with_diff(diff))
+                if len(diff) > 0:
+                    md.new_paragraph(self._wrap_with_diff(diff))
+                else:
+                    md.new_paragraph(f"*No code available for {esym['fullname']}*")
 
         # Create Modified section
         md.new_header(1, 'Modified')
@@ -505,19 +614,24 @@ pie showData
                 md.new_paragraph(self.gen_esym_table_diff(old_name, new_name, modified))
 
                 if 'called' in modified['diff_type']:
-                    md.new_header(3, "Called Diff", add_table_of_contents='n')
+                    md.new_header(3, f"{old_func_name} Called Diff", add_table_of_contents='n')
                     md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'called', n=0))
                 if 'calling' in modified['diff_type']:
-                    md.new_header(3, "Calling Diff", add_table_of_contents='n')
+                    md.new_header(3, f"{old_func_name} Calling Diff", add_table_of_contents='n')
                     md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'calling', n=0))
 
                 md.new_header(3, f"{old_func_name} Diff", add_table_of_contents='n')
                 md.new_paragraph(self._wrap_with_diff(modified['diff']))
 
+                if include_code:
+                    md.new_header(3, f"{old_func_name} Code", add_table_of_contents='n')
+                    md.new_paragraph(self._wrap_with_code(modified['old']['code'], 'c'))
+                    md.new_paragraph(self._wrap_with_code(modified['new']['code'], 'c'))
+
                 # only include side by side diff if requested (this adds html to markdown and considerable size)
                 if side_by_side:
                     md.new_header(3, f"{old_func_name} Side By Side Diff", add_table_of_contents='n')
-                    html_diff = self.gen_code_table_diff_html(
+                    html_diff = GhidriffMarkdown.gen_code_table_diff_html(
                         modified['old']['code'], modified['new']['code'], old_name, new_name)
                     md.new_paragraph(self._wrap_with_details(html_diff))
 
@@ -583,19 +697,17 @@ pie showData
                     md.new_paragraph(self.gen_esym_table_diff(old_name, new_name, modified))
 
                     if 'called' in modified['diff_type']:
-                        md.new_header(3, "Called Diff", add_table_of_contents='n')
+                        md.new_header(3, f"{old_func_name} Called Diff", add_table_of_contents='n')
                         md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'called', n=0))
                     if 'calling' in modified['diff_type']:
-                        md.new_header(3, "Calling Diff", add_table_of_contents='n')
+                        md.new_header(3, f"{old_func_name} Calling Diff", add_table_of_contents='n')
                         md.new_paragraph(self.gen_esym_key_diff(modified['old'], modified['new'], 'calling', n=0))
 
         # add credit
-        md.new_paragraph(self.gen_credits())
+        md.new_paragraph(pdiff['md_credits'])
 
         # generate TOC and set style to atx
         md.table_of_contents += md.header.choose_header(level=1, title='TOC', style='atx')
         md.table_of_contents += TableOfContents().create_table_of_contents(md._table_titles, depth=3)
-
-        # md.new_table_of_contents('TOC', 3)
 
         return md.get_md_text()
