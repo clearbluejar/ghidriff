@@ -1,8 +1,8 @@
 # Ghidriff - A Binary Diffing Engine Powered by Ghidra
 
-![image](https://user-images.githubusercontent.com/3752074/229976340-96394970-152f-4d88-9fe4-a46589b31c50.png)
-
-
+<p align='center'>
+<img  src="https://user-images.githubusercontent.com/3752074/229976340-96394970-152f-4d88-9fe4-a46589b31c50.png" height="600">
+</p>
 
 `ghidriff` is a [Ghidra](https://ghidra-sre.org/) enabled binary diffing engine. It leverages the power of Ghidra's SRE [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. 
 
