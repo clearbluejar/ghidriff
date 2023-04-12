@@ -369,11 +369,11 @@ end
                 break
 
             old_modified.append(self._clean_md_header(
-                f"{modified['old']['name']}-{modified['old']['paramcount']}-old"))
+                f"{modified['old']['fullname']}-{modified['old']['paramcount']}-old"))
             new_modified.append(self._clean_md_header(
-                f"{modified['new']['name']}-{modified['old']['paramcount']}-new"))
+                f"{modified['new']['fullname']}-{modified['old']['paramcount']}-new"))
             modified_links.append(
-                f"{self._clean_md_header(modified['old']['name'])}-{modified['old']['paramcount']}-old<--Match {int(modified['b_ratio']*100)}%-->{self._clean_md_header(modified['new']['name'])}-{modified['old']['paramcount']}-new")
+                f"{self._clean_md_header(modified['old']['fullname'])}-{modified['old']['paramcount']}-old<--Match {int(modified['b_ratio']*100)}%-->{self._clean_md_header(modified['new']['fullname'])}-{modified['old']['paramcount']}-new")
 
         deleted_sub = ''
         added_sub = ''
