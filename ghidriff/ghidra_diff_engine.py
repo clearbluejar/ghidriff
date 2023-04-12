@@ -145,6 +145,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.verbose_analysis = verbose_analysis
         self.no_symbols = no_symbols
 
+        # if looking up more than calling_count_funcs_limit symbols, skip function counts
+        self.calling_count_funcs_limit = 500
+
         self.logger.debug(f'{vars(self)}')
 
     @ staticmethod
@@ -239,18 +242,16 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return text
 
-    def enhance_sym(self, sym: 'ghidra.program.model.symbol.Symbol', thread_id: int = 0) -> dict:
+    def enhance_sym(self, sym: 'ghidra.program.model.symbol.Symbol', thread_id: int = 0, timeout: int = 15, get_decomp_info: bool = False, use_calling_counts: bool = False) -> dict:
         """
         Standardize enhanced symbol. Use esym_memo to speed things up.
         Inspired by Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/api/main/VTMatchInfo.java
+        timeout is for decompiler. -1 is infinite, and too long
         """
 
         from ghidra.program.model.symbol import SymbolType
 
         key = f'{sym.iD}-{sym.program.name}'
-
-        # decompile timeout in sec 0 = infinite
-        TIMEOUT = 0
 
         if key not in self.esym_memo:
 
@@ -290,52 +291,63 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 instructions = []
                 mnemonics = []
                 blocks = []
-
-                code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
-
-                # instruction and mnemonic bulker
-                for code in code_units:
-                    instructions.append(str(code))
-                    mnemonics.append(str(code.mnemonicString))
-
-                from ghidra.program.model.block import BasicBlockModel
-
-                # Basic Block Bulker
-                basic_model = BasicBlockModel(func.getProgram(), True)
-                basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
-
-                for block in basic_blocks:
-                    code_units = func.getProgram().getListing().getCodeUnits(block, True)
-                    for code in code_units:
-                        blocks.append(str(code.mnemonicString))
-
-                # sort - This case handles the case for compiler optimizations
-                blocks = sorted(blocks)
-
                 called_funcs = []
-                for f in func.getCalledFunctions(monitor):
-                    count = 0
-                    for ref in f.symbol.references:
-                        if func.getBody().contains(ref.fromAddress, ref.fromAddress):
-                            count += 1
-                    called_funcs.append(f'{f}-{count}')
-
                 calling_funcs = []
-                for f in func.getCallingFunctions(monitor):
-                    count = 0
-                    for ref in func.symbol.references:
-                        if f.getBody().contains(ref.fromAddress, ref.fromAddress):
-                            count += 1
-                    called_funcs.append(f'{f}-{count}')
+                code = ''
 
-                results = self.decompilers[prog.name][thread_id].decompileFunction(
-                    func, TIMEOUT, monitor).getDecompiledFunction()
-                code = results.getC() if results else ""
+                if get_decomp_info:
 
-                parent_namespace = sym.getParentNamespace().toString().split('@')[0]
+                    code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
+
+                    # instruction and mnemonic bulker
+                    for code in code_units:
+                        instructions.append(str(code))
+                        mnemonics.append(str(code.mnemonicString))
+
+                    from ghidra.program.model.block import BasicBlockModel
+
+                    # Basic Block Bulker
+                    basic_model = BasicBlockModel(func.getProgram(), True)
+                    basic_blocks = basic_model.getCodeBlocksContaining(func.getBody(), monitor)
+
+                    for block in basic_blocks:
+                        code_units = func.getProgram().getListing().getCodeUnits(block, True)
+                        for code in code_units:
+                            blocks.append(str(code.mnemonicString))
+
+                    # sort - This case handles the case for compiler optimizations
+                    blocks = sorted(blocks)
+
+                    if not func.external:
+                        error, code = self.decompile_func(func.program, func, timeout,)
+
+                        if error:
+                            self.logger.warn(f'Failed to decompile {func.program} {func} : {error}')
+                            code = ''
+
+                if use_calling_counts:
+                    for f in func.getCalledFunctions(monitor):
+                        count = 0
+                        for ref in f.symbol.references:
+                            if func.getBody().contains(ref.fromAddress, ref.fromAddress):
+                                count += 1
+                        called_funcs.append(f'{f}-{count}')
+
+                    for f in func.getCallingFunctions(monitor):
+                        count = 0
+                        for ref in func.symbol.references:
+                            if f.getBody().contains(ref.fromAddress, ref.fromAddress):
+                                count += 1
+                        called_funcs.append(f'{f}-{count}')
+                else:
+                    for f in func.getCalledFunctions(monitor):
+                        called_funcs.append(f'{f}')
+                    for f in func.getCallingFunctions(monitor):
+                        calling_funcs.append(f'{f}')
 
                 called_funcs = sorted(called_funcs)
                 calling_funcs = sorted(calling_funcs)
+                parent_namespace = sym.getParentNamespace().toString().split('@')[0]
 
                 self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True),  'parent':  parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
                                        'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()), 'sig': str(func.getSignature(False)), 'code': code,
@@ -463,20 +475,33 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         """
 
         from ghidra.app.decompiler import DecompInterface
+        from ghidra.app.decompiler import DecompileOptions
+
+        decomp_options = DecompileOptions()
+
+        decomp_options.setMaxWidth(100)
 
         if self.threaded:
             decompiler_count = 2 * self.max_workers
             for i in range(self.max_workers):
                 self.decompilers.setdefault(p1.name, {}).setdefault(i, DecompInterface())
                 self.decompilers.setdefault(p2.name, {}).setdefault(i, DecompInterface())
+                self.decompilers[p1.name][i].setOptions(decomp_options)
+                self.decompilers[p2.name][i].setOptions(decomp_options)
                 self.decompilers[p1.name][i].openProgram(p1)
                 self.decompilers[p2.name][i].openProgram(p2)
+                self.decompilers[p1.name].setdefault('available', []).append(i)
+                self.decompilers[p2.name].setdefault('available', []).append(i)
         else:
             decompiler_count = 2
             self.decompilers.setdefault(p1.name, {}).setdefault(0, DecompInterface())
             self.decompilers.setdefault(p2.name, {}).setdefault(0, DecompInterface())
+            self.decompilers[p1.name][0].setOptions(decomp_options)
+            self.decompilers[p2.name][0].setOptions(decomp_options)
             self.decompilers[p1.name][0].openProgram(p1)
             self.decompilers[p2.name][0].openProgram(p2)
+            self.decompilers[p1.name].setdefault('available', []).append(0)
+            self.decompilers[p2.name].setdefault('available', []).append(0)
 
         self.logger.info(f'Setup {decompiler_count} decompliers')
 
@@ -496,10 +521,46 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 self.decompilers[p1.name][i].closeProgram()
                 self.decompilers[p2.name][i].closeProgram()
         else:
-            self.decompilers[p1.name][0].openProgram(p1)
-            self.decompilers[p2.name][0].openProgram(p2)
+            self.decompilers[p1.name][0].closeProgram(p1)
+            self.decompilers[p2.name][0].closeProgram(p2)
 
         self.decompilers = {}
+
+    def decompile_func(
+        self,
+        prog: "ghidra.program.model.listing.Program",
+        func: 'ghidra.program.model.listing.Function',
+        timeout: int = 15
+    ) -> List[str]:
+
+        from ghidra.util.task import ConsoleTaskMonitor
+
+        code = ''
+        error = ''
+        decomp_id = None
+        monitor = ConsoleTaskMonitor()
+
+        # list operations are atomic. right?
+        while decomp_id == None:
+            try:
+                decomp_id = self.decompilers[prog.name]['available'].pop()
+            except IndexError:
+                pass
+
+        results: 'ghidra.app.decompiler.DecompileResults' = self.decompilers[prog.name][decomp_id].decompileFunction(
+            func, timeout, monitor)
+
+        if hasattr(results, 'errorMessage'):
+            error = results.errorMessage
+            if not error:
+                code = results.decompiledFunction.getC()
+        else:
+            error = 'Error: Decompile results missing errorMessage'
+
+        # set decomp as available
+        self.decompilers[prog.name]['available'].append(decomp_id)
+
+        return error, code
 
     def get_pdb(self, prog: "ghidra.program.model.listing.Program", allow_remote=True) -> "java.io.File":
         """
@@ -902,7 +963,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         need_diff = False
 
-        if not any(skip_type == match_types for skip_type in skip_types):
+        if not any(skip_type in match_types for skip_type in skip_types):
             if func.body.numAddresses != func2.body.numAddresses:
                 need_diff = True
             elif sym.referenceCount != sym2.referenceCount:
@@ -1046,6 +1107,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         modified_funcs = []
         all_match_types = []
         all_diff_types = []
+        funcs_need_decomp = []
 
         self.logger.info('Sorting functions...')
 
@@ -1064,8 +1126,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 if not self.syms_need_diff(sym, sym2, match_types, skip_types):
                     continue
 
-                esym_lookups.append(sym)
-                esym_lookups.append(sym2)
+                funcs_need_decomp.append(sym)
+                funcs_need_decomp.append(sym2)
+
+            esym_lookups.extend(funcs_need_decomp)
+
+            use_calling_counts = len(funcs_need_decomp) < self.calling_count_funcs_limit
 
             # there can be duplicate multiple function matches, just do this once
             esym_lookups = list(set(esym_lookups))
@@ -1074,8 +1140,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             completed = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers)
+                futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
                            for thread_id, sym in enumerate(esym_lookups))
+
                 for future in concurrent.futures.as_completed(futures):
                     result = future.result()
                     completed += 1
@@ -1178,10 +1245,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             if ematch_1['address'] != ematch_2['address']:
                 diff_type.append('address')
 
-            if len(ematch_1['calling']) != len(ematch_2['calling']):
+            if not (len(ematch_1['calling']) == len(ematch_2['calling']) and len(set(ematch_2['calling']).union(set(ematch_1['calling']))) == len(ematch_1['calling'])):
                 diff_type.append('calling')
 
-            if len(ematch_1['called']) != len(ematch_2['called']):
+            if not (len(ematch_1['called']) == len(ematch_2['called']) and len(set(ematch_2['called']).union(set(ematch_1['called']))) == len(ematch_1['called'])):
                 diff_type.append('called')
 
             if ematch_1['parent'] != ematch_2['parent']:
@@ -1422,7 +1489,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             for func_name, sxs_diff_html in sxs_diff_htmls:
 
-                sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, func_name, 'html']))
+                # give line ending md despite html so it will render in gists and vscode
+                sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, func_name, 'md']))
                 sxs_diff_path.write_text(sxs_diff_html)
 
         if write_diff:
