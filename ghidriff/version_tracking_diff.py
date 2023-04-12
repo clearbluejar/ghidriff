@@ -193,6 +193,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
             matched.append([func.getSymbol(), func2.getSymbol(), list(match_types.keys())])
 
         # skip types will undergo less processing
-        skip_types = [['BulkBasicBlockMnemonicHash']]
+        skip_types = ['BulkBasicBlockMnemonicHash', 'ExternalsName']
 
         return [unmatched, matched, skip_types]
