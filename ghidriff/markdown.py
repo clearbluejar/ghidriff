@@ -165,9 +165,52 @@ class GhidriffMarkdown:
             items2 = esym2[key]
 
         diff += '\n'.join(difflib.unified_diff(items, items2,
-                          fromfile=f'old {key}', tofile=f'new {key}', lineterm='', n=n))
+                          fromfile=f"{esym['fullname']} {key}", tofile=f"{esym2['fullname']} {key}", lineterm='', n=n))
 
         return self._wrap_with_diff(diff)
+
+    @staticmethod
+    def gen_combined_sxs_html_from_pdiff(pdiff: dict) -> str:
+        """
+        pdiff: Standard pdiff from ghidriff
+        """
+
+        def _add_header(line: str):
+            print(line)
+
+        sxs_diff_htmls = []
+
+        for mod in pdiff['functions']['modified']:
+
+            if 'code' not in mod['diff_type']:
+                continue
+
+            old_code = mod['old']['code']
+            new_code = mod['new']['code']
+            old_name = mod['old']['fullname']
+            new_name = mod['new']['fullname']
+
+            sxs_diff_html = GhidriffMarkdown.gen_code_table_diff_html(
+                old_code, new_code, old_name, new_name, table_only=True)
+
+            sxs_diff_htmls.append([mod['old']['name'], sxs_diff_html])
+
+        table_htmls = [table[1] for table in sxs_diff_htmls]
+
+        charset = 'utf-8'
+
+        html_diff = difflib.HtmlDiff(tabsize=4)
+        html = (html_diff._file_template % dict(
+            styles=html_diff._styles,
+            legend=dedent(html_diff._legend),
+            table="\n".join(table_htmls),
+            charset=charset)).encode(charset, 'xmlcharrefreplace').decode(charset)
+
+        for line in html.splitlines(True):
+
+            _add_header(line)
+
+        return html
 
     @staticmethod
     def gen_sxs_html_from_pdiff(pdiff: dict) -> list:
@@ -184,8 +227,9 @@ class GhidriffMarkdown:
 
             old_code = mod['old']['code']
             new_code = mod['new']['code']
-            old_name = pdiff['old_meta']['Program Name']
-            new_name = pdiff['new_meta']['Program Name']
+            old_name = mod['old']['fullname']
+            new_name = mod['new']['fullname']
+
             sxs_diff_html = GhidriffMarkdown.gen_code_table_diff_html(
                 old_code, new_code, old_name, new_name, bottom=pdiff['html_credits'])
 
@@ -212,9 +256,11 @@ class GhidriffMarkdown:
             new_code = new_code.splitlines(True)
 
         if table_only:
-            diff_html = difflib.HtmlDiff(tabsize=4).make_table(old_code, new_code, fromdesc=old_name, todesc=new_name)
+            diff_html = difflib.HtmlDiff(tabsize=4).make_table(
+                old_code, new_code, fromdesc=old_name, todesc=new_name)
         else:
-            diff_html = difflib.HtmlDiff(tabsize=4).make_file(old_code, new_code, fromdesc=old_name, todesc=new_name)
+            diff_html = difflib.HtmlDiff(tabsize=4).make_file(
+                old_code, new_code, fromdesc=old_name, todesc=new_name)
 
         if dedent_table:
             diff_html = diff_html.splitlines(True)
@@ -238,7 +284,7 @@ class GhidriffMarkdown:
 
             diff_html = pre_table + table + post_table
 
-        if bottom:
+        if not table_only and bottom:
             needle = '</body>'
             loc = diff_html.find(needle)
             diff_html = diff_html[:loc] + bottom + diff_html[loc:]
@@ -286,10 +332,10 @@ class GhidriffMarkdown:
         new_meta = pdiff['new_meta']
 
         old_text = ''
-        old_name = old_meta['Program Name']
+        old_name = f"{old_meta['Program Name']} Meta"
 
         new_text = ''
-        new_name = new_meta['Program Name']
+        new_name = f"{new_meta['Program Name']} Meta"
 
         for i in old_meta:
             self.logger.debug(f"{i}: {old_meta[i]}")

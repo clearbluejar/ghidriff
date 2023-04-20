@@ -6,7 +6,7 @@
 
 `ghidriff` is a [Ghidra](https://ghidra-sre.org/) enabled binary diffing engine. It leverages the power of Ghidra's SRE [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. 
 
-It's primary use case is for patch diffing. It is written in Python 3 using `pyhidra` and as the interface to Ghidra.
+It's primary use case is for patch diffing. It is written in Python 3 using `pyhidra` to orchestrate Ghidra and `jpype` as the interface to Ghidra.
 
 ## High Level
 
@@ -33,7 +33,7 @@ end
 - Beautiful Markdown Output
   - [Visual Diff] Results
   - Easily hosted in a gist
-  - Callgraphs support
+  - Callgraphs support (coming soon)
 - Supports both unified and side by side diff results (unified is default)
 
 The heavy lifting of the binary analysis is done by Ghidra.  This library is just the glue that puts it all together. 
@@ -83,17 +83,15 @@ There are currently 3 differs, which display the evolution of diffing for the pr
 2. [StructualGraphDiff](ghidriff/structural_graph_diff.py) - A slightly more advanced differ, begining to perform some more advanced hashing (such as Halvar's Structural Graph Comparison)
 3. [VersionTrackingDiff](ghidriff/version_tracking_diff.py) - The latest differ, with several [correlators](ghidriff/correlators.py) (an algorithm used to score specific associations based on code, program flow, or any observable aspect of comparison) for function matching. **This one is fast.**
 
-Each implementation leverags the base class, and implements `find_changes`. Let's take a look at the `VersionTrackingDiff`
-
-### Ghidra Version Tracking Differ
-
+Each implementation leverags the base class, and implements `find_changes`.
 
 #### Usage
 
 ```bash
-usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--threaded | --no-threaded]
-                [--force-analysis] [--force-diff] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                [--log-path LOG_PATH] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags] [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS]
+usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH]
+                [--threaded | --no-threaded] [--force-analysis] [--force-diff] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--log-path LOG_PATH] [--verbose-analysis] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags]
+                [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS] [--md-title MD_TITLE]
                 old new [new ...]
 
 ghidriff - A Command Line Ghidra Binary Diffing Engine
@@ -108,12 +106,13 @@ options:
                         The diff implementation to use. (default: VersionTrackingDiff)
   -o OUTPUT_PATH, --output-path OUTPUT_PATH
                         Output path for resulting diffs (default: .ghidriffs)
+  --summary SUMMARY     Add a summary diff if more than two bins are provided (default: False)
 
 Ghidra Project Options:
   -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
                         Ghidra Project Path (default: .ghidra_projects)
   -n PROJECT_NAME, --project-name PROJECT_NAME
-                        Ghidra Project Name (default: diff_project)
+                        Ghidra Project Name (default: ghidriff)
   -s SYMBOLS_PATH, --symbols-path SYMBOLS_PATH
                         Ghidra local symbol store directory (default: .symbols)
 
@@ -127,6 +126,7 @@ Engine Options:
   --file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Set log file level (default: INFO)
   --log-path LOG_PATH   Set ghidriff log path. (default: ghidriff.log)
+  --verbose-analysis    Verbose logging for Ghidra analysis of each binary. (noisy) (default: False)
 
 JVM Options:
   --max-ram-percent MAX_RAM_PERCENT
@@ -139,14 +139,60 @@ Markdown Options:
   --sxs                 Include side by side code diff (default: False)
   --max-section-funcs MAX_SECTION_FUNCS
                         Max number of functions to display per section. (default: 200)
+  --md-title MD_TITLE   Overwrite default title for markdown diff (default: None)
 ```
+
+There are quite a few options here, and some complexity. Generally you can succeed with the defaults, but there is some flexibility with how much of the hosts resources the JVM will use.
 
 ## Quick Start Environment Setup
 
-Follow directions from that repo template [Quick Start](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option)
+1. [Download](https://github.com/NationalSecurityAgency/ghidra/releases) and [install Ghidra](https://htmlpreview.github.io/?https://github.com/NationalSecurityAgency/ghidra/blob/stable/GhidraDocs/InstallationGuide.html#Install).
+2. Set Ghidra Environment Variable `GHIDRA_INSTALL_DIR` to Ghidra install location.
+3. Pip install `ghidriff`
+
+### Windows
+
+```powershell
+PS C:\Users\user> [System.Environment]::SetEnvironmentVariable('GHIDRA_INSTALL_DIR','C:\ghidra_10.2.3_PUBLIC_20230208\ghidra_10.2.3_PUBLIC')
+PS C:\Users\user> pip install ghidriff
+```
+### Linux / Mac
+
+```bash
+export GHIDRA_INSTALL_DIR="/path/to/ghidra/"
+pip install ghidriff
+```
+
+### Devcontainer / Docker
+
+Don't want to install Ghidra and Java on your host?  Use the [.devcontainer](.devcontainer) in this repo. If you don't know how, follow the detailed instructions here: [ghidra-python-vscode-devcontainer-skeleton quick setup](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option).
 
 
-## Overall Design Goals
+## Sample Usage
+
+### Diffing the Windows Kernel
+
+Download two versions of the kernel:
+
+```bash
+ghid
+```
+
+Run ghidriff:
+
+```bash
+
+```
+
+<details><summary>Console Output</details>
+
+
+
+Want a side by side diff as well?
+
+### Diffing a CVE
+
+
 
 - Fast 
 - Find added functions

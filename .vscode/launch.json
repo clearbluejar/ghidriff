@@ -3,7 +3,7 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [        
+    "configurations": [
         {
             "name": "Python: Current File",
             "type": "python",
@@ -13,14 +13,14 @@
             "justMyCode": true,
             // Don't edit env directly, they read from settings.json
             // Add/delete new vars as needed
-            "env": {                
+            "env": {
                 "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
                 "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
-                "GHIDRA_HEADLESS":  "${config:GHIDRA_HEADLESS}",     
-                "PROJECT_NAME": "${config:PROJECT_NAME}",     
-                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",           
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
             },
-            "args": [                 
+            "args": [
                 "bins/rpcrt4.dll.x64.10.0.22000.613",
                 "bins/rpcrt4.dll.x64.10.0.22000.675",
             ]
@@ -34,17 +34,218 @@
             "justMyCode": true,
             // Don't edit env directly, they read from settings.json
             // Add/delete new vars as needed
-            "env": {                
+            "env": {
                 "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
                 "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
-                "GHIDRA_HEADLESS":  "${config:GHIDRA_HEADLESS}",     
-                "PROJECT_NAME": "${config:PROJECT_NAME}",     
-                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",           
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
             },
-            "args": [                 
+            "args": [
                 "bins/nettcpip.dll.10.0.22000.708",
                 "bins/nettcpip.dll.10.0.22000.709",
             ]
-        }
+        },
+        {
+            "name": "fxscompose 508-746",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "bins/fxscompose.dll.x64.10.0.19041.508",
+                "bins/fxscompose.dll.x64.10.0.19041.746",
+            ]
+        },
+        {
+            "name": "fxscompose 508-746 no-symbols",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "bins/fxscompose.dll.x64.10.0.19041.508",
+                "bins/fxscompose.dll.x64.10.0.19041.746",
+                "--no-symbols"
+            ]
+        },
+        {
+            "name": "printdialog ",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "--log-level",
+                "DEBUG",
+                "--max-section-funcs",
+                "250",
+                "bins/printdialog.dll.x64.10.0.19041.928",
+                "bins/printdialog.dll.x64.10.0.19041.1806"
+            ]
+        },
+        {
+            "name": "win32kbase.sys symbolhash test ",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "bins/win32kbase.sys.x64.10.0.22000.469",
+                "bins/win32kbase.sys.x64.10.0.22000.493"
+            ]
+        },
+        {
+            "name": "localspl ",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "bins/localspl.dll.x64.10.0.19041.746",
+                "bins/localspl.dll.x64.10.0.19041.870",
+                "bins/localspl.dll.x64.10.0.19041.1151"
+            ]
+        },
+        {
+            "name": "ntoskrnl ",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "bins/ntoskrnl.exe.x64.10.0.22621.1105",
+                "bins/ntoskrnl.exe.x64.10.0.22621.1194",
+            ]
+        },
+        {
+            "name": "ntoskrnl no symbols",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "bins/ntoskrnl.exe.x64.10.0.22621.1105",
+                "bins/ntoskrnl.exe.x64.10.0.22621.1194",
+                "--no-symbols"
+            ]
+        },
+        {
+            "name": "fxsroute with deletefile extern ",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "--log-level",
+                "DEBUG",
+                "--md-title",
+                "asdfds",
+                "bins/fxsroute.dll.x64.10.0.22000.795",
+                "bins/fxsroute.dll.x64.10.0.22000.856",
+                "--sxs"
+            ]
+        },
+        {
+            "name": "windows.storage massive symbols",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "bins/windows.storage.dll.x64.10.0.22000.348",
+                "bins/windows.storage.dll.x64.10.0.22000.469",
+            ]
+        },
     ]
 }
