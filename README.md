@@ -569,11 +569,6 @@ wget https://msdl.microsoft.com/download/symbols/afd.sys/0C5C6994A8000/afd.sys -
 wget https://msdl.microsoft.com/download/symbols/afd.sys/50989142A9000/afd.sys -O afd.sys.x64.10.0.22621.1415
 ```
 
-                "old_path": "/workspaces/winbindiff/.downloaded_bins/cve-2023_21768/afd.sys.x64.10.0.22621.1028",
-                "new_path": "/workspaces/winbindiff/.downloaded_bins/cve-2023_21768/afd.sys.x64.10.0.22621.1415",
-                "old_url": "https://msdl.microsoft.com/download/symbols/afd.sys/0C5C6994A8000/afd.sys",
-                "new_url": "https://msdl.microsoft.com/download/symbols/afd.sys/50989142A9000/afd.sys"
-
 2.  Run `ghidriff`:
 
 ```bash
