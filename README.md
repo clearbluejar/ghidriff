@@ -596,3 +596,4 @@ ghidriff afd.sys.x64.10.0.22621.1028 afd.sys.x64.10.0.22621.1415
 - Find modified functions
 - Generate JSON capturing Diff Results
 - Generate Markdown Diff
+
