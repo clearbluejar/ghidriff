@@ -311,9 +311,9 @@ class GhidriffMarkdown:
 
     def gen_strings_diff(self, deleted_strings: dict, added_strings: dict):
 
-        added = [item['name'] for item in added_strings]
+        added = [f'{item["name"]}\n' for item in added_strings]
 
-        deleted = [item['name'] for item in deleted_strings]
+        deleted = [f'{item["name"]}\n' for item in deleted_strings]
 
         diff = ''.join(list(difflib.unified_diff(deleted, added,
                                                  lineterm='\n', fromfile='deleted strings', tofile='added strings')))
