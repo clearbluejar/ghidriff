@@ -176,7 +176,8 @@ class GhidriffMarkdown:
         """
 
         def _add_header(line: str):
-            print(line)
+            # print(line)
+            pass
 
         sxs_diff_htmls = []
 
@@ -314,8 +315,8 @@ class GhidriffMarkdown:
 
         deleted = [item['name'] for item in deleted_strings]
 
-        diff = '\n'.join(list(difflib.unified_diff(deleted, added,
-                                                   lineterm='\n', fromfile='deleted strings', tofile='added strings')))
+        diff = ''.join(list(difflib.unified_diff(deleted, added,
+                                                 lineterm='\n', fromfile='deleted strings', tofile='added strings')))
 
         return self._wrap_with_diff(diff)
 
@@ -593,7 +594,7 @@ pie showData
                 old_code = esym['code'].splitlines(True)
                 new_code = ''.splitlines(True)
                 diff = ''.join(list(difflib.unified_diff(old_code, new_code,
-                                                         lineterm='\n', fromfile=old_name, tofile=new_name)))
+                                                         lineterm='\n', fromfile=esym['fullname'], tofile=esym['fullname'])))
                 if len(diff) > 0:
                     md.new_paragraph(self._wrap_with_diff(diff))
                 else:
@@ -623,7 +624,7 @@ pie showData
                 old_code = ''.splitlines(True)
                 new_code = esym['code'].splitlines(True)
                 diff = ''.join(list(difflib.unified_diff(old_code, new_code,
-                                                         lineterm='\n', fromfile=old_name, tofile=new_name)))
+                                                         lineterm='\n', fromfile=esym['fullname'], tofile=esym['fullname'])))
                 if len(diff) > 0:
                     md.new_paragraph(self._wrap_with_diff(diff))
                 else:
