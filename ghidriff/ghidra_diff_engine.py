@@ -251,7 +251,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         from ghidra.program.model.symbol import SymbolType
 
+        # key = f'{sym.iD}-{sym.program.name}-{get_decomp_info}-{use_calling_counts}'
         key = f'{sym.iD}-{sym.program.name}'
+
+        # if sym.getName() == 'SepAppendAceToTokenObjectAcl':
+        #     print('hi')
 
         if key not in self.esym_memo:
 
@@ -322,12 +326,15 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                         error, code = self.decompile_func(func.program, func, timeout,)
 
                         if error:
-                            self.logger.warn(f'Failed to decompile {func.program} {func} : {error}')
-                            code = ''
+                            err = f'Failed to decompile {func.program} {func} : {error}'
+                            self.logger.warn(err)
+                            code = err
 
-                if use_calling_counts:
+                # if use_calling_counts:
+                if False:
                     for f in func.getCalledFunctions(monitor):
                         count = 0
+                        print(len(f.symbol.references))
                         for ref in f.symbol.references:
                             if func.getBody().contains(ref.fromAddress, ref.fromAddress):
                                 count += 1
@@ -335,6 +342,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                     for f in func.getCallingFunctions(monitor):
                         count = 0
+                        print(len(func.symbol.references))
                         for ref in func.symbol.references:
                             if f.getBody().contains(ref.fromAddress, ref.fromAddress):
                                 count += 1
@@ -441,7 +449,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 if pdb:
                     err = f'Symbols are disabled, but the symbol is already downloaded {pdb}. Delete symbol or remove --no-symbol flag'
                     self.logger.error(err)
-                    # raise FileExistsError(err)
+                    raise FileExistsError(err)
 
             if pdb is None and not self.no_symbols:
                 self.logger.warn(f"PDB not found for {program.getName()}!")
@@ -455,7 +463,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             pdb_loaded = pdb_attr.pdbLoaded
             prog_analyzed = pdb_attr.programAnalyzed
 
-            project.save(program)
+            # TODO only save if changes are made
+            # project.save(program)
             project.close(program)
 
             bin_results.append([program.getExecutablePath(), imported, has_pdb, pdb_loaded, prog_analyzed])
@@ -477,17 +486,18 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from ghidra.app.decompiler import DecompInterface
         from ghidra.app.decompiler import DecompileOptions
 
-        decomp_options = DecompileOptions()
+        # TODO decide on decompile options
+        # decomp_options = DecompileOptions()
 
-        decomp_options.setMaxWidth(100)
+        # decomp_options.setMaxWidth(100)
 
         if self.threaded:
             decompiler_count = 2 * self.max_workers
             for i in range(self.max_workers):
                 self.decompilers.setdefault(p1.name, {}).setdefault(i, DecompInterface())
                 self.decompilers.setdefault(p2.name, {}).setdefault(i, DecompInterface())
-                self.decompilers[p1.name][i].setOptions(decomp_options)
-                self.decompilers[p2.name][i].setOptions(decomp_options)
+                # self.decompilers[p1.name][i].setOptions(decomp_options)
+                # self.decompilers[p2.name][i].setOptions(decomp_options)
                 self.decompilers[p1.name][i].openProgram(p1)
                 self.decompilers[p2.name][i].openProgram(p2)
                 self.decompilers[p1.name].setdefault('available', []).append(i)
@@ -496,8 +506,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             decompiler_count = 2
             self.decompilers.setdefault(p1.name, {}).setdefault(0, DecompInterface())
             self.decompilers.setdefault(p2.name, {}).setdefault(0, DecompInterface())
-            self.decompilers[p1.name][0].setOptions(decomp_options)
-            self.decompilers[p2.name][0].setOptions(decomp_options)
+            # self.decompilers[p1.name][0].setOptions(decomp_options)
+            # self.decompilers[p2.name][0].setOptions(decomp_options)
             self.decompilers[p1.name][0].openProgram(p1)
             self.decompilers[p2.name][0].openProgram(p2)
             self.decompilers[p1.name].setdefault('available', []).append(0)
@@ -550,12 +560,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         results: 'ghidra.app.decompiler.DecompileResults' = self.decompilers[prog.name][decomp_id].decompileFunction(
             func, timeout, monitor)
 
-        if hasattr(results, 'errorMessage'):
-            error = results.errorMessage
-            if not error:
-                code = results.decompiledFunction.getC()
+        error = results.getErrorMessage()
+        if error == '':
+            code = results.getDecompiledFunction().getC()
         else:
-            error = 'Error: Decompile results missing errorMessage'
+            error = f'Error: Decompile error: {error}'
 
         # set decomp as available
         self.decompilers[prog.name]['available'].append(decomp_id)
@@ -975,7 +984,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         """
         Normalize some of the dynamic labels to simplify the diff
         ie. Translate LAB_0003234 to LAB_0,LAB_1, etc.
-        Renames based on first appearance in decompilation        
+        Renames based on first appearance in decompilation
 
         """
 
@@ -1121,6 +1130,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             esym_lookups.extend(added_strings)
             esym_lookups.extend(unmatched)
 
+            # TODO consider removing this complexity
+            funcs_need_decomp.extend(unmatched)
+
             for sym, sym2, match_types in matched:
 
                 if not self.syms_need_diff(sym, sym2, match_types, skip_types):
@@ -1133,21 +1145,24 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             use_calling_counts = len(funcs_need_decomp) < self.calling_count_funcs_limit
 
+            # TODO add code to symbols!
+
             # there can be duplicate multiple function matches, just do this once
-            esym_lookups = list(set(esym_lookups))
+            # esym_lookups = list(set(esym_lookups))
 
             self.logger.info(f'Starting esym lookups for {len(esym_lookups)} symbols using {self.max_workers} threads')
 
             completed = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                # futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
                 futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
                            for thread_id, sym in enumerate(esym_lookups))
 
                 for future in concurrent.futures.as_completed(futures):
                     result = future.result()
                     completed += 1
-                    if (completed % 100) == 0:
-                        self.logger.info(f'Completed {completed} and {int(completed/len(esym_lookups)*100)}%')
+                    if (completed % int((len(esym_lookups) * .05) + 1) == 0):
+                        self.logger.info(f'Completed {completed} at {int(completed/len(esym_lookups)*100)}%')
 
         for sym in deleted_symbols:
             symbols['deleted'].append(sym.name)
@@ -1212,10 +1227,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             self.normalize_ghidra_decomp(old_code)
             self.normalize_ghidra_decomp(new_code)
 
+            from_file_name = ematch_1['fullname']
+            to_file_name = ematch_2['fullname']
+
             diff = ''.join(list(difflib.unified_diff(old_code, new_code, lineterm='\n',
-                                                     fromfile=sym.getProgram().getName(), tofile=sym2.getProgram().getName(), n=100)))
-            only_code_diff = ''.join(list(difflib.unified_diff(old_code_no_sig, new_code_no_sig, lineterm='\n', fromfile=sym.getProgram(
-            ).getName(), tofile=sym2.getProgram().getName())))  # ignores name changes
+                           fromfile=from_file_name, tofile=to_file_name, n=1000)))
+            only_code_diff = ''.join(list(difflib.unified_diff(old_code_no_sig, new_code_no_sig, lineterm='\n',
+                                     fromfile=from_file_name, tofile=to_file_name)))  # ignores name changes
 
             if len(only_code_diff) > 0 and (mnemonics_ratio < 1.0 or blocks_ratio < 1.0):
 
@@ -1410,22 +1428,27 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         Simply override this method. It will be called in `dump_pdiff_to_dir`
         """
 
+        # reduce size of esym with hashes
         for func_type in ['added', 'deleted', 'modified']:
 
             for func in pdiff['functions'][func_type]:
 
-                # reduce size of esym with hash
                 for field in ['instructions', 'mnemonics', 'blocks']:
 
-                    if func.get(field) is None:
-                        continue
-
                     if func_type == 'modified':
-                        if isinstance(func[field], list):
-                            func['old'][field] = hash(tuple(func['old'][field]))
-                            func['new'][field] = hash(tuple(func['new'][field]))
+
+                        for func_mod_type in ['old', 'new']:
+
+                            if not func[func_mod_type].get(field) is None:
+                                if isinstance(func[func_mod_type][field], list) and len(func[func_mod_type][field]) > 0:
+                                    func[func_mod_type][field] = hash(tuple(func[func_mod_type][field]))
+
                     else:
-                        if isinstance(func[field], list):
+
+                        if func.get(field) is None:
+                            continue
+
+                        if isinstance(func[field], list) and len(func[field]) > 0:
                             func[field] = hash(tuple(func[field]))
 
         return pdiff
@@ -1492,6 +1515,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 # give line ending md despite html so it will render in gists and vscode
                 sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, func_name, 'md']))
                 sxs_diff_path.write_text(sxs_diff_html)
+
+            combined_sxs_diff_html = GhidriffMarkdown.gen_combined_sxs_html_from_pdiff(pdiff)
+            combined_sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, 'combined', 'html']))
+            combined_sxs_diff_path.write_text(combined_sxs_diff_html)
 
         if write_diff:
             self.logger.info(f'Wrote {md_path}')
