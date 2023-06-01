@@ -38,7 +38,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         # Correlators
         from ghidra.app.plugin.match import ExactMnemonicsFunctionHasher, ExactBytesFunctionHasher, ExactInstructionsFunctionHasher
-        from .correlators import StructuralGraphExactHasher, StructuralGraphHasher, BulkInstructionsHasher, BulkMnemonicHasher, BulkBasicBlockMnemonicHasher, NamespaceNameParamHasher, NameParamHasher, NameParamRefHasher, SigCallingCalledHasher
+        from .correlators import StructuralGraphExactHasher, StructuralGraphHasher, BulkInstructionsHasher, BulkMnemonicHasher, BulkBasicBlockMnemonicHasher, NamespaceNameParamHasher, NameParamHasher, NameParamRefHasher, SigCallingCalledHasher, StringsRefsHasher, SwitchSigHasher, StrUniqueFuncRefsHasher
 
         monitor = ConsoleTaskMonitor()
 
@@ -64,11 +64,19 @@ class VersionTrackingDiff(GhidraDiffEngine):
             (StructuralGraphExactHasher.MATCH_TYPE, StructuralGraphExactHasher(), True, False),
             ('ExactMnemonicsFunctionHasher', ExactMnemonicsFunctionHasher.INSTANCE, True, False),
             (BulkInstructionsHasher.MATCH_TYPE, BulkInstructionsHasher(), True, False),
+            (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False),
+            (StringsRefsHasher.MATCH_TYPE, StringsRefsHasher(), True, False),
+            (StrUniqueFuncRefsHasher.MATCH_TYPE, StrUniqueFuncRefsHasher(), True, False),
+            (SwitchSigHasher.MATCH_TYPE, SwitchSigHasher(), True, False),
             # WARN: one_to_many=True flag allows for false negatives is structal graph matching. Mitgated by added references, func name in hash
             (StructuralGraphHasher.MATCH_TYPE, StructuralGraphHasher(), True, True),
             # WARN: one_to_many=True flag allows for false negatives
             (BulkBasicBlockMnemonicHasher.MATCH_TYPE, BulkBasicBlockMnemonicHasher(), True, True),
-            (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False)
+
+            (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False),
+            (StringsRefsHasher.MATCH_TYPE, StringsRefsHasher(), True, False),
+            (StrUniqueFuncRefsHasher.MATCH_TYPE, StrUniqueFuncRefsHasher(), True, False),
+            (SwitchSigHasher.MATCH_TYPE, SwitchSigHasher(), True, False),
         ]
 
         unmatched = []
@@ -133,7 +141,12 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
             self.logger.info(f'{name} Exec time: {end-start:.4f} secs')
             self.logger.info(f'Match count: {func_matches.size()}')
-            self.logger.info(Counter([tuple(x) for x in matches.values()]))
+
+            # kill noisy monitor after first run
+            monitor = ConsoleTaskMonitor().DUMMY_MONITOR
+
+        # Log current counts
+        self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
         # Find unmatched functions
 
@@ -152,6 +165,29 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         unmatched.extend([func.getSymbol() for func in p1_missing])
         unmatched.extend([func.getSymbol() for func in p2_missing])
+
+        # for sym in sorted(unmatched, key=lambda x: x.getProgram().getFunctionManager().getFunctionAt(x.address).body.numAddresses, reverse=True):
+        #     func = sym.getProgram().getFunctionManager().getFunctionAt(sym.address)
+        #     self.logger.debug(f'\n\n{func.getProgram()}')
+        #     self.logger.debug(func)
+
+        #     for cor in func_correlators:
+
+        #         name, hasher, one_to_one, one_to_many = cor
+
+        #         self.logger.debug(f'Debug umatched correlator: {name}')
+
+        #         if hasattr(hasher, 'DEBUG'):
+        #             hasher.DEBUG = True
+
+        #         dummy = ConsoleTaskMonitor().DUMMY_MONITOR
+        #         dummy.cancel()
+        #         self.logger.debug(hasher.hash(func, dummy))
+
+        # self.logger.debug(self.enhance_sym(sym, get_decomp_info=False))
+
+        # Find Implied Matches
+        # TODO
 
         # Find external function unmatched and matched
 

@@ -1,4 +1,7 @@
+from functools import lru_cache
+import uuid
 from typing import List, Tuple, TYPE_CHECKING
+
 from jpype import JImplements, JOverride
 from ghidra.app.plugin.match import FunctionHasher
 
@@ -50,8 +53,7 @@ class StructuralGraphHasher:
 
             code_units = func.getProgram().getListing().getCodeUnits(block, True)
             for code in code_units:
-                # TODO verify BL instruction for ARM https://developer.arm.com/documentation/den0013/d/Application-Binary-Interfaces/Procedure-Call-Standard?lang=en
-                if code.mnemonicString == 'CALL' or code.mnemonicString == 'BL':
+                if code.mnemonicString == 'CALL' or code.mnemonicString == 'bl':
                     num_call_subfunctions += 1
 
         return hash((fname, num_basic_blocks, num_edges_of_blocks, num_call_subfunctions, func.body.numAddresses, func.parameterCount, sym.referenceCount))
@@ -92,7 +94,7 @@ class StructuralGraphExactHasher:
             code_units = func.getProgram().getListing().getCodeUnits(block, True)
             for code in code_units:
                 # TODO verify BL instruction for ARM https://developer.arm.com/documentation/den0013/d/Application-Binary-Interfaces/Procedure-Call-Standard?lang=en
-                if code.mnemonicString == 'CALL' or code.mnemonicString == 'BL':
+                if code.mnemonicString == 'CALL' or code.mnemonicString == 'bl':
                     num_call_subfunctions += 1
 
         return hash((num_basic_blocks, num_call_subfunctions, num_edges_of_blocks))
@@ -230,7 +232,7 @@ class NameParamHasher:
 
         return hash((func.getName(), func.parameterCount))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
 
@@ -252,7 +254,7 @@ class NameParamRefHasher:
 
         return hash((func.getName(True), func.parameterCount, func.symbol.referenceCount))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
 
@@ -261,6 +263,7 @@ class NameParamRefHasher:
 class SigCallingCalledHasher:
     """
     Hash based on signature, called, and calling functions ignoring FUN_*
+    Not very reliable for programs lacking symbols
 
     DO NOT RUN THIS with one_to_many = TRUE
     This should be run very late in the game
@@ -269,6 +272,7 @@ class SigCallingCalledHasher:
     MIN_FUNC_LEN = 10
     MATCH_TYPE = 'SigCallingCalledHasher'
     FIRST_RUN = True
+    DEBUG = False
 
     @JOverride
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
@@ -279,7 +283,228 @@ class SigCallingCalledHasher:
 
         sig = func.getSignature().toString().replace(func.name, '')
 
+        if self.DEBUG:
+            print(func.name)
+            print((tuple(sorted(called)), tuple(sorted(calling)), sig))
+
         return hash((tuple(sorted(called)), tuple(sorted(calling)), sig))
+
+    @JOverride
+    def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
+        raise NotImplementedError
+
+
+def getStringAtAddr(addr):
+    """Get string at an address, if present"""
+    from ghidra.program.model.data import StringDataType
+    data = getDataAt(addr)
+    if data is not None:
+        dt = data.getDataType()
+        if isinstance(dt, StringDataType):
+            return str(data)
+    return None
+
+
+@lru_cache(None)
+def get_defined_data(program: "ghidra.program.model.listing.Program"):
+
+    from ghidra.program.model.symbol import SymbolUtilities
+    from ghidra.program.model.symbol import SourceType
+    from ghidra.program.model.symbol import SymbolType
+    from ghidra.program.model.listing import Function
+
+    def _is_sym_string(sym: 'ghidra.program.model.symbol.Symbol') -> bool:
+        is_string = False
+        sym_addr = sym.getAddress()
+        if sym_addr is not None:
+            data = sym.getProgram().getListing().getDataAt(sym_addr)
+            if data is not None and data.hasStringValue():
+                is_string = True
+        return is_string
+
+    strings_in_func = []
+    func_str_map = {}
+
+    # from java.util import CollectionUtils
+    from ghidra.program.model.data import StringDataInstance
+    from ghidra.program.util import DefinedDataIterator
+
+    for data in DefinedDataIterator.definedStrings(program):
+        sdi_str = StringDataInstance.getStringDataInstance(data)
+        s = sdi_str.getStringValue()
+        if s != None:
+            strings_in_func.append(str(s))
+
+    for sym in program.getSymbolTable().getAllSymbols(True):
+        if not sym.referenceCount == 0:
+            # skip functions
+            if not sym.symbolType == SymbolType.FUNCTION:  # and _is_sym_string(sym):
+                # don't include DEFAULT (FUN_ LAB_) but do include strings s_something
+                # if sym.getSource() != SourceType.DEFAULT:
+                sym_addr = sym.getAddress()
+                if sym_addr is not None:
+                    data = sym.getProgram().getListing().getDataAt(sym_addr)
+                    if data is not None and data.hasStringValue():
+                        # its a string, find which functions use it
+                        for ref in sym.references:
+                            # print(ref.referenceType.toString())
+                            f = program.getFunctionManager().getFunctionContaining(ref.fromAddress)
+                            if f is not None:
+                                func_str_map.setdefault(f.entryPoint, []).append(str(data))
+
+    return func_str_map
+
+
+@JImplements(FunctionHasher, deferred=True)
+class StringsRefsHasher:
+    """
+    Hash based on signature, called, and calling functions ignoring FUN_*
+
+    DO NOT RUN THIS with one_to_many = TRUE
+    This should be run very late in the game
+    """
+
+    MIN_FUNC_LEN = 10
+    MIN_STRING_LEN = 5
+    MATCH_TYPE = 'StringsRefsHasher'
+    ONE_TO_MANY = True  # supports one to many
+    DEBUG = False
+
+    @JOverride
+    def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
+
+        func_str_map = get_defined_data(func.getProgram())
+
+        # print(get_defined_data.cache_info())
+
+        strings = func_str_map.get(func.entryPoint)
+
+        if strings is not None:
+            strings = sorted(strings)
+        else:
+            # assign unique value for functions without strings. This allows
+            strings = [uuid.uuid4()]
+
+        if self.DEBUG:
+            print(strings)
+            print(len(strings))
+
+        return hash((tuple(strings)))
+
+    @JOverride
+    def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
+        raise NotImplementedError
+
+
+@JImplements(FunctionHasher, deferred=True)
+class StrUniqueFuncRefsHasher:
+    """
+    Hash based on signature, called, and calling functions ignoring FUN_*
+
+    DO NOT RUN THIS with one_to_many = TRUE
+    This should be run very late in the game
+    """
+
+    MIN_FUNC_LEN = 10
+    MIN_STRING_LEN = 5
+    MATCH_TYPE = 'StrUniqueFuncRefsHasher'
+    ONE_TO_MANY = False  # supports one to many
+    DEBUG = False
+
+    @JOverride
+    def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
+
+        func_str_map = get_defined_data(func.getProgram())
+
+        # print(get_defined_data.cache_info())
+
+        strings = func_str_map.get(func.entryPoint)
+        ref_count = func.getSymbol().getReferenceCount()
+
+        if strings is not None:
+            strings = sorted(list(set(strings)))
+
+        else:
+            # assign unique value for functions without strings. This allows
+            strings = [uuid.uuid4()]
+
+        if self.DEBUG:
+            print(strings)
+            print(len(strings))
+            print(ref_count)
+
+        return hash((tuple(strings), ref_count))
+
+    @JOverride
+    def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
+        raise NotImplementedError
+
+
+@lru_cache(None)
+def get_func_to_switch(program: "ghidra.program.model.listing.Program"):
+
+    func_switch_map = {}
+
+    for sym in program.getSymbolTable().getAllSymbols(True):
+        sym: 'ghidra.program.model.symbol.Symbol' = sym
+
+        if sym.getName().startswith('switchD') or sym.getName().startswith('caseD') or "switchD" in sym.getName():
+            f = program.getFunctionManager().getFunctionContaining(sym.address)
+            # if f is None:
+            #     for ref in sym.references:
+            #         # print(ref.referenceType.toString())
+            #         f = program.getFunctionManager().getFunctionContaining(ref.fromAddress)
+            #         if f is not None:
+            #             func_switch_map.setdefault(f.entryPoint, []).append(str(sym))
+            # else:
+            #     func_switch_map.setdefault(f.entryPoint, []).append(str(sym))
+            if f is not None:
+                func_switch_map.setdefault(f.entryPoint, []).append(str(sym))
+            for ref in sym.references:
+                # print(ref.referenceType.toString())
+                f = program.getFunctionManager().getFunctionContaining(ref.fromAddress)
+                if f is not None:
+                    func_switch_map.setdefault(f.entryPoint, []).append(str(sym))
+
+    return func_switch_map
+
+
+@JImplements(FunctionHasher, deferred=True)
+class SwitchSigHasher:
+    """
+    Simply return Name and Param Hash matches
+    No namespace included
+    DO NOT RUN THIS with one_to_many = TRUE
+    """
+
+    MIN_FUNC_LEN = 10
+    MATCH_TYPE = 'SwitchSigHasher'
+    ONE_TO_MANY = False
+    DEBUG = False
+
+    @JOverride
+    def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
+
+        if "00680f84" in func.name:
+            print(func)
+
+        sig = func.getSignature().toString().replace(func.name, '')
+
+        func_switch_map = get_func_to_switch(func.getProgram())
+
+        switch_syms = func_switch_map.get(func.entryPoint)
+
+        if switch_syms is not None:
+            switch_syms = sorted(switch_syms)
+        else:
+            # assign unique value for functions without strings.
+            switch_syms = [uuid.uuid4()]
+
+        if self.DEBUG:
+            print(func.name)
+            print(switch_syms)
+
+        return hash(tuple([sig, tuple(switch_syms)]))
 
     @ JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
