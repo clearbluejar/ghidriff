@@ -705,8 +705,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 flat_api = FlatProgramAPI(program)
 
             pdb_attr = PdbProgramAttributes(program)
-            force_reload_for_symbols = not pdb_attr.isPdbLoaded(
-            ) and not self.no_symbols and pdb_attr.isProgramAnalyzed()
+            # force_reload_for_symbols = not pdb_attr.isPdbLoaded(
+            # ) and not self.no_symbols and pdb_attr.isProgramAnalyzed()
+            force_reload_for_symbols = False
 
             if force_reload_for_symbols:
                 self.set_analysis_option_bool(program, 'PDB Universal', True)
@@ -752,7 +753,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         if self.threaded:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = (executor.submit(self.analyze_program, *[domainFile, require_symbols, force_analysis, verbose_analysis])
-                           for domainFile in self.project.getRootFolder().getFiles())
+                           for domainFile in self.project.getRootFolder().getFiles() if domainFile.getContentType() == 'Program')
                 for future in concurrent.futures.as_completed(futures):
                     prog = future.result()
         else:
@@ -1001,6 +1002,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                         prefix = match.group(0).split('_')[0]
                         matches[match.group(0)] = f'{prefix}_{len(matches)}'
                     code[i] = line.replace(match.group(0), matches[match.group(0)])
+                    # TODO fix this line to work when a line has multiple default label
 
     def diff_bins(
             self,
@@ -1155,7 +1157,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             completed = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 # futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
-                futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
+                futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 60, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
                            for thread_id, sym in enumerate(esym_lookups))
 
                 for future in concurrent.futures.as_completed(futures):
@@ -1203,8 +1205,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             old_code = ematch_1['code'].splitlines(True)
             new_code = ematch_2['code'].splitlines(True)
 
-            old_code_no_sig = ematch_1['code'].split('{', 1)[1].splitlines(True) if ematch_1['code'] else ''
-            new_code_no_sig = ematch_2['code'].split('{', 1)[1].splitlines(True) if ematch_2['code'] else ''
+            old_code_no_sig = ematch_1['code'].split('{', 1)[1].splitlines(
+                True) if ematch_1['code'] and "Failed to decompile" not in ematch_1['code'] else ematch_1['code']
+            new_code_no_sig = ematch_2['code'].split('{', 1)[1].splitlines(
+                True) if ematch_2['code'] and "Failed to decompile" not in ematch_1['code'] else ematch_1['code']
 
             old_instructions = ematch_1['instructions']
             new_instructions = ematch_2['instructions']
@@ -1469,6 +1473,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         Dump pdiff result to directory
         """
 
+        def _clean_func(func, max=30) -> str:
+            func = re.sub('`', '', func)
+            func = func.replace('`', '')
+            if len(func) > max:
+                func = func[:max] + '...'
+            return func.strip()
+
         if not write_diff and not write_json and not side_by_side:
             self.logger.warn('Not writing json or diff.md.')
             return
@@ -1513,7 +1524,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             for func_name, sxs_diff_html in sxs_diff_htmls:
 
                 # give line ending md despite html so it will render in gists and vscode
-                sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, func_name, 'md']))
+                sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, _clean_func(func_name), 'md']))
                 sxs_diff_path.write_text(sxs_diff_html)
 
             combined_sxs_diff_html = GhidriffMarkdown.gen_combined_sxs_html_from_pdiff(pdiff)
