@@ -731,7 +731,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 self.logger.info(f'Starting Ghidra analysis of {program}...')
                 try:
                     flat_api.analyzeAll(program)
-                    GhidraProgramUtilities.setAnalyzedFlag(program, True)
+                    if hasattr(GhidraProgramUtilities, 'setAnalyzedFlag'):
+                        GhidraProgramUtilities.setAnalyzedFlag(program, True)
+                    elif hasattr(GhidraProgramUtilities, 'markProgramAnalyzed'):
+                        GhidraProgramUtilities.markProgramAnalyzed(program)
+                    else:
+                        raise Exception('Missing set analyzed flag method!')
                 finally:
                     GhidraScriptUtil.releaseBundleHostReference()
                     self.project.save(program)
