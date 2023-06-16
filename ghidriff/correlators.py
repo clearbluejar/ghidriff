@@ -10,6 +10,95 @@ if TYPE_CHECKING:
     import ghidra
     from ghidra_builtins import *
 
+from ghidra.feature.vt.api.util import VTAbstractProgramCorrelator
+from ghidra.feature.vt.api.main import VTProgramCorrelator
+from ghidra.feature.vt.api.main import VTScore
+from ghidra.framework.options import ToolOptions
+
+
+@JImplements(VTProgramCorrelator, deferred=True)
+class MyManualMatchProgramCorrelator:
+
+    MANUAL_SCORE = VTScore(1.0)
+    NAME = "TEST GUY"
+
+    def __init__(self, src_prog, dst_prog) -> None:
+
+        self.src_prog = src_prog
+        self.src_addrs = src_prog.getMemory()
+        self.dst_prog = dst_prog
+        self.dst_addrs = dst_prog.getMemory()
+        self.options = ToolOptions(self.NAME)
+
+    # /**
+    #  * Performs the correlation between two programs looking for how well functions in one program
+    #  * correlate to functions in another program.
+    #  * @param session An existing manager that may contain previous results that may
+    #  *        influence this correlation.
+    #  * @param monitor a task monitor for reporting progress during the correlation.
+    #  * @return the match set created by this correlator used to store results.
+    #  *
+    #  * @throws CancelledException if the user cancels the correlation via the task monitor.
+    #  */
+    # public VTMatchSet correlate(VTSession session, TaskMonitor monitor) throws CancelledException;
+
+    @JOverride
+    def correlate(self, matchSet, monitor):
+        print('do_correlate')
+
+    # /**
+    #  * Return the name of the correlator.
+    #  * @return the name of the correlator
+    #  */
+    # public String getName();
+    @JOverride
+    def getName(self):
+        return self.NAME
+
+    # /**
+    #  * Returns a options object populated with the options for this correlator instance.
+    #  */
+    # public ToolOptions getOptions();
+    @JOverride
+    def getOptions(self):
+        return self.options
+
+    # /**
+    #  * Returns the address set associated with this correlator instance.
+    #  * @return  the address set associated with this correlator instance.
+    #  */
+    # public AddressSetView getSourceAddressSet();
+    @JOverride
+    def getSourceAddressSet(self):
+        return self.src_addrs
+
+    # /**
+    #  * Returns the source program for this correlator instance.
+    #  * @return  the source program for this correlator instance.
+    #  */
+    # public Program getSourceProgram();
+    @JOverride
+    def getSourceProgram(self):
+        return self.src_prog
+
+    # /**
+    #  * Returns the destination program for this correlator instance.
+    #  * @return  the destination program for this correlator instance.
+    #  */
+    # public Program getDestinationProgram();
+    @JOverride
+    def getDestinationProgram(self):
+        return self.dst_prog
+
+    # /**
+    #  * Returns the address set associated with this correlator instance.
+    #  * @return  the address set associated with this correlator instance.
+    #  */
+    # public AddressSetView getDestinationAddressSet();
+    @JOverride
+    def getDestinationAddressSet(self):
+        return self.dst_addrs
+
 
 @JImplements(FunctionHasher, deferred=True)
 class StructuralGraphHasher:
