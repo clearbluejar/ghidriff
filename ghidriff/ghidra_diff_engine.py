@@ -892,7 +892,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return False
 
-    def diff_symbols(
+    def diff_nf_symbols(
         self,
         p1: "ghidra.program.model.listing.Program",
         p2: "ghidra.program.model.listing.Program"
@@ -1063,7 +1063,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'
 
         # Find (non function) symbols
-        unmatched_syms, _ = self.diff_symbols(p1, p2)
+        unmatched_nf_syms, _ = self.diff_nf_symbols(p1, p2)
 
         # Find functions matches
         unmatched, matched, skip_types = self.find_matches(p1, p2)
@@ -1073,11 +1073,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         dupes = []
         for func in unmatched:
-            for sym in unmatched_syms:
-                if func.getName(True) == sym.getName(True):
-                    # ensure they are from different progs
-                    assert func.program != sym.program
-                    assert func.source == sym.source
+            for sym in unmatched_nf_syms:
+                # ensure they are from different progs
+                if func.getName(True) == sym.getName(True) and func.getProgram() != sym.getProgram():
                     dupes.append(func)
                     dupes.append(sym)
 
@@ -1211,9 +1209,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             new_code = ematch_2['code'].splitlines(True)
 
             old_code_no_sig = ematch_1['code'].split('{', 1)[1].splitlines(
-                True) if ematch_1['code'] and "Failed to decompile" not in ematch_1['code'] else ematch_1['code']
+                True) if ematch_1['code'] is not None and "Failed to decompile" not in ematch_1['code'] and '{' in ematch_1['code'] else ematch_1['code']
+
             new_code_no_sig = ematch_2['code'].split('{', 1)[1].splitlines(
-                True) if ematch_2['code'] and "Failed to decompile" not in ematch_1['code'] else ematch_1['code']
+                True) if ematch_2['code'] is not None and "Failed to decompile" not in ematch_2['code'] and '{' in ematch_2['code'] else ematch_2['code']
 
             old_instructions = ematch_1['instructions']
             new_instructions = ematch_2['instructions']

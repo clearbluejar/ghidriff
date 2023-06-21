@@ -132,4 +132,4 @@ dmypy.json
 .ghidra_projects*/
 .ghidra_bridge*/
 .symbols*/
-.diff*/
+.ghidriffs/
