@@ -1,10 +1,12 @@
 from collections import Counter
 from time import time
+import concurrent.futures
 
 
 from typing import List, Tuple, TYPE_CHECKING
 
 from .ghidra_diff_engine import GhidraDiffEngine
+from .implied_matches import get_actual_reference, find_implied_match, find_implied_matches, find_matching_ref
 
 if TYPE_CHECKING:
     import ghidra
@@ -57,7 +59,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         # tuples of correlators instances
         # ( name, hasher, one_to_one, one_to_many)
-        # DO NOT CHANGE ORDER UNLESS INTENDED, ORDER HAS MAJOR IMPACT ON EFFICIENCY
+        # DO NOT CHANGE ORDER UNLESS INTENDED, ORDER HAS MAJOR IMPACT ON ACCURACY AND EFFICIENCY
         func_correlators = [
             ('ExactBytesFunctionHasher', ExactBytesFunctionHasher.INSTANCE, True, False),
             ('ExactInstructionsFunctionHasher', ExactInstructionsFunctionHasher.INSTANCE, True, False),
@@ -82,7 +84,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         unmatched = []
         matches = {}
 
-        # Run Symbol Correlator
+        # Run Symbol Hash Correlator
 
         one_to_one = True
         include_externals = True
@@ -114,7 +116,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         self.logger.info(f'Match count {matchedSymbols.size() - skipped}')
         self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
-        # Run Function Correlators
+        # Run Function Hash Correlators
 
         for cor in func_correlators:
 
@@ -123,7 +125,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
             name, hasher, one_to_one, one_to_many = cor
 
             self.logger.info(f'Running correlator: {name}')
-            self.logger.info(f'name: {name} hasher: {hasher} one_to_one: {one_to_one} one_to_many: {one_to_many}')
+            self.logger.debug(f'hasher: {hasher}')
+            self.logger.info(f'name: {name} one_to_one: {one_to_one} one_to_many: {one_to_many}')
 
             func_matches = MatchFunctions.matchFunctions(
                 p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
@@ -148,171 +151,96 @@ class VersionTrackingDiff(GhidraDiffEngine):
         # Log current counts
         self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
-        # Create Implied Matches
-        from ghidra.feature.vt.api.db import VTSessionDB
-        from ghidra.feature.vt.api.main import VTSession
-        from ghidra.feature.vt.api.main import VTMatchInfo, VTAssociationType
-        from java.lang import Object
-
-        def _create_match_info(src_addr, dst_addr, src_len, dst_len, vt_score) -> VTMatchInfo:
-            info: VTMatchInfo = VTMatchInfo(None)
-            info.setSourceAddress(src_addr)
-            info.setDestinationAddress(dst_addr)
-            info.setDestinationLength(dst_len)
-            info.setSourceLength(src_len)
-            info.setSimilarityScore(vt_score)
-            info.setConfidenceScore(vt_score)
-            info.setAssociationType(VTAssociationType.FUNCTION)
-
-            return info
-
-        session: VTSession = VTSessionDB.createVTSession(name, p1, p2, Object())
-        my_cor = MyManualMatchProgramCorrelator(p1, p2)
-        transact = session.startTransaction('test')
-        match_set = session.createMatchSet(my_cor)
-        for match, m_types in matches.items():
-            if "SymbolsHash" in m_types:
-                vt_match = _create_match_info(match[0], match[1], 10, 23, MyManualMatchProgramCorrelator.MANUAL_SCORE)
-                match_set.addMatch(vt_match)
-        for match in match_set.getMatches():
-            print(match)
-            match.association.setAccepted()
-        session.endTransaction(int(transact), True)
-
-        from ghidra.feature.vt.api.correlator.program import ImpliedMatchProgramCorrelator
-
-        transact = session.startTransaction('implied')
-        implied_match_set = session.createMatchSet(ImpliedMatchProgramCorrelator(p1, p2))
-
-        for match in implied_match_set.getMatches():
-            print(match)
-            match.association.setAccepted()
-        session.endTransaction(int(transact), True)
-
-        # Print all match sets from session
-        match_sets = session.getMatchSets()
-        for match_set in match_sets:
-            print(match_set)
-
-        def get_actual_reference(program:  "ghidra.program.model.listing.Program", ref_to_addr):
-
-            ref_func = program.getFunctionManager().getFunctionAt(ref_to_addr)
-            if ref_func is not None and ref_func.isThunk():
-                print('Resolving thunked func addr')
-                ref_to_addr = ref_func.getThunkedFunction(True).getEntryPoint()
-
-            return ref_to_addr
-
-        def find_matching_ref(ref_type, refs_from):
-
-            if refs_from is None:
-                return None
-
-            for ref in refs_from:
-                if ref.getReferenceType() == ref_type:
-                    return ref
-
-            return None
-
-        def find_implied_match(src_func: "ghidra.program.model.listing.Function", dst_func: "ghidra.program.model.listing.Function", ref: "ghidra.program.model.symbol.Reference"):
-
-            # // Get the reference type of the passed in reference and make sure it is either a call or
-            # // data reference
-            ref_type = ref.getReferenceType()
-            if not (ref_type.isCall() or ref_type.isData()):
-                print(f'skipped: reftype is {ref_type}')
-                return None
-
-            # // Get the source reference's "to" address (the address the reference is pointing to)
-            # // and make sure it is in the current program memory space
-
-            src_ref_to_addr = ref.getToAddress()
-            if not src_ref_to_addr.isMemoryAddress():
-                print(f'skipped: src_ref_to_addr {src_ref_to_addr} is not Memory address!')
-                return None
-
-            src_ref_to_addr = get_actual_reference(src_func.getProgram(), src_ref_to_addr)
-
-            src_ref_from_addr = ref.getFromAddress()
-
-            from ghidra.feature.vt.api.correlator.address import VTHashedFunctionAddressCorrelation
-            from ghidra.util.task import ConsoleTaskMonitor
-            from ghidra.program.model.symbol import RefType
-
-            monitor = ConsoleTaskMonitor()
-
-            cor = VTHashedFunctionAddressCorrelation(src_func, dst_func)
-
-            addr_range = cor.getCorrelatedDestinationRange(src_ref_from_addr, monitor)
-            if addr_range is None:
-                return None
-
-            dest_addr = addr_range.getMinAddress()
-            dest_ref_man = dst_func.getProgram().getReferenceManager()
-            refs_from = dest_ref_man.getReferencesFrom(dest_addr)
-            dest_ref = find_matching_ref(ref_type, refs_from)
-
-            if dest_ref is None:
-                return None
-
-            dest_ref_to_addr = dest_ref.getToAddress()
-            dest_ref_to_addr = get_actual_reference(dst_func.getProgram(), dest_ref_to_addr)
-
-            actual_type = None
-            if ref_type.isData():
-                actual_type = 'DATA'
-                if src_func.getProgram().getListing().getInstructionAt(src_ref_to_addr) is not None:
-                    if ref_type != RefType.DATA:
-                        return None
-                    actual_type = 'FUNCTION'
-            else:
-                actual_type = 'FUNCTION'
-
-            if actual_type == 'FUNCTION':
-                if src_func.getProgram().getFunctionManager().getFunctionAt(src_ref_to_addr) is None:
-                    return None
-
-            return (src_ref_to_addr, dest_ref_to_addr, actual_type)
-
-        def find_implied_matches(src_func: "ghidra.program.model.listing.Function", dst_func: "ghidra.program.model.listing.Function"):
-            """
-            Find implied matches for already accepted functions
-            # Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/gui/util/ImpliedMatchUtils.java
-            """
-            implied_matches = {}
-            ref_man = src_func.getProgram().getReferenceManager()
-            body = src_func.getBody()
-            for addr in ref_man.getReferenceSourceIterator(body, True):
-                refs_from = ref_man.getReferencesFrom(addr)
-                for ref in refs_from:
-                    implied_match = find_implied_match(src_func, dst_func, ref)
-                    if implied_match is not None:
-                        print(implied_match)
-
-        # find implied matches
-        implied_matches = {}
-        for match, m_types in matches.items():
-            if "SymbolsHash" in m_types:
-                func = p1.functionManager.getFunctionAt(match[0])
-                func2 = p2.functionManager.getFunctionAt(match[1])
-                implied_match = find_implied_matches(func, func2)
-                if implied_match is not None:
-                    print(implied_match)
-                # vt_match = _create_match_info(match[0], match[1], 10, 23, MyManualMatchProgramCorrelator.MANUAL_SCORE)
+        monitor = ConsoleTaskMonitor()
 
         # Find unmatched functions
 
-        # https://github.com/NationalSecurityAgency/ghidra/blob/2a97771c0fd2f0d41f836e4d1ce8092cec3c7b63/Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/gui/util/ImpliedMatchUtils.java#L39
+        p1_missing = self.get_funcs_from_addr_set(p1, p1_unmatched)
+        p2_missing = self.get_funcs_from_addr_set(p2, p2_unmatched)
 
-        p1_missing = []
-        p2_missing = []
-        for func in p1.functionManager.getFunctions(p1_unmatched, True):
-            if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
-                p1_missing.append(func)
+        # build list of function entry points that have already been matched
+        matched_src_addrs = {}
+        matched_dst_addrs = {}
+        for i, match in enumerate(matches):
+            matched_src_addrs[match[0]] = i
+            matched_dst_addrs[match[1]] = i
 
-        for func in p2.functionManager.getFunctions(p2_unmatched, True):
-            if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
-                p2_missing.append(func)
+        # from all of the unmatched functions, get every function that has already been acceped that calls an unmatched function
+        # if the calling function has been accepted, then accept the unmatched called function
+        potential_calling_funcs = []
+        src_missing_addrs = []
+        dst_missing_addrs = []
+
+        for src_func in p1_missing:
+            src_func: "ghidra.program.model.listing.Function" = src_func
+            src_missing_addrs.append(src_func.getEntryPoint())
+            potential_p1_calling_funcs = [func for func in list(src_func.getCallingFunctions(
+                monitor)) if func.getEntryPoint() in matched_src_addrs.keys()]
+            self.logger.debug(
+                f'Found {len(potential_p1_calling_funcs)} p1 calling functions for potential implied match for {src_func}')
+            potential_calling_funcs.extend(potential_p1_calling_funcs)
+
+        for dst_func in p2_missing:
+            dst_func: "ghidra.program.model.listing.Function" = dst_func
+            dst_missing_addrs.append(dst_func.getEntryPoint())
+            potential_p2_calling_funcs = [func for func in list(
+                dst_func.getCallingFunctions(monitor)) if func.getEntryPoint() in matched_dst_addrs.keys()]
+            self.logger.debug(
+                f'Found {len(potential_p2_calling_funcs)} p2 calling functions for potential implied match for {dst_func}')
+            potential_calling_funcs.extend(potential_p2_calling_funcs)
+
+        potential_calling_funcs = list(set(potential_calling_funcs))
+
+        # find all matches that might provide an implied match for unmatched functions
+        potential_accepted_matches = []
+        for func in potential_calling_funcs:
+            match_index = None
+            if matched_src_addrs.get(func.getEntryPoint()) is not None:
+                match_index = matched_src_addrs.get(func.getEntryPoint())
+            elif matched_dst_addrs.get(func.getEntryPoint()) is not None:
+                match_index = matched_dst_addrs.get(func.getEntryPoint())
+
+            if match_index is not None:
+                match = list(matches.keys())[match_index]
+                f1 = p1.functionManager.getFunctionAt(match[0])
+                f2 = p2.functionManager.getFunctionAt(match[1])
+                potential_accepted_matches.append((f1, f2))
+
+        recovered = 0
+        completed = 0
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = (executor.submit(find_implied_matches, f1, f2)
+                       for f1, f2 in potential_accepted_matches)
+
+            for future in concurrent.futures.as_completed(futures):
+                implied_matches = future.result()
+
+                completed += 1
+                if completed % 50 == 0:
+                    percent = int((float(completed)/len(potential_accepted_matches)) * 100)
+                    print(f'Completed {percent} %  recovered" {recovered}')
+
+                if implied_matches is not None:
+                    for implied_match in implied_matches:
+                        # only apply function matches
+                        if implied_match[2] == 'FUNCTION':
+                            if implied_match[0] in src_missing_addrs or implied_match[1] in dst_missing_addrs:
+                                if matches.get((implied_match[0], implied_match[1])) is None:
+                                    recovered += 1
+
+                                # Correlate function as Implied Match
+                                name = 'Implied Match'
+                                matches.setdefault((implied_match[0], implied_match[1]), {}).setdefault(name, 0)
+                                matches[(implied_match[0], implied_match[1])][name] += 1
+                                p1_matches.add(implied_match[0])
+                                p2_matches.add(implied_match[1])
+
+        p1_unmatched = p1_unmatched.subtract(p1_matches)
+        p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        p1_missing = self.get_funcs_from_addr_set(p1, p1_unmatched)
+        p2_missing = self.get_funcs_from_addr_set(p2, p2_unmatched)
 
         self.logger.info(f'p1 missing = {len(p1_missing)}')
         self.logger.info(f'p2 missing = {len(p2_missing)}')
@@ -339,9 +267,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
         #         self.logger.debug(hasher.hash(func, dummy))
 
         # self.logger.debug(self.enhance_sym(sym, get_decomp_info=False))
-
-        # Find Implied Matches
-        # TODO
 
         # Find external function unmatched and matched
 
