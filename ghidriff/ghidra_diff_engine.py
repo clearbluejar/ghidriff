@@ -13,7 +13,7 @@ from argparse import Namespace
 import logging
 
 from pyhidra.launcher import PyhidraLauncher, GHIDRA_INSTALL_DIR
-from .utils import sha1_file
+from .utils import sha1_file, get_microsoft_download_url, get_pe_extra_data
 from .markdown import GhidriffMarkdown
 
 import multiprocessing
@@ -797,6 +797,43 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return dict(meta)
 
+    def get_pe_download_url(
+        self,
+        path: Path,
+        filename: str
+    ) -> str:
+        """
+        Generate Microsoft PE download URL 
+        """
+
+        path = Path(path)
+        pe_info = get_pe_extra_data(path)
+        url = get_microsoft_download_url(filename, pe_info['timestamp'], pe_info['image_size'])
+
+        # from ghidra.app.util.bin.format.pe import PortableExecutable
+        # from ghidra.app.util.bin import FileByteProvider
+
+        # from java.nio.file import AccessMode
+        # from java.io import File
+
+        # file_path = File(path)
+
+        # bp = FileByteProvider(file_path, None, AccessMode.READ)
+
+        # pe = PortableExecutable(bp, PortableExecutable.SectionLayout.FILE)
+        # ntHeader = pe.getNTHeader()
+        # if ntHeader is not None and ntHeader.getOptionalHeader() is not None:
+        #     timestamp = abs(ntHeader.getFileHeader().getTimeDateStamp())
+        #     virtual_size = ntHeader.getOptionalHeader().getSizeOfImage()
+
+        # if timestamp is not None and virtual_size is not None and filename is not None:
+        #     timestamp = format(timestamp, '08X')
+        #     virtual_size = format(virtual_size, 'X')
+
+        #     url = f'https://msdl.microsoft.com/download/symbols/{filename}/{timestamp}{virtual_size}/{filename}'
+
+        return url
+
     def get_all_program_options(self,
                                 prog: "ghidra.program.model.listing.Program"
                                 ) -> dict:
@@ -1386,6 +1423,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         pdiff['old_meta'] = self.get_metadata(p1)
         pdiff['new_meta'] = self.get_metadata(p2)
+
+        # add pe url
+        if 'visualstudio' in p1.compiler:
+            pdiff['old_pe_url'] = self.get_pe_download_url(old, pdiff['old_meta']['PE Property[OriginalFilename]'])
+        if 'visualstudio' in p1.compiler:
+            pdiff['new_pe_url'] = self.get_pe_download_url(new, pdiff['new_meta']['PE Property[OriginalFilename]'])
 
         pdiff['md_credits'] = self.gen_credits()
         pdiff['html_credits'] = self.gen_credits(html=True)

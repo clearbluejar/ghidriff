@@ -491,6 +491,49 @@ pie showData
     def _clean_md_header(self, text):
         return re.sub('[^A-Za-z0-9_\-]', '', text.replace(' ', '-'))
 
+    def gen_pe_download_cmd(self, pdiff: dict) -> str:
+        """
+        Generates Windows PE file download command        
+        """
+
+        def _decode_arch(proc, addr_size):
+            arch = None
+            if proc == 'x86':
+                if addr_size == '64':
+                    arch = 'x64'
+                else:
+                    arch = proc
+            else:
+                if addr_size == '64':
+                    arch = 'arm64'
+                else:
+                    arch = 'arm'
+
+            return arch
+
+        old_url = pdiff['old_pe_url']
+        new_url = pdiff['new_pe_url']
+
+        # PE Property[OriginalFilename]: localspl.dll
+        old_filename = pdiff['old_meta']['PE Property[OriginalFilename]'].lower()
+        new_filename = pdiff['new_meta']['PE Property[OriginalFilename]'].lower()
+
+        # PE Property[ProductVersion]: 10.0.22000.795
+        old_ver = pdiff['old_meta']['PE Property[ProductVersion]']
+        new_ver = pdiff['new_meta']['PE Property[ProductVersion]']
+
+        # Processor: x86
+        # Address Size: 64
+        old_arch = _decode_arch(pdiff['old_meta']['Processor'], pdiff['old_meta']['Address Size'])
+        new_arch = _decode_arch(pdiff['new_meta']['Processor'], pdiff['new_meta']['Address Size'])
+
+        old_dl = f"wget {old_url} -O {old_filename}.{old_arch}.{old_ver}"
+        new_dl = f"wget {new_url} -O {new_filename}.{new_arch}.{new_ver}"
+
+        dl_cmd = "\n".join((old_dl, new_dl))
+
+        return dl_cmd
+
     def gen_diff_md(
         self,
         pdiff: Union[str, dict],
@@ -552,6 +595,10 @@ pie showData
         md.new_paragraph(self._wrap_with_code(extra_cmd))
         md.new_header(4, 'All Args', add_table_of_contents='n')
         md.new_paragraph(self._wrap_with_code(full_cmd))
+
+        if pdiff.get('old_pe_url') is not None and pdiff.get('new_pe_url') is not None:
+            md.new_header(4, 'Download Original PEs')
+            md.new_paragraph(self._wrap_with_code(self.gen_pe_download_cmd(pdiff)))
 
         md.new_header(2, 'Binary Metadata Diff')
         md.new_paragraph(self._wrap_with_diff(self.gen_metadata_diff(pdiff)))
