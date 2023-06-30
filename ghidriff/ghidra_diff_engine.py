@@ -68,7 +68,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             engine_log_path: pathlib.Path = None,
             engine_log_level: int = logging.INFO,
             engine_file_log_level: int = logging.INFO,
-            max_section_funcs: int = 200) -> None:
+            max_section_funcs: int = 200,
+            min_func_len: int = 10) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -125,6 +126,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.threaded = threaded
         self.max_workers = max_workers
         self.max_section_funcs = max_section_funcs
+        self.min_func_len = min_func_len
 
         # store args used from init
         self.args = args
@@ -486,18 +488,24 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from ghidra.app.decompiler import DecompInterface
         from ghidra.app.decompiler import DecompileOptions
 
-        # TODO decide on decompile options
-        # decomp_options = DecompileOptions()
+        p1_options = DecompileOptions()
+        p2_options = DecompileOptions()
 
-        # decomp_options.setMaxWidth(100)
+        # grab default options from program
+        p1_options.grabFromProgram(p1)
+        p2_options.grabFromProgram(p2)
+
+        # increase maxpayload size to 100MB (default 50MB)
+        p1_options.setMaxPayloadMBytes(100)
+        p2_options.setMaxPayloadMBytes(100)
 
         if self.threaded:
             decompiler_count = 2 * self.max_workers
             for i in range(self.max_workers):
                 self.decompilers.setdefault(p1.name, {}).setdefault(i, DecompInterface())
                 self.decompilers.setdefault(p2.name, {}).setdefault(i, DecompInterface())
-                # self.decompilers[p1.name][i].setOptions(decomp_options)
-                # self.decompilers[p2.name][i].setOptions(decomp_options)
+                self.decompilers[p1.name][i].setOptions(p1_options)
+                self.decompilers[p2.name][i].setOptions(p2_options)
                 self.decompilers[p1.name][i].openProgram(p1)
                 self.decompilers[p2.name][i].openProgram(p2)
                 self.decompilers[p1.name].setdefault('available', []).append(i)
@@ -506,8 +514,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             decompiler_count = 2
             self.decompilers.setdefault(p1.name, {}).setdefault(0, DecompInterface())
             self.decompilers.setdefault(p2.name, {}).setdefault(0, DecompInterface())
-            # self.decompilers[p1.name][0].setOptions(decomp_options)
-            # self.decompilers[p2.name][0].setOptions(decomp_options)
+            self.decompilers[p1.name][0].setOptions(p1_options)
+            self.decompilers[p2.name][0].setOptions(p2_options)
             self.decompilers[p1.name][0].openProgram(p1)
             self.decompilers[p2.name][0].openProgram(p2)
             self.decompilers[p1.name].setdefault('available', []).append(0)
@@ -866,6 +874,27 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return meta['Compiler ID'] == 'windows'
 
+    def get_funcs_from_addr_set(
+            self,
+            prog: 'ghidra.program.database.ProgramDB',
+            addr_set: 'ghidra.program.model.address.AddressSet',
+            min_fun_len=None):
+        """
+        Build a list of functions that match a provided address set
+        Ignores Thunks and functions smaller than `min_fun_len`
+        """
+
+        funcs = []
+
+        if min_fun_len is None:
+            min_fun_len = self.min_func_len
+
+        for func in prog.functionManager.getFunctions(addr_set, True):
+            if (not func.isThunk() and func.getBody().getNumAddresses() >= min_fun_len):
+                funcs.append(func)
+
+        return funcs
+
     @ abstractmethod
     def find_matches(
             self,
@@ -892,7 +921,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return False
 
-    def diff_symbols(
+    def diff_nf_symbols(
         self,
         p1: "ghidra.program.model.listing.Program",
         p2: "ghidra.program.model.listing.Program"
@@ -1063,7 +1092,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'
 
         # Find (non function) symbols
-        unmatched_syms, _ = self.diff_symbols(p1, p2)
+        unmatched_nf_syms, _ = self.diff_nf_symbols(p1, p2)
 
         # Find functions matches
         unmatched, matched, skip_types = self.find_matches(p1, p2)
@@ -1073,21 +1102,19 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         dupes = []
         for func in unmatched:
-            for sym in unmatched_syms:
-                if func.getName(True) == sym.getName(True):
-                    # ensure they are from different progs
-                    assert func.program != sym.program
-                    assert func.source == sym.source
+            for sym in unmatched_nf_syms:
+                # ensure they are from different progs
+                if func.getName(True) == sym.getName(True) and func.getProgram() != sym.getProgram():
                     dupes.append(func)
                     dupes.append(sym)
 
         for dupe in dupes:
             if dupe in unmatched:
-                self.logger.debug(f'Removing function dupe: {dupe}')
+                self.logger.warn(f'Removing function dupe: {dupe}')
                 unmatched.remove(dupe)
-            if dupe in unmatched_syms:
-                self.logger.debug(f'Removing symbol dupe: {dupe}')
-                unmatched_syms.remove(dupe)
+            if dupe in unmatched_nf_syms:
+                self.logger.warn(f'Removing symbol dupe: {dupe}')
+                unmatched_nf_syms.remove(dupe)
 
         deleted_symbols = []
         added_symbols = []
@@ -1096,7 +1123,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         self.logger.info('Sorting symbols and strings...')
 
-        for sym in unmatched_syms:
+        for sym in unmatched_nf_syms:
             if sym.program == p1:
                 if self.is_sym_string(sym):
                     self.logger.debug(f'Found deleted string: {sym}')
@@ -1211,9 +1238,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             new_code = ematch_2['code'].splitlines(True)
 
             old_code_no_sig = ematch_1['code'].split('{', 1)[1].splitlines(
-                True) if ematch_1['code'] and "Failed to decompile" not in ematch_1['code'] else ematch_1['code']
+                True) if ematch_1['code'] is not None and "Failed to decompile" not in ematch_1['code'] and '{' in ematch_1['code'] else ematch_1['code']
+
             new_code_no_sig = ematch_2['code'].split('{', 1)[1].splitlines(
-                True) if ematch_2['code'] and "Failed to decompile" not in ematch_1['code'] else ematch_1['code']
+                True) if ematch_2['code'] is not None and "Failed to decompile" not in ematch_2['code'] and '{' in ematch_2['code'] else ematch_2['code']
 
             old_instructions = ematch_1['instructions']
             new_instructions = ematch_2['instructions']

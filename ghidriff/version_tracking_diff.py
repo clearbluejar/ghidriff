@@ -5,6 +5,7 @@ from time import time
 from typing import List, Tuple, TYPE_CHECKING
 
 from .ghidra_diff_engine import GhidraDiffEngine
+from .implied_matches import correlate_implied_matches
 
 if TYPE_CHECKING:
     import ghidra
@@ -38,7 +39,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         # Correlators
         from ghidra.app.plugin.match import ExactMnemonicsFunctionHasher, ExactBytesFunctionHasher, ExactInstructionsFunctionHasher
-        from .correlators import StructuralGraphExactHasher, StructuralGraphHasher, BulkInstructionsHasher, BulkMnemonicHasher, BulkBasicBlockMnemonicHasher, NamespaceNameParamHasher, NameParamHasher, NameParamRefHasher, SigCallingCalledHasher, StringsRefsHasher, SwitchSigHasher, StrUniqueFuncRefsHasher
+        from .correlators import StructuralGraphExactHasher, StructuralGraphHasher, BulkInstructionsHasher, BulkMnemonicHasher, BulkBasicBlockMnemonicHasher, NamespaceNameParamHasher, NameParamHasher, NameParamRefHasher, SigCallingCalledHasher, StringsRefsHasher, SwitchSigHasher, StrUniqueFuncRefsHasher, MyManualMatchProgramCorrelator
 
         monitor = ConsoleTaskMonitor()
 
@@ -57,7 +58,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         # tuples of correlators instances
         # ( name, hasher, one_to_one, one_to_many)
-        # DO NOT CHANGE ORDER UNLESS INTENDED, ORDER HAS MAJOR IMPACT ON EFFICIENCY
+        # DO NOT CHANGE ORDER UNLESS INTENDED, ORDER HAS MAJOR IMPACT ON ACCURACY AND EFFICIENCY
         func_correlators = [
             ('ExactBytesFunctionHasher', ExactBytesFunctionHasher.INSTANCE, True, False),
             ('ExactInstructionsFunctionHasher', ExactInstructionsFunctionHasher.INSTANCE, True, False),
@@ -82,7 +83,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         unmatched = []
         matches = {}
 
-        # Run Symbol Correlator
+        # Run Symbol Hash Correlator
 
         one_to_one = True
         include_externals = True
@@ -114,7 +115,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         self.logger.info(f'Match count {matchedSymbols.size() - skipped}')
         self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
-        # Run Function Correlators
+        # Run Function Hash Correlators
 
         for cor in func_correlators:
 
@@ -123,7 +124,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
             name, hasher, one_to_one, one_to_many = cor
 
             self.logger.info(f'Running correlator: {name}')
-            self.logger.info(f'name: {name} hasher: {hasher} one_to_one: {one_to_one} one_to_many: {one_to_many}')
+            self.logger.debug(f'hasher: {hasher}')
+            self.logger.info(f'name: {name} one_to_one: {one_to_one} one_to_many: {one_to_many}')
 
             func_matches = MatchFunctions.matchFunctions(
                 p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
@@ -148,17 +150,30 @@ class VersionTrackingDiff(GhidraDiffEngine):
         # Log current counts
         self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
+        monitor = ConsoleTaskMonitor()
+
         # Find unmatched functions
 
-        p1_missing = []
-        p2_missing = []
-        for func in p1.functionManager.getFunctions(p1_unmatched, True):
-            if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
-                p1_missing.append(func)
+        p1_missing = self.get_funcs_from_addr_set(p1, p1_unmatched)
+        p2_missing = self.get_funcs_from_addr_set(p2, p2_unmatched)
 
-        for func in p2.functionManager.getFunctions(p2_unmatched, True):
-            if (not func.isThunk() and func.getBody().getNumAddresses() >= self.MIN_FUNC_LEN):
-                p2_missing.append(func)
+        # Find implied matches
+        correlate_implied_matches(matches,
+                                  p1_missing,
+                                  p2_missing,
+                                  p1_matches,
+                                  p2_matches,
+                                  p1,
+                                  p2,
+                                  self.max_workers,
+                                  monitor,
+                                  self.logger)
+
+        p1_unmatched = p1_unmatched.subtract(p1_matches)
+        p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        p1_missing = self.get_funcs_from_addr_set(p1, p1_unmatched)
+        p2_missing = self.get_funcs_from_addr_set(p2, p2_unmatched)
 
         self.logger.info(f'p1 missing = {len(p1_missing)}')
         self.logger.info(f'p2 missing = {len(p2_missing)}')
@@ -166,31 +181,11 @@ class VersionTrackingDiff(GhidraDiffEngine):
         unmatched.extend([func.getSymbol() for func in p1_missing])
         unmatched.extend([func.getSymbol() for func in p2_missing])
 
-        # for sym in sorted(unmatched, key=lambda x: x.getProgram().getFunctionManager().getFunctionAt(x.address).body.numAddresses, reverse=True):
-        #     func = sym.getProgram().getFunctionManager().getFunctionAt(sym.address)
-        #     self.logger.debug(f'\n\n{func.getProgram()}')
-        #     self.logger.debug(func)
-
-        #     for cor in func_correlators:
-
-        #         name, hasher, one_to_one, one_to_many = cor
-
-        #         self.logger.debug(f'Debug umatched correlator: {name}')
-
-        #         if hasattr(hasher, 'DEBUG'):
-        #             hasher.DEBUG = True
-
-        #         dummy = ConsoleTaskMonitor().DUMMY_MONITOR
-        #         dummy.cancel()
-        #         self.logger.debug(hasher.hash(func, dummy))
-
-        # self.logger.debug(self.enhance_sym(sym, get_decomp_info=False))
-
-        # Find Implied Matches
-        # TODO
+        # Debug umatched
+        # if self.logger.level == 10:  # debug level
+        #     self.debug_function_hasher(unmatched, func_correlators)
 
         # Find external function unmatched and matched
-
         p1_externals = {}
         # get external funcs (these are still interesting)
         for func in p1.functionManager.getExternalFunctions():
@@ -232,3 +227,27 @@ class VersionTrackingDiff(GhidraDiffEngine):
         skip_types = ['BulkBasicBlockMnemonicHash', 'ExternalsName']
 
         return [unmatched, matched, skip_types]
+
+    def debug_function_hasher(self, functions: list, func_correlators: list):
+        """
+        Debug unmatched functions throuh each function hasher
+        """
+        from ghidra.util.task import ConsoleTaskMonitor
+
+        for sym in sorted(functions, key=lambda x: x.getProgram().getFunctionManager().getFunctionAt(x.address).body.numAddresses, reverse=True):
+            func = sym.getProgram().getFunctionManager().getFunctionAt(sym.address)
+            self.logger.debug(f'\n\n{func.getProgram()}')
+            self.logger.debug(func)
+
+            for cor in func_correlators:
+
+                name, hasher, one_to_one, one_to_many = cor
+
+                self.logger.debug(f'Debug umatched correlator: {name}')
+
+                if hasattr(hasher, 'DEBUG'):
+                    hasher.DEBUG = True
+
+                dummy = ConsoleTaskMonitor().DUMMY_MONITOR
+                dummy.cancel()
+                self.logger.debug(hasher.hash(func, dummy))
