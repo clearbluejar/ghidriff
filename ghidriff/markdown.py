@@ -192,7 +192,7 @@ class GhidriffMarkdown:
             new_name = mod['new']['fullname']
 
             sxs_diff_html = GhidriffMarkdown.gen_code_table_diff_html(
-                old_code, new_code, old_name, new_name, table_only=True)
+                old_code, new_code, old_name, new_name)
 
             sxs_diff_htmls.append([mod['old']['name'], sxs_diff_html])
 
@@ -243,25 +243,44 @@ class GhidriffMarkdown:
                                  new_code,
                                  old_name,
                                  new_name,
-                                 table_only=False,
+                                 html_type='file',
                                  dedent_table: bool = True,
-                                 bottom=None) -> str:
+                                 bottom=None,
+                                 tabsize=2
+                                 ) -> str:
         """
         Generates side by side diff in HTML
         dedent_table: True will dedent the indented table so it renders the html table in markdown
+        type: 
+            - inline Simply return table,style,and legend withiout html and body tags
+            - table only - just return table with no style
+            - full - return difflib html template complete
         """
+
+        charset = 'utf-8'
 
         if isinstance(old_code, str):
             old_code = old_code.splitlines(True)
         if isinstance(new_code, str):
             new_code = new_code.splitlines(True)
 
-        if table_only:
-            diff_html = difflib.HtmlDiff(tabsize=4).make_table(
-                old_code, new_code, fromdesc=old_name, todesc=new_name)
-        else:
-            diff_html = difflib.HtmlDiff(tabsize=4).make_file(
-                old_code, new_code, fromdesc=old_name, todesc=new_name)
+        match html_type:
+            case 'inline':
+                styles = '<style type="text/css">%(styles)s\n</style>' % dict(
+                    styles=difflib.HtmlDiff(tabsize=tabsize)._styles)
+                table = difflib.HtmlDiff(tabsize=tabsize).make_table(
+                    old_code, new_code, fromdesc=old_name, todesc=new_name)
+
+                diff_html = styles + table
+                diff_html.encode(charset, 'xmlcharrefreplace').decode(charset)
+            case 'table-only':
+                diff_html = difflib.HtmlDiff(tabsize=4).make_table(
+                    old_code, new_code, fromdesc=old_name, todesc=new_name)
+            case 'file':
+                diff_html = difflib.HtmlDiff(tabsize=tabsize).make_file(
+                    old_code, new_code, fromdesc=old_name, todesc=new_name)
+            case _:
+                raise NotImplementedError
 
         if dedent_table:
             diff_html = diff_html.splitlines(True)
@@ -285,7 +304,7 @@ class GhidriffMarkdown:
 
             diff_html = pre_table + table + post_table
 
-        if not table_only and bottom:
+        if html_type == 'file' and bottom:
             needle = '</body>'
             loc = diff_html.find(needle)
             diff_html = diff_html[:loc] + bottom + diff_html[loc:]
@@ -679,8 +698,8 @@ pie showData
                 if side_by_side:
                     md.new_header(3, f"{old_func_name} Side By Side Diff", add_table_of_contents='n')
                     html_diff = GhidriffMarkdown.gen_code_table_diff_html(
-                        modified['old']['code'], modified['new']['code'], old_name, new_name)
-                    md.new_paragraph(self._wrap_with_details(html_diff))
+                        modified['old']['code'], modified['new']['code'], old_name, new_name, html_type='inline')
+                    md.new_paragraph(html_diff)
 
         # Create Slightly Modified secion
         # slightly as in no code changes but other relevant changes.
