@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
+from pathlib import Path
 import json
-import pathlib
 import difflib
 import argparse
 import re
@@ -13,6 +13,7 @@ from argparse import Namespace
 import logging
 
 from pyhidra.launcher import PyhidraLauncher, GHIDRA_INSTALL_DIR
+from .utils import sha1_file
 from .markdown import GhidriffMarkdown
 
 import multiprocessing
@@ -65,7 +66,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             force_diff: bool = False,
             verbose_analysis: bool = False,
             no_symbols: bool = False,
-            engine_log_path: pathlib.Path = None,
+            engine_log_path: Path = None,
             engine_log_level: int = logging.INFO,
             engine_file_log_level: int = logging.INFO,
             max_section_funcs: int = 200,
@@ -221,7 +222,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return logger
 
-    def add_log_to_path(self, log_path: pathlib.Path, level: int = logging.INFO):
+    def add_log_to_path(self, log_path: Path, level: int = logging.INFO):
         """
         Directory to write log to
         """
@@ -367,10 +368,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
     def setup_project(
             self,
-            binary_paths: List[Union[str, pathlib.Path]],
-            project_location: Union[str, pathlib.Path],
+            binary_paths: List[Union[str, Path]],
+            project_location: Union[str, Path],
             project_name: str,
-            symbols_path: Union[str, pathlib.Path],
+            symbols_path: Union[str, Path],
             symbol_urls: list = None,
     ) -> list:
         """
@@ -384,7 +385,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from ghidra.app.plugin.core.analysis import PdbAnalyzer
         from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
 
-        project_location = pathlib.Path(project_location) / project_name
+        project_location = Path(project_location) / project_name
         project_location.mkdir(exist_ok=True, parents=True)
         pdb = None
 
@@ -393,8 +394,18 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # Open/Create project
         project = None
 
-        # remove duplicates, maintain order
+        # remove duplicate paths, maintain order
         binary_paths = list(dict.fromkeys(binary_paths))
+
+        # remove duplicate files (different path, but same content)
+        bin_hashes = []
+        for i, bin_hash in enumerate([sha1_file(path) for path in binary_paths]):
+
+            if bin_hash in bin_hashes:
+                self.logger.warn(f'Duplicate file detected {binary_paths[i]} with sha1: {bin_hash}')
+                binary_paths.pop(i)
+            else:
+                bin_hashes.append(bin_hash)
 
         try:
             project = GhidraProject.openProject(project_location, project_name, True)
@@ -413,16 +424,17 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # Import binaries and configure symbols
         for program_path in binary_paths:
 
-            program_path = pathlib.Path(program_path)
+            # add sha1 to prevent files with same name collision
+            program_name = self.gen_proj_bin_name_from_path(program_path)
 
             # Import binaries and configure symbols
-            if not project.getRootFolder().getFile(program_path.name):
-                self.logger.info(f'Importing {program_path}')
+            if not project.getRootFolder().getFile(program_name):
+                self.logger.info(f'Importing {program_path} as {program_name}')
                 program = project.importProgram(program_path)
-                project.saveAs(program, "/", program.getName(), True)
+                project.saveAs(program, "/", program_name, True)
             else:
                 self.logger.info(f'Opening {program_path}')
-                program = self.project.openProgram("/", program_path.name, False)
+                program = self.project.openProgram("/", program_name, False)
 
             proj_programs.append(program)
 
@@ -620,7 +632,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             pdb = self.get_pdb(prog)
 
             if pdb is not None:
-                pdb = pathlib.Path(pdb.absoluteFile.toString())
+                pdb = Path(pdb.absoluteFile.toString())
                 self.logger.info(f"PDB {pdb} found for {prog_name}")
 
             pdb_list.append([prog_name, pdb])
@@ -628,7 +640,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         return pdb_list
 
     # program: "ghidra.program.model.listing.Program",
-    def setup_symbol_server(self,  symbols_path: Union[str, pathlib.Path], level=0, server_urls=None) -> None:
+    def setup_symbol_server(self,  symbols_path: Union[str, Path], level=0, server_urls=None) -> None:
         """setup symbols to allow Ghidra to download as needed
         1. Configures symbol_path as local symbol store path
         2. Sets Index level for local symbol path
@@ -641,7 +653,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.logger.info("Setting up Symbol Server for symbols...")
         self.logger.info(f"path: {symbols_path} level: {level}")
 
-        symbols_path = pathlib.Path(symbols_path).absolute()
+        symbols_path = Path(symbols_path).absolute()
 
         from pdb_ import PdbPlugin
         from pdb_.symbolserver import LocalSymbolStore
@@ -667,7 +679,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             known_urls = []
             pdbUrlFiles = Application.findFilesByExtensionInApplication(".pdburl")
             for pdbFile in pdbUrlFiles:
-                data = pathlib.Path(pdbFile.absolutePath).read_text()
+                data = Path(pdbFile.absolutePath).read_text()
                 self.logger.debug(f"Loaded well known {pdbFile.absolutePath}' length: {len(data)}'")
                 for line in data.splitlines(True):
                     cat, location, warning = line.split('|')
@@ -1015,6 +1027,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return need_diff
 
+    def gen_proj_bin_name_from_path(self, path: Path):
+        """
+        Generate unique project name from binary for Ghidra Project
+        """
+
+        return '-'.join((path.name, sha1_file(path.absolute())[:6]))
+
     def normalize_ghidra_decomp(self, code: list):
         """
         Normalize some of the dynamic labels to simplify the diff
@@ -1040,8 +1059,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
     def diff_bins(
             self,
-            old: Union[str, pathlib.Path],
-            new: Union[str, pathlib.Path],
+            old: Union[str, Path],
+            new: Union[str, Path],
             ignore_FUN: bool = False,
             force_diff=False
     ) -> dict:
@@ -1058,15 +1077,24 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # reset pdiff
         pdiff = {}
 
-        old = pathlib.Path(old)
-        new = pathlib.Path(new)
+        old = Path(old)
+        new = Path(new)
 
-        # analysis options used (just check p1, same used for both)
-        # need RW program to get full options
-        p1 = self.project.openProgram("/", old.name, False)
-        p2 = self.project.openProgram("/", new.name, False)
+        p1_name = self.gen_proj_bin_name_from_path(old)
+        p2_name = self.gen_proj_bin_name_from_path(new)
 
+        # analysis options used
         pdiff['program_options'] = {}
+
+        # need RW program to get full options
+        p1 = self.project.openProgram("/", p1_name, False)
+
+        if p1_name == p2_name:
+            self.logger.warn(f'Diffed files have the same content. Are you sure you want to do this??')
+            p2 = p1
+        else:
+            p2 = self.project.openProgram("/", p2_name, False)
+
         pdiff['program_options'][p1.name] = self.get_all_program_options(p1)
         pdiff['program_options'][p2.name] = self.get_all_program_options(p2)
 
@@ -1074,8 +1102,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.project.close(p2)
 
         # now open both programs read-only
-        p1 = self.project.openProgram("/", old.name, True)
-        p2 = self.project.openProgram("/", new.name, True)
+        p1 = self.project.openProgram("/", p1_name, True)
+        if p1_name == p2_name:
+            p2 = p1
+        else:
+            p2 = self.project.openProgram("/", p2_name, True)
 
         # setup decompilers
         self.setup_decompliers(p1, p2)
@@ -1494,7 +1525,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self,
         name: str,
         pdiff: Union[str, dict],
-        output_path: Union[str, pathlib.Path],
+        output_path: Union[str, Path],
         side_by_side: bool = False,
         max_section_funcs: int = None,
         md_title: str = None,
@@ -1522,11 +1553,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         pdiff = self.minimise_pdiff(pdiff)
 
-        output_path = pathlib.Path(output_path)
+        output_path = Path(output_path)
         output_path.mkdir(exist_ok=True)
 
         if write_diff:
-            md_path = output_path / pathlib.Path(name + '.md')
+            md_path = output_path / Path(name + '.md')
             self.logger.info(f'Writing md diff...')
 
             diff_text = self.gen_diff_md(
@@ -1541,7 +1572,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         if write_json:
             json_base_path = output_path / 'json'
             json_base_path.mkdir(exist_ok=True)
-            json_path = json_base_path / pathlib.Path(name + '.json')
+            json_path = json_base_path / Path(name + '.json')
             self.logger.info(f'Writing pdiff json...')
 
             with json_path.open('w') as f:
@@ -1549,7 +1580,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         sxs_count = 0
         if side_by_side:
-            sxs_output_path = output_path / pathlib.Path('sxs_html')
+            sxs_output_path = output_path / Path('sxs_html')
             sxs_output_path.mkdir(exist_ok=True)
 
             sxs_diff_htmls = GhidriffMarkdown.gen_sxs_html_from_pdiff(pdiff)
@@ -1557,11 +1588,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             for func_name, sxs_diff_html in sxs_diff_htmls:
 
                 # give line ending md despite html so it will render in gists and vscode
-                sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, _clean_func(func_name), 'md']))
+                sxs_diff_path = sxs_output_path / Path('.'.join([name, _clean_func(func_name), 'md']))
                 sxs_diff_path.write_text(sxs_diff_html)
 
             combined_sxs_diff_html = GhidriffMarkdown.gen_combined_sxs_html_from_pdiff(pdiff)
-            combined_sxs_diff_path = sxs_output_path / pathlib.Path('.'.join([name, 'combined', 'html']))
+            combined_sxs_diff_path = sxs_output_path / Path('.'.join([name, 'combined', 'html']))
             combined_sxs_diff_path.write_text(combined_sxs_diff_html)
 
         if write_diff:
