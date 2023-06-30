@@ -1,10 +1,11 @@
-from typing import List, Tuple, TYPE_CHECKING
+import concurrent.futures
+from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import ghidra
     from ghidra_builtins import *
 
-# Python version of Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/gui/util/ImpliedMatchUtils.java
+# Python port of Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/gui/util/ImpliedMatchUtils.java
 
 
 def get_actual_reference(program: "ghidra.program.model.listing.Program", ref_to_addr):
@@ -34,6 +35,8 @@ def find_implied_match(src_func: "ghidra.program.model.listing.Function", dst_fu
     # // Get the reference type of the passed in reference and make sure it is either a call or
     # // data reference
     ref_type = ref.getReferenceType()
+
+    # original
     # if not (ref_type.isCall() or ref_type.isData()):
     if not (ref_type.isCall()):  # ignore data
         # print(f'skipped: reftype is {ref_type}')
@@ -109,3 +112,90 @@ def find_implied_matches(src_func: "ghidra.program.model.listing.Function", dst_
                 implied_matches.append(implied_match)
 
     return list(set(implied_matches))
+
+
+def correlate_implied_matches(matches, p1_missing, p2_missing, p1_matches, p2_matches, p1, p2, max_workers, monitor, logger=None):
+    """
+    from all of the unmatched functions, get every function that has already been acceped that calls an unmatched function
+    if the calling function has been accepted, then accept the unmatched called function
+    """
+
+    # build list of function entry points that have already been matched
+    matched_src_addrs = {}
+    matched_dst_addrs = {}
+    for i, match in enumerate(matches):
+        matched_src_addrs[match[0]] = i
+        matched_dst_addrs[match[1]] = i
+
+    potential_calling_funcs = []
+    src_missing_addrs = []
+    dst_missing_addrs = []
+
+    for src_func in p1_missing:
+        src_func: "ghidra.program.model.listing.Function" = src_func
+        src_missing_addrs.append(src_func.getEntryPoint())
+        potential_p1_calling_funcs = [func for func in list(src_func.getCallingFunctions(
+            monitor)) if func.getEntryPoint() in matched_src_addrs.keys()]
+        if logger is not None:
+            logger.debug(
+                f'Found {len(potential_p1_calling_funcs)} p1 calling functions for potential implied match for {src_func}')
+        potential_calling_funcs.extend(potential_p1_calling_funcs)
+
+    for dst_func in p2_missing:
+        dst_func: "ghidra.program.model.listing.Function" = dst_func
+        dst_missing_addrs.append(dst_func.getEntryPoint())
+        potential_p2_calling_funcs = [func for func in list(
+            dst_func.getCallingFunctions(monitor)) if func.getEntryPoint() in matched_dst_addrs.keys()]
+        if logger is not None:
+            logger.debug(
+                f'Found {len(potential_p2_calling_funcs)} p2 calling functions for potential implied match for {dst_func}')
+        potential_calling_funcs.extend(potential_p2_calling_funcs)
+
+    potential_calling_funcs = list(set(potential_calling_funcs))
+
+    # find all matches that might provide an implied match for unmatched functions
+    potential_accepted_matches = []
+    for func in potential_calling_funcs:
+        match_index = None
+        if matched_src_addrs.get(func.getEntryPoint()) is not None:
+            match_index = matched_src_addrs.get(func.getEntryPoint())
+        elif matched_dst_addrs.get(func.getEntryPoint()) is not None:
+            match_index = matched_dst_addrs.get(func.getEntryPoint())
+
+        if match_index is not None:
+            match = list(matches.keys())[match_index]
+            f1 = p1.functionManager.getFunctionAt(match[0])
+            f2 = p2.functionManager.getFunctionAt(match[1])
+            potential_accepted_matches.append((f1, f2))
+
+    recovered = 0
+    completed = 0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = (executor.submit(find_implied_matches, f1, f2)
+                   for f1, f2 in potential_accepted_matches)
+
+        for future in concurrent.futures.as_completed(futures):
+            implied_matches = future.result()
+
+            completed += 1
+            if completed % 50 == 0:
+                percent = int((float(completed)/len(potential_accepted_matches)) * 100)
+                if logger is not None:
+                    logger.debug(f'Completed {percent} %  recovered" {recovered}')
+
+            if implied_matches is not None:
+                for implied_match in implied_matches:
+                    # only apply function matches
+                    if implied_match[2] == 'FUNCTION':
+                        # ensure implied match is correlating an unmatched function
+                        if implied_match[0] in src_missing_addrs or implied_match[1] in dst_missing_addrs:
+                            if matches.get((implied_match[0], implied_match[1])) is None:
+                                recovered += 1
+
+                            # Correlate function as Implied Match
+                            name = 'Implied Match'
+                            matches.setdefault((implied_match[0], implied_match[1]), {}).setdefault(name, 0)
+                            matches[(implied_match[0], implied_match[1])][name] += 1
+                            p1_matches.add(implied_match[0])
+                            p2_matches.add(implied_match[1])

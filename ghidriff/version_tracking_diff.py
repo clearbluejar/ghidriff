@@ -1,12 +1,11 @@
 from collections import Counter
 from time import time
-import concurrent.futures
 
 
 from typing import List, Tuple, TYPE_CHECKING
 
 from .ghidra_diff_engine import GhidraDiffEngine
-from .implied_matches import get_actual_reference, find_implied_match, find_implied_matches, find_matching_ref
+from .implied_matches import correlate_implied_matches
 
 if TYPE_CHECKING:
     import ghidra
@@ -158,83 +157,17 @@ class VersionTrackingDiff(GhidraDiffEngine):
         p1_missing = self.get_funcs_from_addr_set(p1, p1_unmatched)
         p2_missing = self.get_funcs_from_addr_set(p2, p2_unmatched)
 
-        # build list of function entry points that have already been matched
-        matched_src_addrs = {}
-        matched_dst_addrs = {}
-        for i, match in enumerate(matches):
-            matched_src_addrs[match[0]] = i
-            matched_dst_addrs[match[1]] = i
-
-        # from all of the unmatched functions, get every function that has already been acceped that calls an unmatched function
-        # if the calling function has been accepted, then accept the unmatched called function
-        potential_calling_funcs = []
-        src_missing_addrs = []
-        dst_missing_addrs = []
-
-        for src_func in p1_missing:
-            src_func: "ghidra.program.model.listing.Function" = src_func
-            src_missing_addrs.append(src_func.getEntryPoint())
-            potential_p1_calling_funcs = [func for func in list(src_func.getCallingFunctions(
-                monitor)) if func.getEntryPoint() in matched_src_addrs.keys()]
-            self.logger.debug(
-                f'Found {len(potential_p1_calling_funcs)} p1 calling functions for potential implied match for {src_func}')
-            potential_calling_funcs.extend(potential_p1_calling_funcs)
-
-        for dst_func in p2_missing:
-            dst_func: "ghidra.program.model.listing.Function" = dst_func
-            dst_missing_addrs.append(dst_func.getEntryPoint())
-            potential_p2_calling_funcs = [func for func in list(
-                dst_func.getCallingFunctions(monitor)) if func.getEntryPoint() in matched_dst_addrs.keys()]
-            self.logger.debug(
-                f'Found {len(potential_p2_calling_funcs)} p2 calling functions for potential implied match for {dst_func}')
-            potential_calling_funcs.extend(potential_p2_calling_funcs)
-
-        potential_calling_funcs = list(set(potential_calling_funcs))
-
-        # find all matches that might provide an implied match for unmatched functions
-        potential_accepted_matches = []
-        for func in potential_calling_funcs:
-            match_index = None
-            if matched_src_addrs.get(func.getEntryPoint()) is not None:
-                match_index = matched_src_addrs.get(func.getEntryPoint())
-            elif matched_dst_addrs.get(func.getEntryPoint()) is not None:
-                match_index = matched_dst_addrs.get(func.getEntryPoint())
-
-            if match_index is not None:
-                match = list(matches.keys())[match_index]
-                f1 = p1.functionManager.getFunctionAt(match[0])
-                f2 = p2.functionManager.getFunctionAt(match[1])
-                potential_accepted_matches.append((f1, f2))
-
-        recovered = 0
-        completed = 0
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = (executor.submit(find_implied_matches, f1, f2)
-                       for f1, f2 in potential_accepted_matches)
-
-            for future in concurrent.futures.as_completed(futures):
-                implied_matches = future.result()
-
-                completed += 1
-                if completed % 50 == 0:
-                    percent = int((float(completed)/len(potential_accepted_matches)) * 100)
-                    print(f'Completed {percent} %  recovered" {recovered}')
-
-                if implied_matches is not None:
-                    for implied_match in implied_matches:
-                        # only apply function matches
-                        if implied_match[2] == 'FUNCTION':
-                            if implied_match[0] in src_missing_addrs or implied_match[1] in dst_missing_addrs:
-                                if matches.get((implied_match[0], implied_match[1])) is None:
-                                    recovered += 1
-
-                                # Correlate function as Implied Match
-                                name = 'Implied Match'
-                                matches.setdefault((implied_match[0], implied_match[1]), {}).setdefault(name, 0)
-                                matches[(implied_match[0], implied_match[1])][name] += 1
-                                p1_matches.add(implied_match[0])
-                                p2_matches.add(implied_match[1])
+        # Find implied matches
+        correlate_implied_matches(matches,
+                                  p1_missing,
+                                  p2_missing,
+                                  p1_matches,
+                                  p2_matches,
+                                  p1,
+                                  p2,
+                                  self.max_workers,
+                                  monitor,
+                                  self.logger)
 
         p1_unmatched = p1_unmatched.subtract(p1_matches)
         p2_unmatched = p2_unmatched.subtract(p2_matches)
@@ -248,28 +181,11 @@ class VersionTrackingDiff(GhidraDiffEngine):
         unmatched.extend([func.getSymbol() for func in p1_missing])
         unmatched.extend([func.getSymbol() for func in p2_missing])
 
-        # for sym in sorted(unmatched, key=lambda x: x.getProgram().getFunctionManager().getFunctionAt(x.address).body.numAddresses, reverse=True):
-        #     func = sym.getProgram().getFunctionManager().getFunctionAt(sym.address)
-        #     self.logger.debug(f'\n\n{func.getProgram()}')
-        #     self.logger.debug(func)
-
-        #     for cor in func_correlators:
-
-        #         name, hasher, one_to_one, one_to_many = cor
-
-        #         self.logger.debug(f'Debug umatched correlator: {name}')
-
-        #         if hasattr(hasher, 'DEBUG'):
-        #             hasher.DEBUG = True
-
-        #         dummy = ConsoleTaskMonitor().DUMMY_MONITOR
-        #         dummy.cancel()
-        #         self.logger.debug(hasher.hash(func, dummy))
-
-        # self.logger.debug(self.enhance_sym(sym, get_decomp_info=False))
+        # Debug umatched
+        # if self.logger.level == 10:  # debug level
+        #     self.debug_function_hasher(unmatched, func_correlators)
 
         # Find external function unmatched and matched
-
         p1_externals = {}
         # get external funcs (these are still interesting)
         for func in p1.functionManager.getExternalFunctions():
@@ -311,3 +227,27 @@ class VersionTrackingDiff(GhidraDiffEngine):
         skip_types = ['BulkBasicBlockMnemonicHash', 'ExternalsName']
 
         return [unmatched, matched, skip_types]
+
+    def debug_function_hasher(self, functions: list, func_correlators: list):
+        """
+        Debug unmatched functions throuh each function hasher
+        """
+        from ghidra.util.task import ConsoleTaskMonitor
+
+        for sym in sorted(functions, key=lambda x: x.getProgram().getFunctionManager().getFunctionAt(x.address).body.numAddresses, reverse=True):
+            func = sym.getProgram().getFunctionManager().getFunctionAt(sym.address)
+            self.logger.debug(f'\n\n{func.getProgram()}')
+            self.logger.debug(func)
+
+            for cor in func_correlators:
+
+                name, hasher, one_to_one, one_to_many = cor
+
+                self.logger.debug(f'Debug umatched correlator: {name}')
+
+                if hasattr(hasher, 'DEBUG'):
+                    hasher.DEBUG = True
+
+                dummy = ConsoleTaskMonitor().DUMMY_MONITOR
+                dummy.cancel()
+                self.logger.debug(hasher.hash(func, dummy))
