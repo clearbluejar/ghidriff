@@ -2,20 +2,7 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.245.2/containers/python-3
 {
 	"name": "ghidriff",
-	"build": {
-		"dockerfile": "Dockerfile",
-		"context": "..",
-		"args": {
-			// Update 'VARIANT' to pick a Python version: 3, 3.10, 3.9, 3.8, 3.7, 3.6
-			// Append -bullseye or -buster to pin to an OS version.
-			// Use -bullseye variants on local on arm64/Apple Silicon.
-			"VARIANT": "3.10-bullseye",
-			// Options
-			"NODE_VERSION": "none",
-			// Ghidra Version: none, latest, 10.2, 10.1.5, 10.1.4, ...
-			"GHIDRA_VERSION": "latest"
-		}
-	},
+	"image": "ghcr.io/clearbluejar/ghidra-python:latest",
 	// Configure tool-specific properties.
 	"customizations": {
 		// Configure properties specific to VS Code.
@@ -34,32 +21,33 @@
 				"python.linting.pycodestylePath": "/usr/local/py-utils/bin/pycodestyle",
 				"python.linting.pydocstylePath": "/usr/local/py-utils/bin/pydocstyle",
 				"python.linting.pylintPath": "/usr/local/py-utils/bin/pylint",
-				"python.analysis.stubPath": "${workspaceFolder}/.env/lib/python3.10/site-packages/ghidra-stubs/",
+				// settings for ghidra-stubs autocomplete
+				"python.analysis.stubPath": "${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/",
 				"python.autoComplete.extraPaths": [
-					"${workspaceFolder}/.env/lib/python3.10/site-packages/ghidra-stubs/"
+					"${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/"
 				],
 				"python.analysis.extraPaths": [
-					"${workspaceFolder}/.env/lib/python3.10/site-packages/ghidra-stubs/"
+					"${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/"
 				],
+				"[python]": {
+					"editor.formatOnSave": true,
+				},
 			},
 			// Add the IDs of extensions you want installed when the container is created.
 			"extensions": [
 				"ms-python.python",
 				"ms-python.vscode-pylance",
-				"yzhang.markdown-all-in-one",
+				"yzhang.markdown-all-in-one"
 			]
 		}
 	},
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "bash .devcontainer/post-create.sh",
+	"postCreateCommand": [
+		"bash",
+		".devcontainer/post-create.sh"
+	]
 	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode",
-	"features": {
-		"ghcr.io/devcontainers/features/java:1": {
-			"version": "17",
-			"installGradle": true
-		}
-	}
 }
