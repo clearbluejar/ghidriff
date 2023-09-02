@@ -229,7 +229,7 @@ ghidriff ntoskrnl.exe.10.0.22621.1344 ntoskrnl.exe.10.0.22621.1413
 
 <details><summary>Console Output</summary>
 
-```cosole
+```console
 (.env) vscode ➜ /workspaces/ghidriff (main) $ ghidriff ntoskrnl.exe.10.0.22621.1344 ntoskrnl.exe.10.0.22621.1413
 INFO | ghidriff | Init Ghidra Diff Engine...
 INFO | ghidriff | Engine Console Log: INFO

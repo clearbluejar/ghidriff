@@ -2,6 +2,7 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.245.2/containers/python-3
 {
 	"name": "ghidriff",
+	// image from https://github.com/clearbluejar/ghidra-python
 	"image": "ghcr.io/clearbluejar/ghidra-python:latest",
 	// Configure tool-specific properties.
 	"customizations": {
@@ -21,7 +22,7 @@
 				"python.linting.pycodestylePath": "/usr/local/py-utils/bin/pycodestyle",
 				"python.linting.pydocstylePath": "/usr/local/py-utils/bin/pydocstyle",
 				"python.linting.pylintPath": "/usr/local/py-utils/bin/pylint",
-				// settings for ghidra-stubs autocomplete
+				// VS code settings for ghidra-stubs autocomplete
 				"python.analysis.stubPath": "${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/",
 				"python.autoComplete.extraPaths": [
 					"${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/"
@@ -47,7 +48,7 @@
 	"postCreateCommand": [
 		"bash",
 		".devcontainer/post-create.sh"
-	]
+	],
 	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode",
 }
