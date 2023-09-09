@@ -33,6 +33,6 @@ jobs:
         push: never
         runCmd: |
           pip install --upgrade pip
-          pip install -e ".[testing]""
+          pip install -e ".[testing]"
           # pip install -r tests/pytest-requirements.txt
           pytest -rA
