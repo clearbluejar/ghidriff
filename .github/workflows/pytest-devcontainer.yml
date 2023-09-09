@@ -22,6 +22,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        ref: ${{github.ref}}
     - name: Test with pytest on devcontainer    
       uses: devcontainers/ci@v0.3
       with:
@@ -31,6 +33,6 @@ jobs:
         push: never
         runCmd: |
           pip install --upgrade pip
-          pip install -e .
-          pip install -r tests/pytest-requirements.txt
+          pip install -e ".[testing]""
+          # pip install -r tests/pytest-requirements.txt
           pytest -rA
