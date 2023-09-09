@@ -19,6 +19,9 @@ fi
 # install local workspace and test requirements
 pip install -e ".[testing]"
 
+# pull down test data
+git clone git@github.com:clearbluejar/ghidriff-test-data.git tests/data
+
 # Setup Ghidra Dev for Reference
 # git clone https://github.com/NationalSecurityAgency/ghidra.git ~/ghidra-master
 # pushd ~/ghidra-master
