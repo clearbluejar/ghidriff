@@ -4,10 +4,11 @@
 name: Pytest Python Package In Devcontainer
 
 on:
-  push:
-    branches: [ "main", "pytest" ]
-  pull_request:
-    branches: [ "main" ]
+#   push:
+#     branches: [ "main", "pytest" ]
+    branches: [ "pytest" ]
+#   pull_request:
+#     branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -24,8 +25,9 @@ jobs:
     - name: Test with pytest on devcontainer    
       uses: devcontainers/ci@v0.3
       with:
-        imageName: ghcr.io/clearbluejar/ghidra-python:${{matrix.image}}
-        cacheFrom: ghcr.io/clearbluejar/ghidra-python:${{matrix.image}}
+        imageName: ghcr.io/clearbluejar/ghidra-python
+        cacheFrom: ghcr.io/clearbluejar/ghidra-python
+        imageTag: ${{matrix.image}}
         push: never
         runCmd: |
           pip install --upgrade pip

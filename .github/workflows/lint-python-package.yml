@@ -4,8 +4,8 @@
 name: Lint Python Package
 
 on:
-  push:
-    branches: [ "pytest" ]
+#   push:
+#     branches: [ "pytest" ]
 #   pull_request:
 #     branches: [ "main" ]
   workflow_dispatch:
