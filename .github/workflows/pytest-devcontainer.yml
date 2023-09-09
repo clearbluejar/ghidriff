@@ -4,7 +4,7 @@
 name: Pytest Python Package In Devcontainer
 
 on:
-#   push:
+  push:
 #     branches: [ "main", "pytest" ]
     branches: [ "pytest" ]
 #   pull_request:
