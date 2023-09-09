@@ -1,3 +1,0 @@
-ghidra-stubs
-pyhidra
-mdutils
