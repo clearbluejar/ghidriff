@@ -19,8 +19,17 @@ fi
 # install local workspace and test requirements
 pip install -e ".[testing]"
 
-# pull down test data
-git clone git@github.com:clearbluejar/ghidriff-test-data.git tests/data
+# git clone test data if dir doesn't exist
+TEST_DATA_PATH="tests/data"
+
+if [ -z "$(ls -A $TEST_DATA_PATH)" ]; then
+    git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data
+    pushd $TEST_DATA_PATH
+    git remote set-url origin git@github.com:clearbluejar/ghidriff-test-data.git
+    popd
+fi
+
+
 
 # Setup Ghidra Dev for Reference
 # git clone https://github.com/NationalSecurityAgency/ghidra.git ~/ghidra-master

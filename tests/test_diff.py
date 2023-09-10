@@ -8,6 +8,9 @@ import requests
 import json
 import os
 
+SYMBOLS_DIR = 'symbols'
+BINS_DIR = 'bins'
+
 def get_chrome_headers() -> dict:
 
     headers =  {
@@ -37,19 +40,27 @@ def test_diff_afd_cve_2023_21768(shared_datadir: Path):
     test_name = 'cve-2023-21768'
     output_path = shared_datadir / test_name
     output_path.mkdir(exist_ok=True, parents=True)
+    symbols_path = shared_datadir / SYMBOLS_DIR
+    bins_path = shared_datadir / BINS_DIR
 
     
     # setup bins
-    old_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1028'
-    old_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/0C5C6994A8000/afd.sys'
-    new_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1415'
-    new_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/50989142A9000/afd.sys'
+
+    old_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1028'
+    new_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1415'
+
+    # TODO figure out why these download are unreliable
+    # for now just git clone ghidriff-test-data
+    # old_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1028'
+    # old_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/0C5C6994A8000/afd.sys'
+    # new_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1415'
+    # new_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/50989142A9000/afd.sys'
 
     # download binaries    
-    # TODO this download can fail, store in repo?
-    headers = get_chrome_headers()
-    old_bin_path.write_bytes(requests.get(old_url,headers=headers).content)
-    new_bin_path.write_bytes(requests.get(new_url,headers=headers).content)
+    # download is unreliage
+    # headers = get_chrome_headers()
+    # old_bin_path.write_bytes(requests.get(old_url,headers=headers).content)
+    # new_bin_path.write_bytes(requests.get(new_url,headers=headers).content)
 
     assert old_bin_path.exists()
     assert new_bin_path.exists()
@@ -58,7 +69,7 @@ def test_diff_afd_cve_2023_21768(shared_datadir: Path):
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
-    args = parser.parse_args([str(old_bin_path.absolute()),str(new_bin_path.absolute())])
+    args = parser.parse_args(['-s', str(symbols_path), str(old_bin_path.absolute()),str(new_bin_path.absolute())])
 
     engine_log_path = output_path / parser.get_default('log_path')
 
@@ -87,7 +98,7 @@ def test_diff_afd_cve_2023_21768(shared_datadir: Path):
                                      no_symbols=args.no_symbols,
                                      engine_log_path=engine_log_path,
                                      engine_log_level=args.log_level,
-                                     engine_file_log_level=args.file_log_level
+                                     engine_file_log_level=args.file_log_level,                                     
                                      )
 
     d.setup_project(binary_paths, args.project_location, project_name, args.symbols_path)
