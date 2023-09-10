@@ -16,14 +16,13 @@ def get_engine_classes() -> dict:
 
     return engines
 
-
-def main():
+def get_parser() -> argparse.ArgumentParser:
     """
-    ghidriff - GhidraDiffEngine module main function
+    Build main ghidriff parser
     """
 
     parser = argparse.ArgumentParser(description='ghidriff - A Command Line Ghidra Binary Diffing Engine',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+                                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('old', nargs=1, help="Path to old version of binary '/somewhere/bin.old'")
     parser.add_argument('new', action='append', nargs='+',
@@ -34,8 +33,18 @@ def main():
     parser.add_argument('--engine', help='The diff implementation to use.',
                         default='VersionTrackingDiff', choices=engines.keys())
 
-    parser.add_argument('-o', '--output-path', help='Output path for resulting diffs', default='.ghidriffs')
+    parser.add_argument('-o', '--output-path', help='Output path for resulting diffs', default='ghidriffs')
     parser.add_argument('--summary', help='Add a summary diff if more than two bins are provided', default=False)
+
+    return parser
+
+
+def main():
+    """
+    ghidriff - GhidraDiffEngine module main function
+    """
+
+    parser = get_parser()
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
@@ -61,6 +70,7 @@ def main():
 
     project_name = f'{args.project_name}-{binary_paths[0].name}-{binary_paths[-1].name}'
 
+    engines = get_engine_classes()
     DiffEngine: GhidraDiffEngine = engines[args.engine]
 
     d: GhidraDiffEngine = DiffEngine(args=args,
