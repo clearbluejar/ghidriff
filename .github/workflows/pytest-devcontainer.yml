@@ -5,10 +5,9 @@ name: Pytest Python Package In Devcontainer
 
 on:
   push:
-#     branches: [ "main", "pytest" ]
-    branches: [ "pytest" ]
-#   pull_request:
-#     branches: [ "main" ]
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
