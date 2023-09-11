@@ -1,12 +1,23 @@
-# Ghidriff - A Binary Diffing Engine Powered by Ghidra
+# Ghidriff - Ghidra Binary Diffing Engine
+
+<!-- <p align="center">    
+<img align="center" alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/clearbluejar/ghidriff/pytest-devcontainer.yml?label=pytest&style=for-the-badge">
+<img align="center" alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/ghidriff?color=yellow&label=PyPI%20downloads&style=for-the-badge">
+<img align="center" src="https://img.shields.io/github/stars/clearbluejar/ghidriff?style=for-the-badge">
+</p> -->
 
 <p align='center'>
-<img  src="https://user-images.githubusercontent.com/3752074/229976340-96394970-152f-4d88-9fe4-a46589b31c50.png" height="600">
+<img src="https://user-images.githubusercontent.com/3752074/229976340-96394970-152f-4d88-9fe4-a46589b31c50.png" height="300">
 </p>
+
+
+## About
 
 `ghidriff` is a [Ghidra](https://ghidra-sre.org/) enabled binary diffing engine. It leverages the power of Ghidra's SRE [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. 
 
 It's primary use case is for patch diffing. It is written in Python 3 using `pyhidra` to orchestrate Ghidra and `jpype` as the interface to Ghidra.
+
+
 
 ## High Level
 
@@ -23,26 +34,33 @@ subgraph diffs_output_dir
     direction LR
     i(rpcrt4.dll-v1-v2.diff.md)
     h(rpcrt4.dll-v1-v2.diff.json)
+    j(rpcrt4.dll-v1-v2.diff.side-by-side.html)
 end
 ```
 
 ## Features
 
+- Command Line
 - Highlights important changes in the TOC
 - Fast - Can diff the full Windows kernel in less than a minute.
 - Beautiful Markdown Output
-  - [Visual Diff] Results
-  - Easily hosted in a gist
+  - Visual Diff Graph Results
+  - Easily hosted in a GitHub or GitLab gist, blog, or anywhere markdown is supported
   - Callgraphs support (coming soon)
 - Supports both unified and side by side diff results (unified is default)
+- Provides unique Meta Diffs
+  - Strings
+  - Called
+  - Calling
+  - Binary Metadata
 
 The heavy lifting of the binary analysis is done by Ghidra.  This library is just the glue that puts it all together. 
 
-## About
+## Engine
 
 > An "engine" is a self-contained, but externally-controllable, piece of code that encapsulates powerful logic designed to perform a specific type of work.
 
-`ghidriff` is provides a core base class, [GhidraDiffEngine](ghidriff/ghidra_diff_engine.py), that can be extended to create your own binary diffing [implementations](#implementations).
+`ghidriff` is provides a core base class [GhidraDiffEngine](ghidriff/ghidra_diff_engine.py) that can be extended to create your own binary diffing [implementations](#implementations).
 
 The base class implements first 3 steps of the Ghidra [headless workflow](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#steps):
 >1. **Create Ghidra Project** - Directory and collection of Ghidra project files and data
@@ -88,10 +106,9 @@ Each implementation leverags the base class, and implements `find_changes`.
 #### Usage
 
 ```bash
-usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH]
-                [--threaded | --no-threaded] [--force-analysis] [--force-diff] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--log-path LOG_PATH] [--verbose-analysis] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags]
-                [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS] [--md-title MD_TITLE]
+usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--threaded | --no-threaded]
+                [--force-analysis] [--force-diff] [--no-symbols] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                [--log-path LOG_PATH] [--va] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags] [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS] [--md-title MD_TITLE]
                 old new [new ...]
 
 ghidriff - A Command Line Ghidra Binary Diffing Engine
@@ -105,7 +122,7 @@ options:
   --engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}
                         The diff implementation to use. (default: VersionTrackingDiff)
   -o OUTPUT_PATH, --output-path OUTPUT_PATH
-                        Output path for resulting diffs (default: .ghidriffs)
+                        Output path for resulting diffs (default: ghidriffs)
   --summary SUMMARY     Add a summary diff if more than two bins are provided (default: False)
 
 Ghidra Project Options:
@@ -121,12 +138,14 @@ Engine Options:
                         Use threading during import, analysis, and diffing. Recommended (default: True)
   --force-analysis      Force a new binary analysis each run (slow) (default: False)
   --force-diff          Force binary diff (ignore arch/symbols mismatch) (default: False)
+  --no-symbols          Turn off symbols for analysis (default: False)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Set console log level (default: INFO)
   --file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
                         Set log file level (default: INFO)
   --log-path LOG_PATH   Set ghidriff log path. (default: ghidriff.log)
-  --verbose-analysis    Verbose logging for Ghidra analysis of each binary. (noisy) (default: False)
+  --va, --verbose-analysis
+                        Verbose logging for analysis step. (default: False)
 
 JVM Options:
   --max-ram-percent MAX_RAM_PERCENT
@@ -584,11 +603,13 @@ ghidriff afd.sys.x64.10.0.22621.1028 afd.sys.x64.10.0.22621.1415
 
 ### Design Goals
 
-- Fast 
+- Fast
 - Simple
-- Find added functions
-- Find deleted functions
-- Find modified functions
-- Generate JSON capturing Diff Results
-- Generate Markdown Diff
+- Accurate
+- Find all added, deleted, and modified functions
+- Easy sharing of results
+  - capture diff results in JSON
+  - diff reports generated in markdown or html
+- Enable Social Diffing
+- Provide building block for automation
 

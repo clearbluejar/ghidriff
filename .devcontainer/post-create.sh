@@ -29,8 +29,6 @@ if [ -z "$(ls -A $TEST_DATA_PATH)" ]; then
     popd
 fi
 
-
-
 # Setup Ghidra Dev for Reference
 # git clone https://github.com/NationalSecurityAgency/ghidra.git ~/ghidra-master
 # pushd ~/ghidra-master

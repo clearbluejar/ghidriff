@@ -1,12 +1,12 @@
 {
     // needed to make ghidra stubs work in this project (auto complete for vscode)
     "python.defaultInterpreterPath": "${workspaceFolder}.env/bin/python",
-    "python.analysis.stubPath": "${workspaceFolder}/.env/lib/python3.10/site-packages/ghidra-stubs/",
+    "python.analysis.stubPath": "${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/",
     "python.autoComplete.extraPaths": [
-        "${workspaceFolder}/.env/lib/python3.10/site-packages/ghidra-stubs/"
+        "${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/"
     ],
     "python.analysis.extraPaths": [
-        "${workspaceFolder}/.env/lib/python3.10/site-packages/ghidra-stubs/"
+        "${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/"
     ],
     // env vars        
     "GHIDRA_INSTALL_DIR": "${env:GHIDRA_INSTALL_DIR}",
@@ -14,5 +14,10 @@
     "GHIDRA_HEADLESS": "${env:GHIDRA_INSTALL_DIR}${pathSeparator}support${pathSeparator}analyzeHeadless",
     "PROJECT_NAME": "sample_project",
     "GHIDRA_BRIDGE_INSTALL_DIR": "${workspaceFolder}${pathSeparator}.ghidra_bridge",
-    "sarif-viewer.connectToGithubCodeScanning": "off"
+    "sarif-viewer.connectToGithubCodeScanning": "off",
+    "liveServer.settings.port": 5501,
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.autopep8"
+    },
+    "python.formatting.provider": "none"
 }

@@ -29,7 +29,7 @@
             "name": "Python: tcpip",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "module": "ghidriff",
             "console": "integratedTerminal",
             "justMyCode": true,
             // Don't edit env directly, they read from settings.json
@@ -136,7 +136,7 @@
             ]
         },
         {
-            "name": "localspl ",
+            "name": "localspl",
             "type": "python",
             "request": "launch",
             "module": "ghidriff",
@@ -201,6 +201,28 @@
             ]
         },
         {
+            "name": "same path, name ls ",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "/bin/ls",
+                "/bin/ls",
+                "/tmp/ls",
+            ]
+        },
+        {
             "name": "fxsroute with deletefile extern ",
             "type": "python",
             "request": "launch",
@@ -219,11 +241,59 @@
             "args": [
                 "--log-level",
                 "DEBUG",
-                "--md-title",
-                "asdfds",
+                // "--md-title",
+                // "asdfds",
                 "bins/fxsroute.dll.x64.10.0.22000.795",
                 "bins/fxsroute.dll.x64.10.0.22000.856",
                 "--sxs"
+            ]
+        },
+        {
+            "name": "libwhatsapp 2.22.16.11-12",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "--log-level",
+                "DEBUG",
+                "android/com.whatsapp.2.22.16.11.libwhatsapp.so",
+                "android/com.whatsapp.2.22.16.12.libwhatsapp.so",
+                // "--sxs"
+            ]
+        },
+        {
+            "name": "libwhatsapp 2.22.16.2-15.75",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "env": {
+                "GHIDRA_INSTALL_DIR": "${config:GHIDRA_INSTALL_DIR}",
+                "GHIDRA_PROJECTS_PATH": "${config:GHIDRA_PROJECTS_PATH}",
+                "GHIDRA_HEADLESS": "${config:GHIDRA_HEADLESS}",
+                "PROJECT_NAME": "${config:PROJECT_NAME}",
+                "GHIDRA_BRIDGE_INSTALL_DIR": "${config:GHIDRA_BRIDGE_INSTALL_DIR}",
+            },
+            "args": [
+                "--log-level",
+                "DEBUG",
+                "android/com.whatsapp.2.22.15.75-arm64-v8a.libwhatsapp.so",
+                "android/com.whatsapp.2.22.16.2-arm64-v8a.libwhatsapp.so",
+                // "--sxs"
             ]
         },
         {
