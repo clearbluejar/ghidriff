@@ -54,7 +54,7 @@ end
   - Calling
   - Binary Metadata
 
-The heavy lifting of the binary analysis is done by Ghidra.  This library is just the glue that puts it all together. 
+The heavy lifting of the binary analysis is done by Ghidra.  This library provides a diffing [workflow](#engine), function matching, and resulting markdown and html diffs. 
 
 ## Engine
 
@@ -69,9 +69,9 @@ The base class implements first 3 steps of the Ghidra [headless workflow](https:
 
 The base class provides the abstract method [find_matches](ghidriff/ghidra_diff_engine.py) where the actual "diffing" takes place.
 
-## Implementation 
+## Extending ghidriff 
 
-The basic idea is create new diffing tools by implementing the `find_matches` method from the base class. 
+`ghidriff` can be used as is, but offers developers the abilty to extend the tool by implementing their own differ. The basic idea is create new diffing tools by implementing the `find_matches` method from the base class. 
 
 ```python
 class NewDiffTool(GhidraDiffEngine):
@@ -95,13 +95,13 @@ class NewDiffTool(GhidraDiffEngine):
 
 ## Implementations
 
-There are currently 3 differs, which display the evolution of diffing for the project.
+There are currently 3 diffing implementations, which also display the evolution of diffing for the project.
 
 1. [SimpleDiff](ghidriff/simple_diff.py) - A simple diff finding implementation. "Simple" as in it relies mostly on known symbols to find the differences between functions.
-2. [StructualGraphDiff](ghidriff/structural_graph_diff.py) - A slightly more advanced differ, begining to perform some more advanced hashing (such as Halvar's Structural Graph Comparison)
+2. [StructualGraphDiff](ghidriff/structural_graph_diff.py) - A slightly more advanced differ, beginning to perform some more advanced hashing (such as Halvar's Structural Graph Comparison)
 3. [VersionTrackingDiff](ghidriff/version_tracking_diff.py) - The latest differ, with several [correlators](ghidriff/correlators.py) (an algorithm used to score specific associations based on code, program flow, or any observable aspect of comparison) for function matching. **This one is fast.**
 
-Each implementation leverags the base class, and implements `find_changes`.
+Each implementation leverages the base class, and implements `find_changes`.
 
 #### Usage
 
