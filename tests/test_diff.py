@@ -1,12 +1,7 @@
 from pathlib import Path
-
-from ghidriff.ghidra_diff_engine import GhidraDiffEngine
-
-from ghidriff import get_parser, get_engine_classes, VersionTrackingDiff
-
-import requests
 import json
-import os
+
+from ghidriff import get_parser, get_engine_classes, VersionTrackingDiff, GhidraDiffEngine
 
 SYMBOLS_DIR = 'symbols'
 BINS_DIR = 'bins'
