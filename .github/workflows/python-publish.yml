@@ -1,0 +1,56 @@
+# This workflow will upload a Python Package using Twine when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Upload Python Package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # This workflow can be matrixed against multiple Python versions if desired. eg. [3.7, 3.8, 3.9, "3.10"]
+        python-version: [ 3.8 ]
+
+    steps:
+      # Get the code from the repository to be linted, packaged, and pushed
+      - name: Get Repo
+        uses: actions/checkout@v3
+
+      # Setup the Python environment
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Install the packages for linting and building the package
+      - name: Prepare Build Environment
+        run: |
+          pip install -q flake8 twine wheel build
+      # Build the distributable package 
+      - name: Build Objects        
+        run: python -m build
+
+      # Ensure the objects were packaged correctly and there wasn't an issue with
+      # the compilation or packaging process.
+      - name: Check Objects
+        if: startsWith(github.ref, 'refs/tags')
+        run: twine check dist/*
+
+      # If this commit is the result of a Git tag, push the wheel and tar packages
+      # to the PyPi registry
+      - name: Publish to PyPI        
+        run: twine upload --repository-url https://upload.pypi.org/legacy/ -u __token__ -p ${{ secrets.PYPI_API_TOKEN }} --skip-existing --verbose dist/*
