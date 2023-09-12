@@ -1,6 +1,6 @@
 {
     // needed to make ghidra stubs work in this project (auto complete for vscode)
-    "python.defaultInterpreterPath": "${workspaceFolder}.env/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.env/bin/python",
     "python.analysis.stubPath": "${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/",
     "python.autoComplete.extraPaths": [
         "${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/"
