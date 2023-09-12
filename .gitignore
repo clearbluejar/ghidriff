@@ -136,3 +136,5 @@ ghidriffs/
 
 # pytest data (pulled from https://github.com/clearbluejar/ghidriff-test-data)
 tests/data
+
+.DS_Store
