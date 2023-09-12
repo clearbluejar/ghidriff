@@ -1444,7 +1444,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.logger.info("Finished diffing old program: {}".format(p1.getName()))
         self.logger.info("Finished diffing program: {}".format(p2.getName()))
 
-        self.logger.info(json.dumps(pdiff['stats'], indent=2))
+        self.logger.debug(json.dumps(pdiff['stats'], indent=2))
 
         return pdiff
 
