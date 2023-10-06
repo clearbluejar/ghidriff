@@ -1314,20 +1314,20 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             old_instructions = ematch_1['instructions']
             new_instructions = ematch_2['instructions']
 
-            instructions_ratio = difflib.SequenceMatcher(None, old_instructions, new_instructions).ratio()
+            instructions_ratio = round(difflib.SequenceMatcher(None, old_instructions, new_instructions).ratio(),2)
 
             old_mnemonics = ematch_1['mnemonics']
             new_mnemonics = ematch_2['mnemonics']
 
-            mnemonics_ratio = difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio()
+            mnemonics_ratio = round(difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio(),2)
 
             old_blocks = ematch_1['blocks']
             new_blocks = ematch_2['blocks']
 
-            blocks_ratio = difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio()
+            blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio())
 
             # ignore signature for ratio
-            ratio = difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio()
+            ratio = round(difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio(),2)
 
             self.normalize_ghidra_decomp(old_code)
             self.normalize_ghidra_decomp(new_code)
@@ -1472,7 +1472,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             self.logger.debug(f'Engine Args {args}')
             self.logger.debug(f'Engine Arg Defaults {defaults}')
 
-            known_cmd_line.append('python')
             known_cmd_line.append(__package__)
 
             for arg in vars(args):

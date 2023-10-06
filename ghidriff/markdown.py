@@ -54,6 +54,7 @@ class GhidriffMarkdown:
         text += "<details>\n"
         if summary:
             text += f"<summary>{summary}</summary>\n"
+        text += '\n'
         text += diff
         text += "\n</details>\n"
 
@@ -143,7 +144,10 @@ class GhidriffMarkdown:
         keys = ['diff_type', 'ratio', 'i_ratio', 'm_ratio', 'b_ratio', 'match_types']
         count = 1
         for key in keys:
-            table_list.extend([key, modified[key]])
+            val = modified[key]
+            if isinstance(val,list):
+                val = ','.join(val)
+            table_list.extend([key, val])
             count += 1
 
         diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
@@ -589,12 +593,10 @@ pie showData
 
         md.new_header(3, 'Command Line')
         known_cmd, extra_cmd, full_cmd = self.gen_diff_cmd_line(old_name, new_name)
-        md.new_header(4, 'Known Command Line', add_table_of_contents='n')
+        md.new_header(4, 'Captured Command Line', add_table_of_contents='n')
         md.new_paragraph(self._wrap_with_code(known_cmd))
-        md.new_header(4, 'Extra Args', add_table_of_contents='n')
-        md.new_paragraph(self._wrap_with_code(extra_cmd))
-        md.new_header(4, 'All Args', add_table_of_contents='n')
-        md.new_paragraph(self._wrap_with_code(full_cmd))
+        md.new_header(4, 'Verbose Args', add_table_of_contents='n')        
+        md.new_paragraph(self._wrap_with_details(self._wrap_with_code(full_cmd)))
 
         if pdiff.get('old_pe_url') is not None and pdiff.get('new_pe_url') is not None:
             md.new_header(4, 'Download Original PEs')
