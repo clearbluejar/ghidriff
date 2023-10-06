@@ -7,17 +7,16 @@
 </p> -->
 
 <p align='center'>
-<img src="https://user-images.githubusercontent.com/3752074/229976340-96394970-152f-4d88-9fe4-a46589b31c50.png" height="300">
+<img src="https://github.com/clearbluejar/ghidriff/assets/3752074/96693811-b09d-4655-8a36-904e883578fa" height="300">
 </p>
-
 
 ## About
 
-`ghidriff` is a [Ghidra](https://ghidra-sre.org/) enabled binary diffing engine. It leverages the power of Ghidra's SRE [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. 
+`ghidriff` provides a command line binary diffing capability with a fresh take on diffing workflow and results.
 
-It's primary use case is for patch diffing. It is written in Python 3 using `pyhidra` to orchestrate Ghidra and `jpype` as the interface to Ghidra.
+It leverages the power of Ghidra's ProgramAPI and [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. It is written in Python3 using `pyhidra` to orchestrate Ghidra and `jpype` as the Python to Java interface to Ghidra.
 
-
+Its primary use cases is patch diffing. Its ability to perform a patch diff with a single command make it ideal for automated analysis. The diffing results are stored in json and rendered in markdown (optionally side-by-side html). The markdown output promotes "social" diffing, as results are easy to publish in a gist or include in yout next writeup or blog post. 
 
 ## High Level
 
@@ -40,34 +39,56 @@ end
 
 ## Features
 
-- Command Line
+- Command Line (patch diffing workflow reduced to a single step)
 - Highlights important changes in the TOC
-- Fast - Can diff the full Windows kernel in less than a minute.
-- Beautiful Markdown Output
-  - Visual Diff Graph Results
+- Fast - Can diff the full Windows kernel in less than a minute (after Ghidra analysis is complete)
+- Enables Social Diffing
+  - Beautiful Markdown Output  
   - Easily hosted in a GitHub or GitLab gist, blog, or anywhere markdown is supported
-  - Callgraphs support (coming soon)
+  - Visual Diff Graph Results
 - Supports both unified and side by side diff results (unified is default)
-- Provides unique Meta Diffs
-  - Strings
+- Provides unique Meta Diffs:
+  - Binary Strings
   - Called
   - Calling
   - Binary Metadata
+- Batteries Included
+  - Docker support
+  - Automated Testing
+  - Ghidra (No license required)
 
-The heavy lifting of the binary analysis is done by Ghidra.  This library provides a diffing [workflow](#engine), function matching, and resulting markdown and html diffs. 
+## Design Goals
+
+- Find all added, deleted, and modified functions
+- Provide foundation for automation
+- Simple, Fast, Accurate
+- Resilient
+- Extendable
+- Easy sharing of results
+  - capture diff results in JSON
+- Social Diffing
+	- diff reports generated in markdown or html
+
+## Powered by Ghidra
+
+The heavy lifting of the binary analysis is done by Ghidra and the diffing is possible via Ghidra's Program API.  `ghidriff` provides a diffing [workflow](#engine), function matching, and resulting markdown and html diff output.
 
 ## Engine
 
+<p align='center'>
+<img src="https://user-images.githubusercontent.com/3752074/229976340-96394970-152f-4d88-9fe4-a46589b31c50.png" height="300">
+</p>
+
 > An "engine" is a self-contained, but externally-controllable, piece of code that encapsulates powerful logic designed to perform a specific type of work.
 
-`ghidriff` is provides a core base class [GhidraDiffEngine](ghidriff/ghidra_diff_engine.py) that can be extended to create your own binary diffing [implementations](#implementations).
+`ghidriff` provides a core base class [GhidraDiffEngine](ghidriff/ghidra_diff_engine.py) that can be extended to create your own binary diffing [implementations](#implementations).
 
 The base class implements first 3 steps of the Ghidra [headless workflow](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#steps):
 >1. **Create Ghidra Project** - Directory and collection of Ghidra project files and data
 >2. **Import Binary to project** - Import one or more binaries to the project for analysis
 >3. **Analyze Binary** - Ghidra will perform default binary analysis on each binary
 
-The base class provides the abstract method [find_matches](ghidriff/ghidra_diff_engine.py) where the actual "diffing" takes place.
+The base class provides the abstract method [find_matches](ghidriff/ghidra_diff_engine.py) where the actual diffing (function matching) takes place.
 
 ## Extending ghidriff 
 
@@ -136,7 +157,7 @@ Ghidra Project Options:
 Engine Options:
   --threaded, --no-threaded
                         Use threading during import, analysis, and diffing. Recommended (default: True)
-  --force-analysis      Force a new binary analysis each run (slow) (default: False)
+  --force-analysis      Force a fresh binary analysis each run (default: False)
   --force-diff          Force binary diff (ignore arch/symbols mismatch) (default: False)
   --no-symbols          Turn off symbols for analysis (default: False)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
@@ -161,7 +182,7 @@ Markdown Options:
   --md-title MD_TITLE   Overwrite default title for markdown diff (default: None)
 ```
 
-There are quite a few options here, and some complexity. Generally you can succeed with the defaults, but there is some flexibility with how much of the hosts resources the JVM will use.
+There are quite a few options here, and some complexity. Generally you can succeed with the defaults, but you can override the defaults as needed. One example might be to increase the JVM RAM used to run Ghidra to enable faster analysis of large binaries (`--max-ram-percent 80`). See help for details of other options. 
 
 ## Quick Start Environment Setup
 
@@ -182,7 +203,7 @@ export GHIDRA_INSTALL_DIR="/path/to/ghidra/"
 pip install ghidriff
 ```
 
-### Devcontainer / Docker
+### Ghidriff in a Box - Devcontainer / Docker
 
 Don't want to install Ghidra and Java on your host?  Use the [.devcontainer](.devcontainer) in this repo. If you don't know how, follow the detailed instructions here: [ghidra-python-vscode-devcontainer-skeleton quick setup](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option).
 
@@ -569,17 +590,19 @@ INFO | ghidriff | Wrote .ghidriffs/json/ntoskrnl.exe.10.0.22621.1344-ntoskrnl.ex
 ```
 </details>
 
+#### Analyze the Diff
+
 Results in this beatiful markdown: [ntoskrnl.exe.10.0.22621.1344-ntoskrnl.exe.10.0.22621.1413.diff.md](https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282)
 
 See if you can figure out what function was patched for [CVE-2023-2342](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-23420).
 
 - Details of [CVE-2023-2342](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-23420) can be found here: [https://bugs.chromium.org/p/project-zero/issues/detail?id=2392](https://bugs.chromium.org/p/project-zero/issues/detail?id=2392)
 
-Prefer a side by side diff? Try out `ghidriff`'s custom viewer.  https://diffpreview.github.io/?b95ae854a92ee917cd0b5c7055b60282
+Prefer a side by side diff? Try out `ghidriff`'s custom html viewer. https://diffpreview.github.io/?b95ae854a92ee917cd0b5c7055b60282
 
 ### Diffing CVE-2023-21768
 
-Details of the CVE-2023-21768 (detailed in this [post](https://securityintelligence.com/posts/patch-tuesday-exploit-wednesday-pwning-windows-ancillary-function-driver-winsock/)). What if you wanted to repeat this patch diff with `ghidriff`?
+Details of the CVE-2023-21768 (detailed in this blog [post](https://securityintelligence.com/posts/patch-tuesday-exploit-wednesday-pwning-windows-ancillary-function-driver-winsock/)). What if you wanted to repeat this patch diff with `ghidriff`?
 
 1. Download two versions of `AFD.sys` (vulnerable and patched):
 
@@ -596,20 +619,6 @@ ghidriff afd.sys.x64.10.0.22621.1028 afd.sys.x64.10.0.22621.1415
 
 3. Review results
 
- The results are posted in this [gist](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d). The vulnerable function  `AfdNotifyRemoveIoCompletion` was identified here with a [single line change](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d#afdnotifyremoveiocompletion-diff).
+ The diff results are posted in this GitHub [gist](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d). The vulnerable function  `AfdNotifyRemoveIoCompletion` was identified here with a [single line change](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d#afdnotifyremoveiocompletion-diff).
 
- Want to see the diff in a side by side? https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d 
-
-
-### Design Goals
-
-- Fast
-- Simple
-- Accurate
-- Find all added, deleted, and modified functions
-- Easy sharing of results
-  - capture diff results in JSON
-  - diff reports generated in markdown or html
-- Enable Social Diffing
-- Provide building block for automation
-
+ Want to see the entire diff in a side by side? https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d or jump to the [single line change](https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d#d2h-703858:~:text=ProbeForWrite(*(undefined8%20*)(param_3%20%2B%200x18)%2C4%2C4)%3B)
