@@ -1324,7 +1324,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             old_blocks = ematch_1['blocks']
             new_blocks = ematch_2['blocks']
 
-            blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio())
+            blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio(),2)
 
             # ignore signature for ratio
             ratio = round(difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio(),2)
