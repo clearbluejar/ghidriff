@@ -74,7 +74,7 @@ def main():
 
         d.validate_diff_json(pdiff_json)
 
-        diff_name = f"{Path(diff[0]).name}-{Path(diff[1]).name}_diff"
+        diff_name = f"{Path(diff[0]).name}-{Path(diff[1]).name}.ghidriff"
 
         d.dump_pdiff_to_path(diff_name,
                              pdiff,
