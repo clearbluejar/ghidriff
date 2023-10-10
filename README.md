@@ -1,22 +1,18 @@
-# Ghidriff - Ghidra Binary Diffing Engine
-
-<!-- <p align="center">    
-<img align="center" alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/clearbluejar/ghidriff/pytest-devcontainer.yml?label=pytest&style=for-the-badge">
-<img align="center" alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/ghidriff?color=yellow&label=PyPI%20downloads&style=for-the-badge">
-<img align="center" src="https://img.shields.io/github/stars/clearbluejar/ghidriff?style=for-the-badge">
-</p> -->
-
 <p align='center'>
 <img src="https://github.com/clearbluejar/ghidriff/assets/3752074/96693811-b09d-4655-8a36-904e883578fa" height="300">
 </p>
 
-## About
+<p align="center">    
+<img align="center" alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/clearbluejar/ghidriff/pytest-devcontainer.yml?label=pytest&style=for-the-badge">
+<img align="center" alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/ghidriff?color=yellow&label=PyPI%20downloads&style=for-the-badge">
+<img align="center" src="https://img.shields.io/github/stars/clearbluejar/ghidriff?style=for-the-badge">
 
-`ghidriff` provides a command line binary diffing capability with a fresh take on diffing workflow and results.
+## Ghidriff - Ghidra Binary Diffing Engine
+`ghidriff` provides a command-line binary diffing capability with a fresh take on diffing workflow and results.
 
 It leverages the power of Ghidra's ProgramAPI and [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. It is written in Python3 using `pyhidra` to orchestrate Ghidra and `jpype` as the Python to Java interface to Ghidra.
 
-Its primary use cases is patch diffing. Its ability to perform a patch diff with a single command make it ideal for automated analysis. The diffing results are stored in json and rendered in markdown (optionally side-by-side html). The markdown output promotes "social" diffing, as results are easy to publish in a gist or include in yout next writeup or blog post. 
+Its primary use case is patch diffing. Its ability to perform a patch diff with a single command makes it ideal for automated analysis. The diffing results are stored in JSON and rendered in markdown (optionally side-by-side HTML). The markdown output promotes "social" diffing, as results are easy to publish in a gist or include in your next writeup or blog post. 
 
 ## High Level
 
@@ -65,13 +61,11 @@ end
 - Resilient
 - Extendable
 - Easy sharing of results
-  - capture diff results in JSON
 - Social Diffing
-	- diff reports generated in markdown or html
 
 ## Powered by Ghidra
 
-The heavy lifting of the binary analysis is done by Ghidra and the diffing is possible via Ghidra's Program API.  `ghidriff` provides a diffing [workflow](#engine), function matching, and resulting markdown and html diff output.
+The heavy lifting of the binary analysis is done by Ghidra and the diffing is possible via Ghidra's Program API.  `ghidriff` provides a diffing [workflow](#engine), function matching, and resulting markdown and HTML diff output.
 
 ## Engine
 
@@ -83,7 +77,7 @@ The heavy lifting of the binary analysis is done by Ghidra and the diffing is po
 
 `ghidriff` provides a core base class [GhidraDiffEngine](ghidriff/ghidra_diff_engine.py) that can be extended to create your own binary diffing [implementations](#implementations).
 
-The base class implements first 3 steps of the Ghidra [headless workflow](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#steps):
+The base class implements the first 3 steps of the Ghidra [headless workflow](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#steps):
 >1. **Create Ghidra Project** - Directory and collection of Ghidra project files and data
 >2. **Import Binary to project** - Import one or more binaries to the project for analysis
 >3. **Analyze Binary** - Ghidra will perform default binary analysis on each binary
@@ -92,7 +86,7 @@ The base class provides the abstract method [find_matches](ghidriff/ghidra_diff_
 
 ## Extending ghidriff 
 
-`ghidriff` can be used as is, but offers developers the abilty to extend the tool by implementing their own differ. The basic idea is create new diffing tools by implementing the `find_matches` method from the base class. 
+`ghidriff` can be used as is, but it offers developers the ability to extend the tool by implementing their own differ. The basic idea is create new diffing tools by implementing the `find_matches` method from the base class. 
 
 ```python
 class NewDiffTool(GhidraDiffEngine):
@@ -118,7 +112,7 @@ class NewDiffTool(GhidraDiffEngine):
 
 There are currently 3 diffing implementations, which also display the evolution of diffing for the project.
 
-1. [SimpleDiff](ghidriff/simple_diff.py) - A simple diff finding implementation. "Simple" as in it relies mostly on known symbols to find the differences between functions.
+1. [SimpleDiff](ghidriff/simple_diff.py) - A simple diff implementation. "Simple" as in it relies mostly on known symbol names for matching. 
 2. [StructualGraphDiff](ghidriff/structural_graph_diff.py) - A slightly more advanced differ, beginning to perform some more advanced hashing (such as Halvar's Structural Graph Comparison)
 3. [VersionTrackingDiff](ghidriff/version_tracking_diff.py) - The latest differ, with several [correlators](ghidriff/correlators.py) (an algorithm used to score specific associations based on code, program flow, or any observable aspect of comparison) for function matching. **This one is fast.**
 
@@ -205,7 +199,19 @@ pip install ghidriff
 
 ### Ghidriff in a Box - Devcontainer / Docker
 
-Don't want to install Ghidra and Java on your host?  Use the [.devcontainer](.devcontainer) in this repo. If you don't know how, follow the detailed instructions here: [ghidra-python-vscode-devcontainer-skeleton quick setup](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option).
+Don't want to install Ghidra and Java on your host?
+
+#### For Docker command-line diffing
+
+```
+docker pull ghcr.io/clearbluejar/ghidra-python:latest
+pip install ghidriff
+```
+
+#### For development
+
+Use the [.devcontainer](.devcontainer) in this repo. If you don't know how, follow the detailed instructions here: [ghidra-python-vscode-devcontainer-skeleton quick setup](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option).
+
 
 
 ## Sample Usage
