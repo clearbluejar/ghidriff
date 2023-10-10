@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ghidriff module run: ntos ",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            // Don't edit env directly, they read from settings.json
+            // Add/delete new vars as needed
+            "args": [
+                "bins/ntoskrnl.exe.x64.10.0.22621.1105",
+                "bins/ntoskrnl.exe.x64.10.0.22621.1194",
+            ]
+        },
+    ]
+}
