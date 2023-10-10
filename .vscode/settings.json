@@ -10,14 +10,9 @@
     ],
     // env vars        
     "GHIDRA_INSTALL_DIR": "${env:GHIDRA_INSTALL_DIR}",
-    "GHIDRA_PROJECTS_PATH": "${workspaceFolder}${pathSeparator}.ghidra_projects",
-    "GHIDRA_HEADLESS": "${env:GHIDRA_INSTALL_DIR}${pathSeparator}support${pathSeparator}analyzeHeadless",
-    "PROJECT_NAME": "sample_project",
-    "GHIDRA_BRIDGE_INSTALL_DIR": "${workspaceFolder}${pathSeparator}.ghidra_bridge",
     "sarif-viewer.connectToGithubCodeScanning": "off",
     "liveServer.settings.port": 5501,
     "[python]": {
         "editor.defaultFormatter": "ms-python.autopep8"
     },
-    "python.formatting.provider": "none"
 }
