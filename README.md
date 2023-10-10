@@ -1,6 +1,7 @@
 <p align='center'>
-<img src="https://github.com/clearbluejar/ghidriff/assets/3752074/96693811-b09d-4655-8a36-904e883578fa" height="300">
+<img src="https://github.com/clearbluejar/ghidriff/assets/3752074/170f1a54-24d9-4c8e-ac4d-3b5bea860750" height="300">
 </p>
+
 
 <p align="center">    
 <img align="center" alt="GitHub Workflow Status (with event)" src="https://img.shields.io/github/actions/workflow/status/clearbluejar/ghidriff/pytest-devcontainer.yml?label=pytest&style=for-the-badge">
