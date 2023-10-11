@@ -26,6 +26,16 @@ def main():
     else:
         engine_log_path = Path(args.log_path)
 
+    if args.project_location == parser.get_default('project_location'):
+        project_path = output_path / parser.get_default('project_location')
+    else:
+        project_path = Path(args.project_location)
+
+    if args.symbols_path == parser.get_default('symbols_path'):
+        symbols_path = output_path / parser.get_default('symbols_path')
+    else:
+        symbols_path = Path(args.symbols_path)
+
     binary_paths = args.old + [bin for sublist in args.new for bin in sublist]
 
     binary_paths = [Path(path) for path in binary_paths]
@@ -54,7 +64,7 @@ def main():
                                      engine_file_log_level=args.file_log_level
                                      )
 
-    d.setup_project(binary_paths, args.project_location, project_name, args.symbols_path)
+    d.setup_project(binary_paths, project_path, project_name, symbols_path)
 
     d.analyze_project()
 
