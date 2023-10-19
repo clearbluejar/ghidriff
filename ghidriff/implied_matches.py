@@ -47,7 +47,7 @@ def find_implied_match(src_func: "ghidra.program.model.listing.Function", dst_fu
 
     src_ref_to_addr = ref.getToAddress()
     if not src_ref_to_addr.isMemoryAddress():
-        print(f'skipped: src_ref_to_addr {src_ref_to_addr} is not Memory address!')
+        # print(f'skipped: src_ref_to_addr {src_ref_to_addr} is not Memory address!')
         return None
 
     src_ref_to_addr = get_actual_reference(src_func.getProgram(), src_ref_to_addr)
