@@ -6,6 +6,9 @@ name: Pytest Python Package In Devcontainer
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'ghidriff/**'
+      - 'tests/**'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -17,7 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ["latest", "10.1.5ghidra3.11python-bookworm"]
+        # cover the latest and all versions of all subreleases        
+        image: ["latest", "10.4ghidra3.8python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
 
     steps:
     - uses: actions/checkout@v3
