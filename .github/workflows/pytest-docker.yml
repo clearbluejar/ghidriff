@@ -31,8 +31,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: |
-        mkdir tmp
-        cd tmp
         python -m venv .env
         source .env/bin/activate        
         ls -a        
@@ -43,6 +41,8 @@ jobs:
         pip install -e ".[testing]"
         #init pyhidra
         python -m pyhidra.install_plugins
+        pushd /tmp
+        popd
         # download data to shared test data
         if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
         pytest -rA
