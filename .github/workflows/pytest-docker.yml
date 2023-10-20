@@ -39,6 +39,8 @@ jobs:
         pip install --upgrade pip
         # install ghidriff package and testing reqs
         pip install -e ".[testing]"
+        pushd /tmp
+        popd
         #init pyhidra
         python -m pyhidra.install_plugins
         pushd /tmp
