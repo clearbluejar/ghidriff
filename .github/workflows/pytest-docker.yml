@@ -31,6 +31,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: |
+        mkdir tmp
+        cd tmp
         python -m venv .env
         source .env/bin/activate        
         ls -a        
