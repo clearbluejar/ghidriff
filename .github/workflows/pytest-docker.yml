@@ -28,6 +28,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: | 
+        su vscode
         env
         ls /usr/local/include/
         pip install --upgrade pip
