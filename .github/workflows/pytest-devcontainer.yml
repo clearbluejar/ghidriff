@@ -35,7 +35,7 @@ jobs:
         runCmd: |
           pip install --upgrade pip
           # install package and testing
-          pip install -e ".[testing]"          
+          pip install -e ".[testing]"
           # download data to shared test data
-          git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data
+          if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
           pytest -rA

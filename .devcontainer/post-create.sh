@@ -22,7 +22,7 @@ pip install -e ".[testing]"
 # git clone test data if dir doesn't exist
 TEST_DATA_PATH="tests/data"
 
-if [ -z "$(ls -A $TEST_DATA_PATH)" ]; then
+if [ ! -d "$TEST_DATA_PATH" ] ; then
     git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data
     pushd $TEST_DATA_PATH
     git remote set-url origin git@github.com:clearbluejar/ghidriff-test-data.git
