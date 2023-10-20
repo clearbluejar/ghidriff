@@ -5,7 +5,7 @@ name: Pytest Python Package In Docker Image
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "fix-workflows" ]
     paths:
       - 'ghidriff/**'
       - 'tests/**'
