@@ -24,6 +24,8 @@ jobs:
         image: ["latest", "10.4ghidra3.8python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
     
     container: ghcr.io/clearbluejar/ghidra-python:${{ matrix.image }}
+    env:
+      GHIDRA_INSTALL_DIR: /ghidra
 
     steps:
     - uses: actions/checkout@v3
