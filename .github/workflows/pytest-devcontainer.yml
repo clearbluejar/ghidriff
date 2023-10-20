@@ -29,10 +29,12 @@ jobs:
       uses: devcontainers/ci@v0.3
       with:
         imageName: ghcr.io/clearbluejar/ghidra-python
-        cacheFrom: ghcr.io/clearbluejar/ghidra-python
+        # cacheFrom: ghcr.io/clearbluejar/ghidra-python
         imageTag: ${{matrix.image}}
         push: never
         runCmd: |
+          env
+          ls /usr/local/include/
           pip install --upgrade pip
           # install package and testing
           pip install -e ".[testing]"
