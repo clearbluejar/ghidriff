@@ -42,7 +42,8 @@ jobs:
         pushd /tmp
         popd
         #init pyhidra
-        python -m pyhidra.install_plugins
+        #python -m pyhidra.install_plugins
+        pyhidra &
         pushd /tmp
         popd
         # download data to shared test data
