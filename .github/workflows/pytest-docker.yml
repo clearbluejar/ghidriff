@@ -24,15 +24,15 @@ jobs:
         image: ["latest", "10.4ghidra3.9python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
     
     container:
-      image: ghcr.io/clearbluejar/ghidra-python:${{ matrix.image }}
-      options: --user vscode
-      env:    
-        GHIDRA_INSTALL_DIR: /ghidra
+        image: ghcr.io/clearbluejar/ghidra-python:${{ matrix.image }}
+        env:
+            GHIDRA_INSTALL_DIR: /ghidra
 
     steps:
     - uses: actions/checkout@v3
     - run: | 
-        whoami
+        pwd
+        ls -a        
         env
         ls /usr/local/include/
         pip install --upgrade pip
