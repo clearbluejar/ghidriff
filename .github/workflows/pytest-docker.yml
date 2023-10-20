@@ -9,6 +9,7 @@ on:
     paths:
       - 'ghidriff/**'
       - 'tests/**'
+      - '.github/workflows/pytest-docker.yml'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -39,14 +40,15 @@ jobs:
         pip install --upgrade pip
         # install ghidriff package and testing reqs
         pip install -e ".[testing]"
-        pushd /tmp
-        popd
+      shell: bash
+    - run: | 
+        source .env/bin/activate
         #init pyhidra
-        #python -m pyhidra.install_plugins
-        pyhidra &
+        python -m pyhidra.install_plugins        
         pushd /tmp
         popd
         # download data to shared test data
         if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
         pytest -rA
       shell: bash
+      
