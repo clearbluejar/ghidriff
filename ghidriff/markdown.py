@@ -145,7 +145,7 @@ class GhidriffMarkdown:
         count = 1
         for key in keys:
             val = modified[key]
-            if isinstance(val,list):
+            if isinstance(val, list):
                 val = ','.join(val)
             table_list.extend([key, val])
             count += 1
@@ -268,23 +268,22 @@ class GhidriffMarkdown:
         if isinstance(new_code, str):
             new_code = new_code.splitlines(True)
 
-        match html_type:
-            case 'inline':
-                styles = '<style type="text/css">%(styles)s\n</style>' % dict(
-                    styles=difflib.HtmlDiff(tabsize=tabsize)._styles)
-                table = difflib.HtmlDiff(tabsize=tabsize).make_table(
-                    old_code, new_code, fromdesc=old_name, todesc=new_name)
+        if html_type == 'inline':
+            styles = '<style type="text/css">%(styles)s\n</style>' % dict(
+                styles=difflib.HtmlDiff(tabsize=tabsize)._styles)
+            table = difflib.HtmlDiff(tabsize=tabsize).make_table(
+                old_code, new_code, fromdesc=old_name, todesc=new_name)
 
-                diff_html = styles + table
-                diff_html.encode(charset, 'xmlcharrefreplace').decode(charset)
-            case 'table-only':
-                diff_html = difflib.HtmlDiff(tabsize=4).make_table(
-                    old_code, new_code, fromdesc=old_name, todesc=new_name)
-            case 'file':
-                diff_html = difflib.HtmlDiff(tabsize=tabsize).make_file(
-                    old_code, new_code, fromdesc=old_name, todesc=new_name)
-            case _:
-                raise NotImplementedError
+            diff_html = styles + table
+            diff_html.encode(charset, 'xmlcharrefreplace').decode(charset)
+        elif html_type == 'table-only':
+            diff_html = difflib.HtmlDiff(tabsize=4).make_table(
+                old_code, new_code, fromdesc=old_name, todesc=new_name)
+        elif html_type == 'file':
+            diff_html = difflib.HtmlDiff(tabsize=tabsize).make_file(
+                old_code, new_code, fromdesc=old_name, todesc=new_name)
+        else:
+            raise NotImplementedError
 
         if dedent_table:
             diff_html = diff_html.splitlines(True)
@@ -519,12 +518,21 @@ pie showData
         new_url = pdiff['new_pe_url']
 
         # PE Property[OriginalFilename]: localspl.dll
-        old_filename = pdiff['old_meta']['PE Property[OriginalFilename]'].lower()
-        new_filename = pdiff['new_meta']['PE Property[OriginalFilename]'].lower()
+
+        if pdiff['old_meta'].get('OriginalFilename') is not None:
+            # handle Ghidra pe_key before 10.2
+            pe_key = 'OriginalFilename'
+            ver_key = 'ProductVersion'
+        else:
+            pe_key = 'PE Property[OriginalFilename]'
+            ver_key = 'PE Property[ProductVersion]'
+
+        old_filename = pdiff['old_meta'][pe_key].lower()
+        new_filename = pdiff['new_meta'][pe_key].lower()
 
         # PE Property[ProductVersion]: 10.0.22000.795
-        old_ver = pdiff['old_meta']['PE Property[ProductVersion]']
-        new_ver = pdiff['new_meta']['PE Property[ProductVersion]']
+        old_ver = pdiff['old_meta'][ver_key]
+        new_ver = pdiff['new_meta'][ver_key]
 
         # Processor: x86
         # Address Size: 64
@@ -595,7 +603,7 @@ pie showData
         known_cmd, extra_cmd, full_cmd = self.gen_diff_cmd_line(old_name, new_name)
         md.new_header(4, 'Captured Command Line', add_table_of_contents='n')
         md.new_paragraph(self._wrap_with_code(known_cmd))
-        md.new_header(4, 'Verbose Args', add_table_of_contents='n')        
+        md.new_header(4, 'Verbose Args', add_table_of_contents='n')
         md.new_paragraph(self._wrap_with_details(self._wrap_with_code(full_cmd)))
 
         if pdiff.get('old_pe_url') is not None and pdiff.get('new_pe_url') is not None:

@@ -160,9 +160,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         """
 
         group = parser.add_argument_group('Ghidra Project Options')
-        group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='.ghidra_projects')
+        group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='ghidra_projects')
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='ghidriff')
-        group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='.symbols')
+        group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='symbols')
 
         group = parser.add_argument_group('Engine Options')
         group.add_argument('--threaded', help='Use threading during import, analysis, and diffing. Recommended',
@@ -194,6 +194,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--max-section-funcs',
                            help='Max number of functions to display per section.', type=int, default=200)
         group.add_argument('--md-title', help='Overwrite default title for markdown diff', type=str, default=None)
+
+    def get_ghidra_version(self) -> str:
+
+        from pyhidra.version import get_ghidra_version
+
+        return get_ghidra_version()
 
     def get_default_args(self) -> list:
         """
@@ -743,6 +749,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                     self.logger.warn(f"Turning off 'Shared Return Calls' for {program}")
                     self.set_analysis_option_bool(
                         program, 'Shared Return Calls.Assume Contiguous Functions Only', False)
+
+                # TODO make this argument optional, or provide custom analyzer config parsing
+                # This really helps with decompilation, was turned off by default in 10.x
+                # self.set_analysis_option_bool(program, 'Decompiler Parameter ID', True)
 
                 if self.no_symbols:
                     self.logger.warn(f'Disabling symbols for analysis! --no-symbols flag: {self.no_symbols}')
@@ -1314,20 +1324,20 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             old_instructions = ematch_1['instructions']
             new_instructions = ematch_2['instructions']
 
-            instructions_ratio = round(difflib.SequenceMatcher(None, old_instructions, new_instructions).ratio(),2)
+            instructions_ratio = round(difflib.SequenceMatcher(None, old_instructions, new_instructions).ratio(), 2)
 
             old_mnemonics = ematch_1['mnemonics']
             new_mnemonics = ematch_2['mnemonics']
 
-            mnemonics_ratio = round(difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio(),2)
+            mnemonics_ratio = round(difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio(), 2)
 
             old_blocks = ematch_1['blocks']
             new_blocks = ematch_2['blocks']
 
-            blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio(),2)
+            blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio(), 2)
 
             # ignore signature for ratio
-            ratio = round(difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio(),2)
+            ratio = round(difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio(), 2)
 
             self.normalize_ghidra_decomp(old_code)
             self.normalize_ghidra_decomp(new_code)
@@ -1425,10 +1435,16 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         pdiff['new_meta'] = self.get_metadata(p2)
 
         # add pe url
-        if 'visualstudio' in p1.compiler:
-            pdiff['old_pe_url'] = self.get_pe_download_url(old, pdiff['old_meta']['PE Property[OriginalFilename]'])
-        if 'visualstudio' in p1.compiler:
-            pdiff['new_pe_url'] = self.get_pe_download_url(new, pdiff['new_meta']['PE Property[OriginalFilename]'])
+        if 'visualstudio' in p1.compiler and 'visualstudio' in p2.compiler:
+
+            if pdiff['old_meta'].get('OriginalFilename') is not None:
+                # handle Ghidra pe_key before 10.2
+                pe_key = 'OriginalFilename'
+            else:
+                pe_key = 'PE Property[OriginalFilename]'
+
+            pdiff['old_pe_url'] = self.get_pe_download_url(old, pdiff['old_meta'][pe_key])
+            pdiff['new_pe_url'] = self.get_pe_download_url(new, pdiff['new_meta'][pe_key])
 
         pdiff['md_credits'] = self.gen_credits()
         pdiff['html_credits'] = self.gen_credits(html=True)
