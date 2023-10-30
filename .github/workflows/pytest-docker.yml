@@ -42,7 +42,8 @@ jobs:
         # pip install --upgrade pip
         cd ghidriff
         # install ghidriff package and testing reqs
-        pip install -e ".[testing]"
+        pip install ghidriff
+        pip install -e "[testing]"
         pyhidra &
         sleep 10
         killall python
