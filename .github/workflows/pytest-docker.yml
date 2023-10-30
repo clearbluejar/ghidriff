@@ -34,27 +34,31 @@ jobs:
       with:
         path: ghidriff
     - run: |
-        chown -R 777 /__w
+        #chown -R 777 /__w
         # python -m venv .env
         # source .env/bin/activate        
         # ls -a        
         env
         # ls /usr/local/include/
-        
+        ls -R ~/.
         pip install --upgrade pip
         cd ghidriff
         # install ghidriff package and testing reqs
         pip install ".[testing]"
+        ls -R ~/.
         #pyhidra &
         #sleep 10
         #killall python
         # source .env/bin/activate
         # #init pyhidra
-        # python -m pyhidra.install_plugins        
+        mkdir tmp_ghidra
+        ln -s ~/.ghidra/ tmp_ghidra/
+        python -m pyhidra.install_plugins        
         # pushd /tmp
         # popd
         # download data to shared test data
         if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
+
         pytest -rAv
       shell: bash
       
