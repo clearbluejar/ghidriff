@@ -9,6 +9,7 @@ on:
     paths:
       - 'ghidriff/**'
       - 'tests/**'
+      - '.github/workflows/pytest-devcontainer.yml'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -32,7 +33,7 @@ jobs:
         # cacheFrom: ghcr.io/clearbluejar/ghidra-python
         imageTag: latest, 10.4ghidra3.9python-bookworm, 10.3.3ghidra3.10python-bookworm, 10.2.3ghidra3.11python-bookworm, 10.1.5ghidra3.11python-bookworm
         push: never
-        platform: linux/amd64,linux/arm64
+        #platform: linux/amd64,linux/arm64
         runCmd: |
           env
           ls /usr/local/include/
