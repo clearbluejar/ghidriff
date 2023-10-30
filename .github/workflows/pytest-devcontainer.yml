@@ -34,7 +34,7 @@ jobs:
         imageTag: ${{matrix.image}}
         push: never
         #platform: linux/amd64,linux/arm64
-        subFolder: .github/workflows
+        # subFolder: .github/workflows
         runCmd: |
           env
           ls /usr/local/include/
