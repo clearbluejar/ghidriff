@@ -26,6 +26,7 @@ jobs:
     
     container:
         image: ghcr.io/clearbluejar/ghidra-python:${{ matrix.image }}
+        options: --user vscode
         env:
             GHIDRA_INSTALL_DIR: /ghidra
 
@@ -35,7 +36,7 @@ jobs:
         path: ghidriff
     - run: |
         # yes this is bad (remove later)
-        chmod -R 777 /__w
+        sudo chmod -R 777 /__w
         # python -m venv .env
         # source .env/bin/activate        
         # ls -a        
