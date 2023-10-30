@@ -32,6 +32,7 @@ jobs:
         # cacheFrom: ghcr.io/clearbluejar/ghidra-python
         imageTag: ${{matrix.image}}
         push: never
+        platform: linux/amd64,linux/arm64
         runCmd: |
           env
           ls /usr/local/include/
