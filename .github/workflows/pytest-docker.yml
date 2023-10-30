@@ -26,7 +26,6 @@ jobs:
     
     container:
         image: ghcr.io/clearbluejar/ghidra-python:${{ matrix.image }}
-        options: --user vscode
         env:
             GHIDRA_INSTALL_DIR: /ghidra
 
@@ -35,15 +34,15 @@ jobs:
       with:
         path: ghidriff
     - run: |
-        # yes this is bad (remove later)
-        sudo chmod -R 777 /__w
-        # python -m venv .env
-        # source .env/bin/activate        
+        cd ghidriff        
+        su vscode
+        whoami
+        python -m venv .env
+        source .env/bin/activate        
         # ls -a        
         # env
         # ls /usr/local/include/
         # pip install --upgrade pip
-        cd ghidriff
         # install ghidriff package and testing reqs
         pip install -e ".[testing]"
         # source .env/bin/activate
