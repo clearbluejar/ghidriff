@@ -51,8 +51,8 @@ jobs:
         #killall python
         # source .env/bin/activate
         # #init pyhidra
-        mkdir tmp_ghidra
-        ln -s ~/.ghidra/ tmp_ghidra/
+        mkdir -p /github
+        ln -s /root $HOME # Create Symlink /github/home
         python -m pyhidra.install_plugins        
         # pushd /tmp
         # popd
