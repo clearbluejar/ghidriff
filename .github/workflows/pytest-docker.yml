@@ -47,7 +47,7 @@ jobs:
         cd ghidriff
         # install ghidriff package and testing reqs
         pip install ".[testing]"
-        ls -R ~/.
+        ls -R /root
         #pyhidra &
         #sleep 10
         #killall python
