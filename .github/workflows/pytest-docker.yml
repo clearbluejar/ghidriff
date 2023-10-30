@@ -42,11 +42,10 @@ jobs:
         # pip install --upgrade pip
         cd ghidriff
         # install ghidriff package and testing reqs
-        pip install ghidriff
-        pip install -e "[testing]"
-        pyhidra &
-        sleep 10
-        killall python
+        pip install ".[testing]"
+        #pyhidra &
+        #sleep 10
+        #killall python
         # source .env/bin/activate
         # #init pyhidra
         # python -m pyhidra.install_plugins        
