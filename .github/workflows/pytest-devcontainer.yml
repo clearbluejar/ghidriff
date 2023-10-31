@@ -27,15 +27,20 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Test with pytest on devcontainer    
+      env:
+        # this will set the imageName in the base docker container .github/workflows/.devcontainer/devcontainer.json
+        # (which is needed because imageName for devcontainers/ci@0.3 doesn't affect which image you use!
+        DC_IMAGE_TAG : ${{matrix.image}}
       uses: devcontainers/ci@v0.3
-      with:
-        imageName: ghcr.io/clearbluejar/ghidra-python
-        # cacheFrom: ghcr.io/clearbluejar/ghidra-python
+      with: 
+        # this is not the image name used for building the dev container.
+        #imageName: ghcr.io/clearbluejar/ghidra-python
+        cacheFrom: ghcr.io/clearbluejar/ghidra-python
         imageTag: ${{matrix.image}}
         push: never
         #platform: linux/amd64,linux/arm64
-        # subFolder: .github/workflows
-        noCache: true
+        # this is why to get the coverage across, we need to 
+        subFolder: .github/workflows/
         runCmd: |
           env
           ls /usr/local/include/
