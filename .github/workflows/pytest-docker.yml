@@ -5,13 +5,13 @@ name: Pytest Python Package In Docker Image
 
 on:
   push:
-    branches: [ "main", "fix-workflows" ]
+    # branches: [ "main" ]
     paths:
-      - 'ghidriff/**'
-      - 'tests/**'
+      # - 'ghidriff/**'
+      # - 'tests/**'
       - '.github/workflows/pytest-docker.yml'
-  pull_request:
-    branches: [ "main" ]
+  # pull_request:
+  #   branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
