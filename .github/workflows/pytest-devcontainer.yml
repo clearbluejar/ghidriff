@@ -38,9 +38,8 @@ jobs:
         cacheFrom: ghcr.io/clearbluejar/ghidra-python
         imageTag: ${{matrix.image}}
         push: never
+        subFolder: .github/workflows
         #platform: linux/amd64,linux/arm64
-        # this is why to get the coverage across, we need to 
-        subFolder: .devcontainer-gh-workflow
         runCmd: |
           env
           ls /usr/local/include/
