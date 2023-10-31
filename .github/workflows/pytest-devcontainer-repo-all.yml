@@ -9,7 +9,7 @@ on:
     paths:
       - 'ghidriff/**'
       - 'tests/**'
-      - '.github/workflows/pytest-devcontainer.yml'
+      - '.github/workflows/pytest-devcontainer-repo-all.yml'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
