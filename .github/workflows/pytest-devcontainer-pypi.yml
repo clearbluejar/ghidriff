@@ -7,13 +7,9 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - 'ghidriff/**'
-      - 'tests/**'
       - '.github/workflows/pytest-devcontainer-pypi.yml'
   schedule:
     - cron: '30 5,15 * * *'
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
