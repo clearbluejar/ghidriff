@@ -5,7 +5,6 @@
     // image from https://github.com/clearbluejar/ghidra-python
     //"image": "ghcr.io/clearbluejar/ghidra-python:latest",
     "image": "ghcr.io/clearbluejar/ghidra-python:${localEnv:DC_IMAGE_TAG}",
-    "workspaceFolder" : "${localWorkspaceFolder}",
     // Configure tool-specific properties.
     "customizations": {
         // Configure properties specific to VS Code.
