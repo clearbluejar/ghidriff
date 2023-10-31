@@ -34,7 +34,7 @@ jobs:
       uses: devcontainers/ci@v0.3
       with: 
         # this is not the image name used for building the dev container.
-        #imageName: ghcr.io/clearbluejar/ghidra-python
+        imageName: ghcr.io/clearbluejar/ghidra-python
         cacheFrom: ghcr.io/clearbluejar/ghidra-python
         imageTag: ${{matrix.image}}
         push: never
