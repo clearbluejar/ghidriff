@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: Pytest Python Package In Devcontainer
+name: Pytest Python Package Devcontainer
 
 on:
   push:
@@ -18,29 +18,13 @@ jobs:
   test:
 
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # cover the latest and all versions of all subreleases   
-        # add "latest" when jpype is update for python 3.12     
-        image: ["10.4ghidra3.11python-bookworm","10.4ghidra3.9python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
-
+   
     steps:
     - uses: actions/checkout@v3
-    - name: Overwrite original devcontainer with workflow devcontainer
-      run: |
-        cp .github/workflows/devcontainer.json .devcontainer/devcontainer.json 
     - name: Test with pytest on devcontainer  
-      env:
-        # this will set the imageName in the base docker container .github/workflows/.devcontainer/devcontainer.json
-        # (which is needed because imageName for devcontainers/ci@0.3 doesn't affect which image you use!
-        DC_IMAGE_TAG : ${{matrix.image}}
       uses: devcontainers/ci@v0.3
       with: 
-        # this is not the image name used for building the dev container.
-        imageName: ghcr.io/clearbluejar/ghidra-python
         cacheFrom: ghcr.io/clearbluejar/ghidra-python
-        imageTag: ${{matrix.image}}
         push: never
         #platform: linux/amd64,linux/arm64
         runCmd: |

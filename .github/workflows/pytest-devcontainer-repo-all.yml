@@ -1,17 +1,15 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: Pytest Python PyPi Package Repo In Devcontainer
+name: Pytest Python Package Repo Devcontianer Across Versions
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "fix-workflows" ]
     paths:
       - 'ghidriff/**'
       - 'tests/**'
-      - '.github/workflows/pytest-devcontainer-pypi.yml'
-  schedule:
-    - cron: '30 5,17 * * *'
+      - '.github/workflows/pytest-devcontainer.yml'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -50,9 +48,7 @@ jobs:
           ls /usr/local/include/
           pip install --upgrade pip
           # install package and testing
-          # install from pypi
-          pip install -e "ghidriff[testing]"
-          pip list
+          pip install -e ".[testing]"
           # download data to shared test data
           if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
           pytest -rA
