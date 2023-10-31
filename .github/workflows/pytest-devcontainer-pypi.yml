@@ -11,7 +11,7 @@ on:
       - 'tests/**'
       - '.github/workflows/pytest-devcontainer-pypi.yml'
   schedule:
-    - cron: '30 5,17 * * *'
+    - cron: '30 5,15 * * *'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -51,7 +51,7 @@ jobs:
           pip install --upgrade pip
           # install package and testing
           # install from pypi
-          pip install -e "ghidriff[testing]"
+          pip install "ghidriff[testing]"
           pip list
           # download data to shared test data
           if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
