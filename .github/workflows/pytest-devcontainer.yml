@@ -29,12 +29,12 @@ jobs:
     - name: Test with pytest on devcontainer    
       uses: devcontainers/ci@v0.3
       with:
-        imageName: ghcr.io/clearbluejar/ghidra-python
+        imageName: ghcr.io/clearbluejar/ghidra-python:${{matrix.image}}
         # cacheFrom: ghcr.io/clearbluejar/ghidra-python
-        imageTag: ${{matrix.image}}
+        # imageTag: ${{matrix.image}}
         push: never
         #platform: linux/amd64,linux/arm64
-        # subFolder: .github/workflows
+        subFolder: .github/workflows
         runCmd: |
           env
           ls /usr/local/include/
