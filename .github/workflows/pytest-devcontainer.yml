@@ -1,14 +1,15 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: Pytest Python Package In Devcontainer
+name: Pytest Python Package Devcontainer
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "fix-workflows" ]
     paths:
       - 'ghidriff/**'
       - 'tests/**'
+      - '.github/workflows/pytest-devcontainer.yml'
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -17,21 +18,15 @@ jobs:
   test:
 
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # cover the latest and all versions of all subreleases        
-        image: ["latest", "10.4ghidra3.9python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
-
+   
     steps:
     - uses: actions/checkout@v3
-    - name: Test with pytest on devcontainer    
+    - name: Test with pytest on devcontainer  
       uses: devcontainers/ci@v0.3
-      with:
-        imageName: ghcr.io/clearbluejar/ghidra-python
-        # cacheFrom: ghcr.io/clearbluejar/ghidra-python
-        imageTag: ${{matrix.image}}
+      with: 
+        cacheFrom: ghcr.io/clearbluejar/ghidra-python
         push: never
+        #platform: linux/amd64,linux/arm64
         runCmd: |
           env
           ls /usr/local/include/

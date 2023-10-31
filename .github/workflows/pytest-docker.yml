@@ -5,12 +5,13 @@ name: Pytest Python Package In Docker Image
 
 on:
   push:
-    branches: [ "main" ]
+    # branches: [ "main" ]
     paths:
-      - 'ghidriff/**'
-      - 'tests/**'
-  pull_request:
-    branches: [ "main" ]
+      # - 'ghidriff/**'
+      # - 'tests/**'
+      - '.github/workflows/pytest-docker.yml'
+  # pull_request:
+  #   branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -21,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         # cover the latest and all versions of all subreleases        
-        image: ["latest", "10.4ghidra3.9python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
+        image: ["10.4ghidra3.11python-bookworm", "10.4ghidra3.9python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
     
     container:
         image: ghcr.io/clearbluejar/ghidra-python:${{ matrix.image }}
@@ -30,14 +31,34 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - run: | 
-        pwd
-        ls -a        
+      with:
+        path: ghidriff
+    - run: |
+        mkdir -p /github
+        ln -s /root $HOME # Create Symlink /github/home
+        #chown -R 777 /__w
+        # python -m venv .env
+        # source .env/bin/activate        
+        # ls -a        
         env
-        ls /usr/local/include/
+        # ls /usr/local/include/
+        ls -R ~/.
         pip install --upgrade pip
-        # install package and testing
-        pip install -e ".[testing]"
+        cd ghidriff
+        # install ghidriff package and testing reqs
+        pip install ".[testing]"
+        ls -R /root
+        #pyhidra &
+        #sleep 10
+        #killall python
+        # source .env/bin/activate
+        # #init pyhidra
+        python -m pyhidra.install_plugins        
+        # pushd /tmp
+        # popd
         # download data to shared test data
         if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
-        pytest -rA
+
+        pytest -rAv
+      shell: bash
+      
