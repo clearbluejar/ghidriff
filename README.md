@@ -599,6 +599,7 @@ INFO | ghidriff | Wrote .ghidriffs/json/ntoskrnl.exe.10.0.22621.1344-ntoskrnl.ex
 
 #### Analyze the Diff
 
+
 Results in this beatiful markdown: [ntoskrnl.exe.10.0.22621.1344-ntoskrnl.exe.10.0.22621.1413.diff.md](https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282)
 
 See if you can figure out what function was patched for [CVE-2023-2342](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-23420).
@@ -606,6 +607,31 @@ See if you can figure out what function was patched for [CVE-2023-2342](https://
 - Details of [CVE-2023-2342](https://msrc.microsoft.com/update-guide/vulnerability/CVE-2023-23420) can be found here: [https://bugs.chromium.org/p/project-zero/issues/detail?id=2392](https://bugs.chromium.org/p/project-zero/issues/detail?id=2392)
 
 Prefer a side by side diff? Try out `ghidriff`'s custom html viewer. https://diffpreview.github.io/?b95ae854a92ee917cd0b5c7055b60282
+
+##### Results stored in `ghidriffs` folder
+
+```bash
+$ tree ghidriffs
+ghidriffs
+├── ghidra_projects
+│   └── ghidriff-ntoskrnl.exe.10.0.22621.2215-ntoskrnl.exe.10.0.22621.2283
+│       ├── ghidriff-ntoskrnl.exe.10.0.22621.2215-ntoskrnl.exe.10.0.22621.2283.gpr
+│       └── ghidriff-ntoskrnl.exe.10.0.22621.2215-ntoskrnl.exe.10.0.22621.2283.rep
+│           ├── idata
+│           ├── project.prp
+│           ├── user
+│           └── versioned
+├── ghidriff.log
+├── json
+│   └── ntoskrnl.exe.10.0.22621.2215-ntoskrnl.exe.10.0.22621.2283.ghidriff.json
+├── ntoskrnl.exe.10.0.22621.2215-ntoskrnl.exe.10.0.22621.2283.ghidriff.md
+└── symbols
+    ├── ntkrnlmp.pdb
+        ├── 69071F680ADFE36F178C6EC06E79E09C1
+        │   └── ntkrnlmp.pdb
+        └── 738ED8FF966E8502EFE17095B9F1F5481
+            └── ntkrnlmp.pdb
+```
 
 ### Diffing CVE-2023-21768
 
