@@ -37,9 +37,9 @@ end
 ## Sample Diffs
 
 <div>
-    <a href="https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282"><img width="33%" align=top alt="image" src="https://github.com/clearbluejar/ghidriff/assets/3752074/d53b681f-8cc9-479c-af4c-5ec697cf4989"></a>
-    <a href="https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282#visual-chart-diff"><img width="33%" align=top alt="image" src="https://github.com/clearbluejar/ghidriff/assets/3752074/16d7ae4c-4df9-4bcd-b4af-0ce576d49ad1"></a>
-    <a href="https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d"><img width="33%" align=top src="https://github.com/clearbluejar/ghidriff/assets/3752074/662ed834-738d-4be1-96c3-8500ccab9591"/></a>
+    <a href="https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282"><img width="30%" align=top alt="image" src="https://github.com/clearbluejar/ghidriff/assets/3752074/d53b681f-8cc9-479c-af4c-5ec697cf4989"></a>
+    <a href="https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282#visual-chart-diff"><img width="30%" align=top alt="image" src="https://github.com/clearbluejar/ghidriff/assets/3752074/16d7ae4c-4df9-4bcd-b4af-0ce576d49ad1"></a>
+    <a href="https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d"><img width="30%" align=top src="https://github.com/clearbluejar/ghidriff/assets/3752074/662ed834-738d-4be1-96c3-8500ccab9591"/></a>
 <div>
 
 ## Features
