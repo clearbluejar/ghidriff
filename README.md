@@ -34,6 +34,14 @@ subgraph diffs_output_dir
 end
 ```
 
+## Sample Diffs
+
+<div>
+    <a href="https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282"><img width="33%" align=top alt="image" src="https://github.com/clearbluejar/ghidriff/assets/3752074/d53b681f-8cc9-479c-af4c-5ec697cf4989"></a>
+    <a href="https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282#visual-chart-diff"><img width="33%" align=top alt="image" src="https://github.com/clearbluejar/ghidriff/assets/3752074/16d7ae4c-4df9-4bcd-b4af-0ce576d49ad1"></a>
+    <a href="https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d"><img width="33%" align=top src="https://github.com/clearbluejar/ghidriff/assets/3752074/662ed834-738d-4be1-96c3-8500ccab9591"/></a>
+<div>
+
 ## Features
 
 - Command Line (patch diffing workflow reduced to a single step)
@@ -53,6 +61,8 @@ end
   - Docker support
   - Automated Testing
   - Ghidra (No license required)
+ 
+See below for [CVE diffs and sample usage](#sample-usage)
 
 ## Design Goals
 
@@ -652,6 +662,6 @@ ghidriff afd.sys.x64.10.0.22621.1028 afd.sys.x64.10.0.22621.1415
 
 3. Review results
 
- The diff results are posted in this GitHub [gist](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d). The vulnerable function  `AfdNotifyRemoveIoCompletion` was identified here with a [single line change](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d#afdnotifyremoveiocompletion-diff).
+The diff results are posted in this GitHub [gist](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d). The vulnerable function  `AfdNotifyRemoveIoCompletion` was identified here with a [single line change](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d#afdnotifyremoveiocompletion-diff).
 
- Want to see the entire diff in a side by side? https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d or jump to the [single line change](https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d#d2h-703858:~:text=ProbeForWrite(*(undefined8%20*)(param_3%20%2B%200x18)%2C4%2C4)%3B)
+Want to see the entire diff in a side by side? https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d or jump to the [single line change](https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d#d2h-703858:~:text=ProbeForWrite(*(PVOID%20*)(param_3%20%2B%200x18)%2C4%2C4)%3B)
