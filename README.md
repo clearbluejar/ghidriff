@@ -13,7 +13,7 @@
 
 It leverages the power of Ghidra's ProgramAPI and [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. It is written in Python3 using `pyhidra` to orchestrate Ghidra and `jpype` as the Python to Java interface to Ghidra.
 
-Its primary use case is patch diffing. Its ability to perform a patch diff with a single command makes it ideal for automated analysis. The diffing results are stored in JSON and rendered in markdown (optionally side-by-side HTML). The markdown output promotes "social" diffing, as results are easy to publish in a gist or include in your next writeup or blog post. 
+Its primary use case is patch diffing. Its ability to perform a patch diff with a single command makes it ideal for automated analysis. The diffing results are stored in JSON and rendered in markdown (optionally side-by-side HTML). The markdown output promotes "social" diffing, as results are easy to publish in a gist or include in your next writeup or blog post.
 
 ## High Level
 
@@ -61,7 +61,7 @@ end
   - Docker support
   - Automated Testing
   - Ghidra (No license required)
- 
+
 See below for [CVE diffs and sample usage](#sample-usage)
 
 ## Design Goals
@@ -150,7 +150,16 @@ options:
   -o OUTPUT_PATH, --output-path OUTPUT_PATH
                         Output path for resulting diffs (default: ghidriffs)
   --summary SUMMARY     Add a summary diff if more than two bins are provided (default: False)
+```
 
+
+#### Extendend Usage
+
+There are quite a few options here, and some complexity. Generally you can succeed with the defaults, but you can override the defaults as needed. One example might be to increase the JVM RAM used to run Ghidra to enable faster analysis of large binaries (`--max-ram-percent 80`). See help for details of other options. 
+
+<details><summary>Show Extended Usage</summary>
+
+```bash
 Ghidra Project Options:
   -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
                         Ghidra Project Path (default: .ghidra_projects)
@@ -187,7 +196,7 @@ Markdown Options:
   --md-title MD_TITLE   Overwrite default title for markdown diff (default: None)
 ```
 
-There are quite a few options here, and some complexity. Generally you can succeed with the defaults, but you can override the defaults as needed. One example might be to increase the JVM RAM used to run Ghidra to enable faster analysis of large binaries (`--max-ram-percent 80`). See help for details of other options. 
+</details>
 
 ## Quick Start Environment Setup
 
@@ -210,19 +219,58 @@ pip install ghidriff
 
 ### Ghidriff in a Box - Devcontainer / Docker
 
-Don't want to install Ghidra and Java on your host?
+Don't want to install Ghidra and Java on your host? Try "Ghidriff in a box". It supports multiple-platforms (x64 and arm64).
+
+<p align='center'>
+<img src="https://github.com/clearbluejar/ghidriff/assets/3752074/688756fc-038c-471a-8e49-e56a1c06e77c" height="300">
+</p>
+
+`docker pull ghcr.io/clearbluejar/ghidriff:latest`
+
+
+This is a docker container with the latest [PyPi version of Ghidriff](https://pypi.org/project/ghidriff/) installed. You can check the latest container [here](https://github.com/clearbluejar/ghidriff/pkgs/container/ghidriff).
+
 
 #### For Docker command-line diffing
 
-```
-docker pull ghcr.io/clearbluejar/ghidra-python:latest
-pip install ghidriff
+You will need to map the binaries you want to compare into the container. See below for an example.
+```bash
+mkdir -p ghidriffs
+wget https://msdl.microsoft.com/download/symbols/clfs.sys/9848245C6f000/clfs.sys -O ghidriffs/clfs.sys.x64.10.0.22621.2506
+wget https://msdl.microsoft.com/download/symbols/clfs.sys/D929C6E56f000/clfs.sys -O ghidriffs/clfs.sys.x64.10.0.22621.2715
+docker run -it --rm -v $(pwd)/ghidriffs:/ghidriffs ghcr.io/clearbluejar/ghidriff:latest  ghidriffs/clfs.sys.x64.10.0.22621.2506 ghidriffs/clfs.sys.x64.10.0.22621.2715
 ```
 
-#### For development
+The result will produce the following. 
+
+```bash
+tree ghidriffs
+ghidriffs
+├── clfs.sys.x64.10.0.22621.2506
+├── clfs.sys.x64.10.0.22621.2506-clfs.sys.x64.10.0.22621.2715.ghidriff.md
+├── clfs.sys.x64.10.0.22621.2715
+├── ghidra_projects
+│   └── ghidriff-clfs.sys.x64.10.0.22621.2506-clfs.sys.x64.10.0.22621.2715
+│       ├── ghidriff-clfs.sys.x64.10.0.22621.2506-clfs.sys.x64.10.0.22621.2715.gpr
+│       ├── ghidriff-clfs.sys.x64.10.0.22621.2506-clfs.sys.x64.10.0.22621.2715.lock
+│       └── ghidriff-clfs.sys.x64.10.0.22621.2506-clfs.sys.x64.10.0.22621.2715.rep
+├── ghidriff.log
+├── json
+│   └── clfs.sys.x64.10.0.22621.2506-clfs.sys.x64.10.0.22621.2715.ghidriff.json
+└── symbols
+    ├── 000admin
+    ├── clfs.pdb
+    │   ├── 6EAE8987F981603FEFA0E55DE0CE2C521
+    │   │   └── clfs.pdb
+    │   └── E3D1FEA241ECEC3DC6DB2B278A22A6A31
+    │       └── clfs.pdb
+    └── pingme.txt
+
+```
+
+#### For Ghidriff development
 
 Use the [.devcontainer](.devcontainer) in this repo. If you don't know how, follow the detailed instructions here: [ghidra-python-vscode-devcontainer-skeleton quick setup](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option).
-
 
 
 ## Sample Usage
