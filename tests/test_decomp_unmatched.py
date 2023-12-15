@@ -23,8 +23,8 @@ def test_diff_ntoskrnl_decomp_unmatched(shared_datadir: Path):
 
     # setup bins
 
-    old_bin_path = bins_path / 'ntoskrnl.exe.x64.10.0.22621.2792'
-    new_bin_path = bins_path / 'ntoskrnl.exe.x64.10.0.22621.2861'
+    old_bin_path = bins_path / 'ntoskrnl.exe.x64.10.0.22621.2792.10-1-5.gzf'
+    new_bin_path = bins_path / 'ntoskrnl.exe.x64.10.0.22621.2861.10-1-5.gzf'
 
     assert old_bin_path.exists()
     assert new_bin_path.exists()
