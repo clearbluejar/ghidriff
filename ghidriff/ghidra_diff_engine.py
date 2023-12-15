@@ -402,19 +402,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # Open/Create project
         project = None
 
-        # remove duplicate paths, maintain order
-        binary_paths = list(dict.fromkeys(binary_paths))
-
-        # remove duplicate files (different path, but same content)
-        bin_hashes = []
-        for i, bin_hash in enumerate([sha1_file(path) for path in binary_paths]):
-
-            if bin_hash in bin_hashes:
-                self.logger.warn(f'Duplicate file detected {binary_paths[i]} with sha1: {bin_hash}')
-                binary_paths.pop(i)
-            else:
-                bin_hashes.append(bin_hash)
-
         try:
             project = GhidraProject.openProject(project_location, project_name, True)
             self.logger.info(f'Opened project: {project.project.name}')
@@ -429,8 +416,21 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         bin_results = []
         proj_programs = []
 
+        # remove duplicate paths, maintain order
+        import_paths = list(dict.fromkeys(binary_paths))
+
+        # remove duplicate files (different path, but same content)
+        bin_hashes = []
+        for i, bin_hash in enumerate([sha1_file(path) for path in import_paths]):
+
+            if bin_hash in bin_hashes:
+                self.logger.warn(f'Duplicate file detected {import_paths[i]} with sha1: {bin_hash}')
+                import_paths.pop(i)
+            else:
+                bin_hashes.append(bin_hash)
+
         # Import binaries and configure symbols
-        for program_path in binary_paths:
+        for program_path in import_paths:
 
             # add sha1 to prevent files with same name collision
             program_name = self.gen_proj_bin_name_from_path(program_path)
@@ -443,6 +443,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             else:
                 self.logger.info(f'Opening {program_path}')
                 program = self.project.openProgram("/", program_name, False)
+
+            self.logger.info(f'Loaded {program}')
 
             proj_programs.append(program)
 
