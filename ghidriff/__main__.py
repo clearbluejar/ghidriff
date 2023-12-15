@@ -3,14 +3,15 @@ from pathlib import Path
 import json
 
 from ghidriff import GhidraDiffEngine
-from .parser import get_parser,get_engine_classes
+from .parser import get_parser, get_engine_classes
+
 
 def main():
     """
     ghidriff - GhidraDiffEngine module main function
     """
 
-    parser : ArgumentParser = get_parser()
+    parser: ArgumentParser = get_parser()
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
@@ -62,7 +63,8 @@ def main():
                                      engine_log_path=engine_log_path,
                                      engine_log_level=args.log_level,
                                      engine_file_log_level=args.file_log_level,
-                                     min_func_len=args.min_func_len
+                                     min_func_len=args.min_func_len,
+                                     use_calling_counts=args.use_calling_counts
                                      )
 
     d.setup_project(binary_paths, project_path, project_name, symbols_path)
