@@ -179,6 +179,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--log-path', help='Set ghidriff log path.', default='ghidriff.log')
         group.add_argument('--va', '--verbose-analysis',
                            help='Verbose logging for analysis step.', action='store_true')
+        group.add_argument('--min-func-len', help='Minimum function length to consider for diff',
+                           type=int, default=10)
 
         # TODO add following option
         # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
@@ -706,6 +708,34 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         self.logger.info(f'Symbol Server Configured path: {symbolServerService.toString().strip()}')
 
+    # def apply_gdt(self, program: "ghidra.program.model.listing.Program", gdt_path:  Union[str, Path], verbose: bool = False):
+    #     """
+    #     Apply GDT to program
+    #     """
+
+    #     from ghidra.app.cmd.function import ApplyFunctionDataTypesCmd
+    #     from ghidra.program.model.symbol import SourceType
+    #     from java.io import File
+    #     from java.util import List
+    #     from ghidra.program.model.data import FileDataTypeManager
+    #     from ghidra.util.task import ConsoleTaskMonitor
+
+    #     gdt_path = Path(gdt_path)
+
+    #     if verbose:
+    #         print('Enabling verbose gdt..')
+    #         monitor = ConsoleTaskMonitor()
+    #     else:
+    #         monitor = ConsoleTaskMonitor().DUMMY_MONITOR
+
+    #     archiveGDT = File(gdt_path)
+    #     archiveDTM = FileDataTypeManager.openFileArchive(archiveGDT, False)
+    #     always_replace = True
+    #     createBookmarksEnabled = True
+    #     cmd = ApplyFunctionDataTypesCmd(List.of(archiveDTM), None, SourceType.USER_DEFINED,
+    #                                     always_replace, createBookmarksEnabled)
+    #     cmd.applyTo(program, monitor)
+
     def analyze_program(self, df_or_prog: Union["ghidra.framework.model.DomainFile", "ghidra.program.model.listing.Program"], require_symbols: bool, force_analysis: bool = False, verbose_analysis: bool = False):
 
         from ghidra.program.flatapi import FlatProgramAPI
@@ -722,6 +752,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             program = df_or_prog
 
         self.logger.info(f"Analyzing: {program}")
+
+        # gdt_names = [name for name in program.getDataTypeManager().getSourceArchives()]
+        # if len(gdt_names) > 0:
+        #     print(f'Using file gdts: {gdt_names}')
 
         try:
             if verbose_analysis or self.verbose_analysis:
@@ -1104,6 +1138,16 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                     code[i] = line.replace(match.group(0), matches[match.group(0)])
                     # TODO fix this line to work when a line has multiple default label
 
+    def remove_code_sig(self, code, split_char='{'):
+        """
+        Find the first '{' and remove everything before it
+        """
+        new_code = f'{code}'
+        if code is not None and "Failed to decompile" not in code and split_char in code:
+            new_code = code.split('{', 1)[1].splitlines(True)
+
+        return new_code
+
     def diff_bins(
             self,
             old: Union[str, Path],
@@ -1163,7 +1207,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         if not force_diff and not self.force_diff:
             # ensure architectures match
-            assert p1.languageID == p2.languageID, 'p1: {} != p2: {}. The arch or processor does not match. Add --force-diff to ignore this assert'
+            assert p1.languageID == p2.languageID, f'p1: {p1.name}:{p1.languageID} != p2: {p2.name}:{p2.languageID}. The arch or processor does not match. Add --force-diff to ignore this assert'
 
             # sanity check - ensure both programs have symbols, or both don't
             sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
@@ -1315,12 +1359,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             old_code = ematch_1['code'].splitlines(True)
             new_code = ematch_2['code'].splitlines(True)
 
-            old_code_no_sig = ematch_1['code'].split('{', 1)[1].splitlines(
-                True) if ematch_1['code'] is not None and "Failed to decompile" not in ematch_1['code'] and '{' in ematch_1['code'] else ematch_1['code']
-
-            new_code_no_sig = ematch_2['code'].split('{', 1)[1].splitlines(
-                True) if ematch_2['code'] is not None and "Failed to decompile" not in ematch_2['code'] and '{' in ematch_2['code'] else ematch_2['code']
-
             old_instructions = ematch_1['instructions']
             new_instructions = ematch_2['instructions']
 
@@ -1336,11 +1374,16 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio(), 2)
 
-            # ignore signature for ratio
-            ratio = round(difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio(), 2)
-
             self.normalize_ghidra_decomp(old_code)
             self.normalize_ghidra_decomp(new_code)
+
+            old_code_no_sig = self.remove_code_sig(ematch_1['code'])
+            new_code_no_sig = self.remove_code_sig(ematch_2['code'])
+            self.normalize_ghidra_decomp(old_code_no_sig)
+            self.normalize_ghidra_decomp(new_code_no_sig)
+
+            # ignore signature for ratio
+            ratio = round(difflib.SequenceMatcher(None, old_code_no_sig, new_code_no_sig).ratio(), 2)
 
             from_file_name = ematch_1['fullname']
             to_file_name = ematch_2['fullname']
@@ -1443,8 +1486,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             else:
                 pe_key = 'PE Property[OriginalFilename]'
 
-            pdiff['old_pe_url'] = self.get_pe_download_url(old, pdiff['old_meta'][pe_key])
-            pdiff['new_pe_url'] = self.get_pe_download_url(new, pdiff['new_meta'][pe_key])
+            if pdiff['old_meta'].get(pe_key) is not None:
+                pdiff['old_pe_url'] = self.get_pe_download_url(old, pdiff['old_meta'][pe_key])
+                pdiff['new_pe_url'] = self.get_pe_download_url(new, pdiff['new_meta'][pe_key])
+            else:
+                self.logger.warn('Missing pe information. Not able to generate MSDL download link')
 
         pdiff['md_credits'] = self.gen_credits()
         pdiff['html_credits'] = self.gen_credits(html=True)
