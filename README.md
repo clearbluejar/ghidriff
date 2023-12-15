@@ -48,7 +48,7 @@ end
 - Highlights important changes in the TOC
 - Fast - Can diff the full Windows kernel in less than a minute (after Ghidra analysis is complete)
 - Enables Social Diffing
-  - Beautiful Markdown Output  
+  - Beautiful Markdown Output
   - Easily hosted in a GitHub or GitLab gist, blog, or anywhere markdown is supported
   - Visual Diff Graph Results
 - Supports both unified and side by side diff results (unified is default)
@@ -713,3 +713,9 @@ ghidriff afd.sys.x64.10.0.22621.1028 afd.sys.x64.10.0.22621.1415
 The diff results are posted in this GitHub [gist](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d). The vulnerable function  `AfdNotifyRemoveIoCompletion` was identified here with a [single line change](https://gist.github.com/clearbluejar/f6fecbc507a9f1a92c9231e3db7ef40d#afdnotifyremoveiocompletion-diff).
 
 Want to see the entire diff in a side by side? https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d or jump to the [single line change](https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d#d2h-703858:~:text=ProbeForWrite(*(PVOID%20*)(param_3%20%2B%200x18)%2C4%2C4)%3B)
+
+## Notes
+
+### Markdown Spec + MermaidJs
+- Striving to be compliant with [GFM](https://github.github.com/gfm/) and [cmark](https://spec.commonmark.org/). Still working on it though. See issues.
+- MermaidJs requires your markdown [renderer support](https://mermaid.js.org/ecosystem/integrations-community.html). 
