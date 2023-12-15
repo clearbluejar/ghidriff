@@ -49,6 +49,8 @@ jobs:
           pip install --upgrade pip
           # install package and testing
           pip install -e ".[testing]"
+          # workaround for issue 
+          pip install py
           # download data to shared test data
           if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
           pytest -rA
