@@ -37,4 +37,4 @@ jobs:
           pip install -e ".[testing]"
           # download data to shared test data
           if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
-          pytest -rA
+          pytest -rA -n auto
