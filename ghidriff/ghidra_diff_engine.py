@@ -70,7 +70,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             engine_log_level: int = logging.INFO,
             engine_file_log_level: int = logging.INFO,
             max_section_funcs: int = 200,
-            min_func_len: int = 10) -> None:
+            min_func_len: int = 10,
+            use_calling_counts: bool = True) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -149,7 +150,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.no_symbols = no_symbols
 
         # if looking up more than calling_count_funcs_limit symbols, skip function counts
-        self.calling_count_funcs_limit = 500
+        self.use_calling_counts = use_calling_counts
 
         self.logger.debug(f'{vars(self)}')
 
@@ -180,7 +181,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--va', '--verbose-analysis',
                            help='Verbose logging for analysis step.', action='store_true')
         group.add_argument('--min-func-len', help='Minimum function length to consider for diff',
-                           type=int, default=10)
+                           type=int, default=10),
+        group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=True)
 
         # TODO add following option
         # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
@@ -265,9 +267,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # key = f'{sym.iD}-{sym.program.name}-{get_decomp_info}-{use_calling_counts}'
         key = f'{sym.iD}-{sym.program.name}'
 
-        # if sym.getName() == 'SepAppendAceToTokenObjectAcl':
-        #     print('hi')
-
         if key not in self.esym_memo:
 
             from ghidra.util.task import ConsoleTaskMonitor
@@ -341,23 +340,32 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                             self.logger.warn(err)
                             code = err
 
-                # if use_calling_counts:
-                if False:
+                if use_calling_counts:
+                    MAX_FUNC_REFS = 2000
+
                     for f in func.getCalledFunctions(monitor):
-                        count = 0
                         print(len(f.symbol.references))
-                        for ref in f.symbol.references:
-                            if func.getBody().contains(ref.fromAddress, ref.fromAddress):
-                                count += 1
-                        called_funcs.append(f'{f}-{count}')
+                        count = 0
+                        if len(f.symbol.references) > MAX_FUNC_REFS:
+                            self.logger.debug(f'Skipping {func} count calling, too many refs')
+                            called_funcs.append(f'{f}')
+                        else:
+
+                            for ref in f.symbol.references:
+                                if func.getBody().contains(ref.fromAddress, ref.fromAddress):
+                                    count += 1
+                            called_funcs.append(f'{f}-{count}')
 
                     for f in func.getCallingFunctions(monitor):
                         count = 0
-                        print(len(func.symbol.references))
-                        for ref in func.symbol.references:
-                            if f.getBody().contains(ref.fromAddress, ref.fromAddress):
-                                count += 1
-                        called_funcs.append(f'{f}-{count}')
+                        if len(f.symbol.references) > MAX_FUNC_REFS:
+                            self.logger.debug(f'Skipping {func} count calling, too many refs')
+                            calling_funcs.append(f'{f}')
+                        else:
+                            for ref in func.symbol.references:
+                                if f.getBody().contains(ref.fromAddress, ref.fromAddress):
+                                    count += 1
+                            calling_funcs.append(f'{f}-{count}')
                 else:
                     for f in func.getCalledFunctions(monitor):
                         called_funcs.append(f'{f}')
@@ -1301,8 +1309,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             esym_lookups.extend(funcs_need_decomp)
 
-            use_calling_counts = len(funcs_need_decomp) < self.calling_count_funcs_limit
-
             # TODO add code to symbols!
 
             # there can be duplicate multiple function matches, just do this once
@@ -1313,7 +1319,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             completed = 0
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 # futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
-                futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 60, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
+                futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 60, (sym in funcs_need_decomp), (self.use_calling_counts and sym in funcs_need_decomp))
                            for thread_id, sym in enumerate(esym_lookups))
 
                 for future in concurrent.futures.as_completed(futures):
