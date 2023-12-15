@@ -344,13 +344,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                     MAX_FUNC_REFS = 2000
 
                     for f in func.getCalledFunctions(monitor):
-                        print(len(f.symbol.references))
                         count = 0
-                        if len(f.symbol.references) > MAX_FUNC_REFS:
-                            self.logger.debug(f'Skipping {func} count calling, too many refs')
+                        ref_count = len(f.symbol.references)
+
+                        if ref_count > MAX_FUNC_REFS:
+                            self.logger.debug(f'Skipping {func} count calling, too many refs: {ref_count}')
                             called_funcs.append(f'{f}')
                         else:
-
                             for ref in f.symbol.references:
                                 if func.getBody().contains(ref.fromAddress, ref.fromAddress):
                                     count += 1
@@ -358,8 +358,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                     for f in func.getCallingFunctions(monitor):
                         count = 0
-                        if len(f.symbol.references) > MAX_FUNC_REFS:
-                            self.logger.debug(f'Skipping {func} count calling, too many refs')
+                        ref_count = len(f.symbol.references)
+
+                        if ref_count > MAX_FUNC_REFS:
+                            self.logger.debug(f'Skipping {func} count calling, too many refs: {ref_count}')
                             calling_funcs.append(f'{f}')
                         else:
                             for ref in func.symbol.references:
