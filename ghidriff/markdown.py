@@ -833,4 +833,4 @@ pie showData
         md.table_of_contents += md.header.choose_header(level=1, title='TOC', style='atx')
         md.table_of_contents += TableOfContents().create_table_of_contents(md._table_titles, depth=3)
 
-        return md.get_md_text()
+        return md.get_md_text().strip()
