@@ -6,6 +6,7 @@ from typing import List, Tuple, TYPE_CHECKING
 
 from .ghidra_diff_engine import GhidraDiffEngine
 from .implied_matches import correlate_implied_matches
+from .correlate_unmatched import correlate_unmatched
 
 if TYPE_CHECKING:
     import ghidra
@@ -175,15 +176,24 @@ class VersionTrackingDiff(GhidraDiffEngine):
         p1_missing = self.get_funcs_from_addr_set(p1, p1_unmatched)
         p2_missing = self.get_funcs_from_addr_set(p2, p2_unmatched)
 
-        self.logger.info(f'p1 missing = {len(p1_missing)}')
-        self.logger.info(f'p2 missing = {len(p2_missing)}')
+        # attempt to correlate amongst unmatched functions
+        correlate_unmatched(self, matches, p1_missing, p2_missing, p1_matches, p2_matches)
+
+        p1_unmatched = p1_unmatched.subtract(p1_matches)
+        p2_unmatched = p2_unmatched.subtract(p2_matches)
+
+        p1_missing = self.get_funcs_from_addr_set(p1, p1_unmatched)
+        p2_missing = self.get_funcs_from_addr_set(p2, p2_unmatched)
 
         unmatched.extend([func.getSymbol() for func in p1_missing])
         unmatched.extend([func.getSymbol() for func in p2_missing])
 
+        self.logger.info(f'p1 missing = {len(p1_missing)}')
+        self.logger.info(f'p2 missing = {len(p2_missing)}')
+
         # Debug umatched
-        # if self.logger.level == 10:  # debug level
-        #     self.debug_function_hasher(unmatched, func_correlators)
+        if self.logger.level == 10:  # debug level
+            self.debug_function_hasher(unmatched, func_correlators, p1, p2)
 
         # Find external function unmatched and matched
         p1_externals = {}
@@ -201,6 +211,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
         deleted_externs = list(set(p1_externals.keys()).difference(p2_externals.keys()))
         added_externs = list(set(p2_externals.keys()).difference(p1_externals.keys()))
         matched_externs = list(set(p2_externals.keys()).intersection(p1_externals.keys()))
+
+        self.logger.info(f'Externs - deleted: {len(deleted_externs)} added: {len(added_externs)} matched:{len(matched_externs)}')
 
         unmatched.extend([p1_externals[key].getSymbol() for key in deleted_externs])
         unmatched.extend([p2_externals[key].getSymbol() for key in added_externs])
@@ -224,30 +236,60 @@ class VersionTrackingDiff(GhidraDiffEngine):
             matched.append([func.getSymbol(), func2.getSymbol(), list(match_types.keys())])
 
         # skip types will undergo less processing
-        skip_types = ['BulkBasicBlockMnemonicHash', 'ExternalsName']
+        skip_types = ['BulkBasicBlockMnemonicHash' 'Decomp Match']
 
         return [unmatched, matched, skip_types]
 
-    def debug_function_hasher(self, functions: list, func_correlators: list):
+    def debug_function_hasher(self,
+                              functions: list,
+                              func_correlators: list,
+                              p1: "ghidra.program.model.listing.Program",
+                              p2: "ghidra.program.model.listing.Program"):
         """
         Debug unmatched functions throuh each function hasher
         """
         from ghidra.util.task import ConsoleTaskMonitor
 
-        for sym in sorted(functions, key=lambda x: x.getProgram().getFunctionManager().getFunctionAt(x.address).body.numAddresses, reverse=True):
-            func = sym.getProgram().getFunctionManager().getFunctionAt(sym.address)
-            self.logger.debug(f'\n\n{func.getProgram()}')
-            self.logger.debug(func)
+        for cor in func_correlators:
 
-            for cor in func_correlators:
+            name, hasher, one_to_one, one_to_many = cor
 
-                name, hasher, one_to_one, one_to_many = cor
+            self.logger.debug(f'Debug umatched correlator: {name}')
 
-                self.logger.debug(f'Debug umatched correlator: {name}')
+            if hasattr(hasher, 'DEBUG'):
+                hasher.DEBUG = True
 
-                if hasattr(hasher, 'DEBUG'):
-                    hasher.DEBUG = True
+            dummy = ConsoleTaskMonitor().DUMMY_MONITOR
+            dummy.cancel()
 
-                dummy = ConsoleTaskMonitor().DUMMY_MONITOR
-                dummy.cancel()
-                self.logger.debug(hasher.hash(func, dummy))
+            p1_hashes_seen = {}
+            p2_hashes_seen = {}
+
+            for sym in sorted(functions, key=lambda x: x.getProgram().getFunctionManager().getFunctionAt(x.address).body.numAddresses, reverse=True):
+                func = sym.getProgram().getFunctionManager().getFunctionAt(sym.address)
+                in_p1 = (func.getProgram().name == p1.name)
+
+                func_hash = hasher.hash(func, dummy)
+                func_len = func.getBody().getNumAddresses()
+
+                if in_p1:
+                    if func_hash in p1_hashes_seen.keys():
+                        print(f'hash matches another func in p1? {func_hash} {name} {func_len}')
+                    p1_hashes_seen.setdefault(func_hash, []).append(func)
+
+                    if func_hash in p2_hashes_seen.keys():
+                        print(f'why though? {func_hash} {name} {func_len}')
+                        func_json = self.enhance_sym(func.getSymbol(), get_decomp_info=True)
+                        p2_func_json = self.enhance_sym(p2_hashes_seen[func_hash][0].getSymbol(), get_decomp_info=True)
+                        for key in func_json.keys():
+                            print(func_json[key])
+                            print(p2_func_json[key])
+                else:
+                    if func_hash in p2_hashes_seen:
+                        print(f'hash matches another func in p2 {func_hash} {name} {func_len}')
+                    p2_hashes_seen.setdefault(func_hash, []).append(func)
+
+                    if func_hash in p1_hashes_seen:
+                        print(f'why though? {func_hash} {name} {func_len}')
+
+                self.logger.debug(f'{func.getProgram().getName()}:{func}:{func_hash}')

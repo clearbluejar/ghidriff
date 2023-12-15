@@ -116,7 +116,7 @@ def find_implied_matches(src_func: "ghidra.program.model.listing.Function", dst_
 
 def correlate_implied_matches(matches, p1_missing, p2_missing, p1_matches, p2_matches, p1, p2, max_workers, monitor, logger=None):
     """
-    from all of the unmatched functions, get every function that has already been acceped that calls an unmatched function
+    use already matched functions as indicators of truth
     if the calling function has been accepted, then accept the unmatched called function
     """
 
