@@ -8,34 +8,14 @@ SYMBOLS_DIR = 'symbols'
 BINS_DIR = 'bins'
 
 
-def get_chrome_headers() -> dict:
-
-    headers = {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-        "accept-language": "en-US,en;q=0.9",
-        "cache-control": "no-cache",
-        "pragma": "no-cache",
-        "sec-ch-ua": '"Chromium";v="116", "Not)A;Brand";v="24", "Google Chrome";v="116"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"macOS"',
-        "sec-fetch-dest": "document",
-        "sec-fetch-mode": "navigate",
-        "sec-fetch-site": "none",
-        "sec-fetch-user": "?1",
-        "upgrade-insecure-requests": "1"
-    }
-
-    return headers
-
-
 @pytest.mark.forked
-def test_diff_afd_cve_2023_21768(shared_datadir: Path):
+def test_diff_ntoskrnl_decomp_unmatched(shared_datadir: Path):
     """
     Tests end to end diff of CVE
     runs forked because each jpype jvm can only be initialized 1x
     """
 
-    test_name = 'cve-2023-21768'
+    test_name = 'ntoskrnl_decomp_unmatched'
     output_path = shared_datadir / test_name
     output_path.mkdir(exist_ok=True, parents=True)
     symbols_path = shared_datadir / SYMBOLS_DIR
@@ -43,21 +23,8 @@ def test_diff_afd_cve_2023_21768(shared_datadir: Path):
 
     # setup bins
 
-    old_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1028'
-    new_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1415'
-
-    # TODO figure out why these download are unreliable
-    # for now just git clone ghidriff-test-data
-    # old_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1028'
-    # old_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/0C5C6994A8000/afd.sys'
-    # new_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1415'
-    # new_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/50989142A9000/afd.sys'
-
-    # download binaries
-    # download is unreliage
-    # headers = get_chrome_headers()
-    # old_bin_path.write_bytes(requests.get(old_url,headers=headers).content)
-    # new_bin_path.write_bytes(requests.get(new_url,headers=headers).content)
+    old_bin_path = bins_path / 'ntoskrnl.exe.x64.10.0.22621.2792'
+    new_bin_path = bins_path / 'ntoskrnl.exe.x64.10.0.22621.2861'
 
     assert old_bin_path.exists()
     assert new_bin_path.exists()
@@ -115,10 +82,7 @@ def test_diff_afd_cve_2023_21768(shared_datadir: Path):
                          max_section_funcs=args.max_section_funcs,
                          md_title=args.md_title)
 
-    assert len(pdiff['functions']['modified']) == 12
-    assert len(pdiff['functions']['added']) == 28
+    assert pdiff['stats']['match_types']['Decomp Match'] == 29
+    assert len(pdiff['functions']['added']) == 0
     assert len(pdiff['functions']['deleted']) == 0
-
-    func_name = "AfdNotifyRemoveIoCompletion"
-    assert any([func_name in func['old']['name'] or func_name in func['new']['name']
-               for func in pdiff['functions']['modified']]) is True
+    assert len(pdiff['functions']['modified']) == 33
