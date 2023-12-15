@@ -1,6 +1,8 @@
 from pathlib import Path
 import json
 import pytest
+from pyhidra.version import get_ghidra_version
+
 
 from ghidriff import get_parser, get_engine_classes, VersionTrackingDiff, GhidraDiffEngine
 
@@ -14,6 +16,11 @@ def test_diff_afd_cve_2023_21768_gzf(shared_datadir: Path):
     Tests end to end diff of CVE
     runs forked because each jpype jvm can only be initialized 1x
     """
+
+    if get_ghidra_version() < '10.4':
+        # gzf files were made with 10.4
+        print('Skip testing gzf on <10.4')
+        return
 
     test_name = 'cve-2023-21768-gzf'
     output_path = shared_datadir / test_name
@@ -110,6 +117,12 @@ def test_diff_afd_cve_2023_21768_gzf_with_one_nongzf(shared_datadir: Path):
     Tests end to end diff of CVE
     runs forked because each jpype jvm can only be initialized 1x
     """
+
+    # check ghidra version and bail if old
+    if get_ghidra_version() < '10.4':
+        # gzf files were made with 10.4
+        print('Skip testing gzf on <10.4')
+        return
 
     test_name = 'cve-2023-21768-gzf'
     output_path = shared_datadir / test_name
