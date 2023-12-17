@@ -11,12 +11,11 @@ on:
 jobs:
 
   test-deploy:
-    defaults:
-      run:
-        shell: bash
-        working-directory: www/
     name: Test deployment
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: www
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
