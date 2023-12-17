@@ -1,41 +1,43 @@
 import clsx from 'clsx';
 import Heading from '@theme/Heading';
 import styles from './styles.module.css';
+import Link from '@docusaurus/Link';
 
 const FeatureList = [
   {
-    title: 'Easy to Use',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    title: 'Command Line',
+    Svg: require('@site/static/icons/terminal.svg').default,
     description: (
       <>
-        Docusaurus was designed from the ground up to be easily installed and
-        used to get your website up and running quickly.
+        A command-line binary diffing engine with a fresh take on diffing workflow and results. <code>ghidriff</code> offers quick and efficient patch diffing.
+        It reduces the the complete diffing workflow (import, analysis, diffing, results) to a single step.
+      </>
+    ),
+    // Whether you <code>pip install ghidriff</code> or leverage its <Link to={'https://github.com/clearbluejar/ghidriff/pkgs/container/ghidriff/158782097?tag=latest'}>Docker image</Link>,
+    //you will quickly be diffing complex binaries. The results are available immediately to review, share, or post.
+  },
+  {
+    title: 'Powered by Ghidra',
+    Svg: require('@site/static/icons/ghidra.svg').default,
+    description: (
+      <>
+        It leverages the power of Ghidra's ProgramAPI and <Link to={'https://pretalx.com/bsidescharm2024/submit/bVcJdS/info/'}>FlatProgramAPI</Link> to find the added, deleted, and modified functions of two binaries.
       </>
     ),
   },
   {
-    title: 'Focus on What Matters',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: 'Social Diffing',
+    Svg: require('@site/static/icons/markdown.svg').default,
     description: (
       <>
-        Docusaurus lets you focus on your docs, and we&apos;ll do the chores. Go
-        ahead and move your docs into the <code>docs</code> directory.
-      </>
-    ),
-  },
-  {
-    title: 'Powered by React',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
-    description: (
-      <>
-        Extend or customize your website layout by reusing React. Docusaurus can
-        be extended while reusing the same header and footer.
+        The diffing results are stored in JSON and rendered in markdown (optionally side-by-side HTML).
+        The markdown output promotes "social" diffing, as results are easy to publish in a gist or include in your next writeup or blog post.
       </>
     ),
   },
 ];
 
-function Feature({Svg, title, description}) {
+function Feature({ Svg, title, description }) {
   return (
     <div className={clsx('col col--4')}>
       <div className="text--center">
