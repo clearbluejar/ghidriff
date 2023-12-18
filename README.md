@@ -9,6 +9,7 @@
 <img align="center" src="https://img.shields.io/github/stars/clearbluejar/ghidriff?style=for-the-badge">
 
 ## Ghidriff - Ghidra Binary Diffing Engine
+
 `ghidriff` provides a command-line binary diffing capability with a fresh take on diffing workflow and results.
 
 It leverages the power of Ghidra's ProgramAPI and [FlatProgramAPI](https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html) to find the *added*, *deleted*, and *modified* functions of two arbitrary binaries. It is written in Python3 using `pyhidra` to orchestrate Ghidra and `jpype` as the Python to Java interface to Ghidra.
@@ -34,7 +35,7 @@ subgraph diffs_output_dir
 end
 ```
 
-## Sample Diffs
+### Sample Diffs
 
 <div>
     <a href="https://gist.github.com/clearbluejar/b95ae854a92ee917cd0b5c7055b60282"><img width="30%" align=top alt="image" src="https://github.com/clearbluejar/ghidriff/assets/3752074/d53b681f-8cc9-479c-af4c-5ec697cf4989"></a>
@@ -42,7 +43,7 @@ end
     <a href="https://diffpreview.github.io/?f6fecbc507a9f1a92c9231e3db7ef40d"><img width="30%" align=top src="https://github.com/clearbluejar/ghidriff/assets/3752074/662ed834-738d-4be1-96c3-8500ccab9591"/></a>
 <div>
 
-## Features
+### Features
 
 - Command Line (patch diffing workflow reduced to a single step)
 - Highlights important changes in the TOC
@@ -64,7 +65,7 @@ end
 
 See below for [CVE diffs and sample usage](#sample-usage)
 
-## Design Goals
+### Design Goals
 
 - Find all added, deleted, and modified functions
 - Provide foundation for automation
@@ -74,7 +75,7 @@ See below for [CVE diffs and sample usage](#sample-usage)
 - Easy sharing of results
 - Social Diffing
 
-## Powered by Ghidra
+### Powered by Ghidra
 
 The heavy lifting of the binary analysis is done by Ghidra and the diffing is possible via Ghidra's Program API.  `ghidriff` provides a diffing [workflow](#engine), function matching, and resulting markdown and HTML diff output.
 
@@ -119,7 +120,7 @@ class NewDiffTool(GhidraDiffEngine):
         return [unmatched, matched]
 ```
 
-## Implementations
+### Implementations
 
 There are currently 3 diffing implementations, which also display the evolution of diffing for the project.
 
@@ -129,12 +130,12 @@ There are currently 3 diffing implementations, which also display the evolution 
 
 Each implementation leverages the base class, and implements `find_changes`.
 
-#### Usage
+## Usage
 
 ```bash
-usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--threaded | --no-threaded]
-                [--force-analysis] [--force-diff] [--no-symbols] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                [--log-path LOG_PATH] [--va] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags] [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS] [--md-title MD_TITLE]
+usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--threaded | --no-threaded] [--force-analysis] [--force-diff] [--no-symbols] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--log-path LOG_PATH] [--va] [--min-func-len MIN_FUNC_LEN] [--use-calling-counts USE_CALLING_COUNTS] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags] [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS]
+                [--md-title MD_TITLE]
                 old new [new ...]
 
 ghidriff - A Command Line Ghidra Binary Diffing Engine
@@ -153,7 +154,7 @@ options:
 ```
 
 
-#### Extendend Usage
+### Extendend Usage
 
 There are quite a few options here, and some complexity. Generally you can succeed with the defaults, but you can override the defaults as needed. One example might be to increase the JVM RAM used to run Ghidra to enable faster analysis of large binaries (`--max-ram-percent 80`). See help for details of other options. 
 
@@ -162,16 +163,16 @@ There are quite a few options here, and some complexity. Generally you can succe
 ```bash
 Ghidra Project Options:
   -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
-                        Ghidra Project Path (default: .ghidra_projects)
+                        Ghidra Project Path (default: ghidra_projects)
   -n PROJECT_NAME, --project-name PROJECT_NAME
                         Ghidra Project Name (default: ghidriff)
   -s SYMBOLS_PATH, --symbols-path SYMBOLS_PATH
-                        Ghidra local symbol store directory (default: .symbols)
+                        Ghidra local symbol store directory (default: symbols)
 
 Engine Options:
   --threaded, --no-threaded
                         Use threading during import, analysis, and diffing. Recommended (default: True)
-  --force-analysis      Force a fresh binary analysis each run (default: False)
+  --force-analysis      Force a new binary analysis each run (slow) (default: False)
   --force-diff          Force binary diff (ignore arch/symbols mismatch) (default: False)
   --no-symbols          Turn off symbols for analysis (default: False)
   --log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}
@@ -181,6 +182,10 @@ Engine Options:
   --log-path LOG_PATH   Set ghidriff log path. (default: ghidriff.log)
   --va, --verbose-analysis
                         Verbose logging for analysis step. (default: False)
+  --min-func-len MIN_FUNC_LEN
+                        Minimum function length to consider for diff (default: 10)
+  --use-calling-counts USE_CALLING_COUNTS
+                        Add calling/called reference counts (default: True)
 
 JVM Options:
   --max-ram-percent MAX_RAM_PERCENT
@@ -217,13 +222,15 @@ export GHIDRA_INSTALL_DIR="/path/to/ghidra/"
 pip install ghidriff
 ```
 
-### Ghidriff in a Box - Devcontainer / Docker
+## Ghidriff in a Box 
 
 Don't want to install Ghidra and Java on your host? Try "Ghidriff in a box". It supports multiple-platforms (x64 and arm64).
 
 <p align='center'>
 <img src="https://github.com/clearbluejar/ghidriff/assets/3752074/688756fc-038c-471a-8e49-e56a1c06e77c" height="300">
 </p>
+
+### Docker
 
 `docker pull ghcr.io/clearbluejar/ghidriff:latest`
 
@@ -268,12 +275,12 @@ ghidriffs
 
 ```
 
-#### For Ghidriff development
+### Devcontainer - For Ghidriff development
 
 Use the [.devcontainer](.devcontainer) in this repo. If you don't know how, follow the detailed instructions here: [ghidra-python-vscode-devcontainer-skeleton quick setup](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option).
 
 
-## Sample Usage
+## Use Cases
 
 ### Diffing a full Windows Kernel 
 
