@@ -156,11 +156,11 @@ const config = {
             items: [
               {
                 label: 'Blog',
-                to: '/blog',
+                to: 'https://clearbluejar.github.io/',
               },
               {
                 label: 'GitHub',
-                href: 'https://github.com/facebook/docusaurus',
+                href: 'https://github.com/clearbluejar/ghidriff',
               },
             ],
           },
