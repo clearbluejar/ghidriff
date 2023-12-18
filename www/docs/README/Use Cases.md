@@ -2,8 +2,6 @@
 sidebar_position: 7
 ---
 
-## Use Cases
-
 ### Diffing a full Windows Kernel 
 
 #### Download two versions of the kernel (older and latest binary):

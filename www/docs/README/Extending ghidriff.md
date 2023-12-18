@@ -1,8 +1,7 @@
 ---
 sidebar_position: 3
+hide_title: false
 ---
-
-## Extending ghidriff 
 
 `ghidriff` can be used as is, but it offers developers the ability to extend the tool by implementing their own differ. The basic idea is create new diffing tools by implementing the `find_matches` method from the base class. 
 

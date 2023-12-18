@@ -2,8 +2,6 @@
 sidebar_position: 1
 ---
 
-## High Level
-
 ```mermaid
 flowchart LR
 

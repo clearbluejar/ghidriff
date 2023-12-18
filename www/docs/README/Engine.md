@@ -2,8 +2,6 @@
 sidebar_position: 2
 ---
 
-## Engine
-
 <p align='center'>
 <img src="https://user-images.githubusercontent.com/3752074/229976340-96394970-152f-4d88-9fe4-a46589b31c50.png" height="300">
 </p>

@@ -2,8 +2,6 @@
 sidebar_position: 5
 ---
 
-## Quick Start Environment Setup
-
 1. [Download](https://github.com/NationalSecurityAgency/ghidra/releases) and [install Ghidra](https://htmlpreview.github.io/?https://github.com/NationalSecurityAgency/ghidra/blob/stable/GhidraDocs/InstallationGuide.html#Install).
 2. Set Ghidra Environment Variable `GHIDRA_INSTALL_DIR` to Ghidra install location.
 3. Pip install `ghidriff`
