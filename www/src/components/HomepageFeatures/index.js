@@ -21,7 +21,7 @@ const FeatureList = [
     Svg: require('@site/static/icons/ghidra.svg').default,
     description: (
       <>
-        It leverages the power of Ghidra's ProgramAPI and <Link to={'https://pretalx.com/bsidescharm2024/submit/bVcJdS/info/'}>FlatProgramAPI</Link> to find the added, deleted, and modified functions of two binaries.
+        It leverages the power of Ghidra's ProgramAPI and <Link to={'https://ghidra.re/ghidra_docs/api/ghidra/program/flatapi/FlatProgramAPI.html'}>FlatProgramAPI</Link> to find the added, deleted, and modified functions of two binaries.
       </>
     ),
   },

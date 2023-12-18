@@ -10,7 +10,7 @@ import { themes as prismThemes } from 'prism-react-renderer';
 const config = {
   title: 'ghidriff',
   tagline: 'Python Command-Line Ghidra Binary Diff Engine',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/fav/favicon.ico',
 
   // Set the production url of your site here
   url: 'https://clearbluejar.github.io/',
@@ -99,7 +99,7 @@ const config = {
         title: 'ghidriff',
         logo: {
           alt: 'ghidriff: Ghidra Binary Diffing Engine',
-          src: 'img/logo.svg',
+          src: 'img/ghidriff-circle.svg',
         },
         items: [
           //left
@@ -170,7 +170,7 @@ const config = {
       prism: {
         theme: prismThemes.github,
         darkTheme: prismThemes.dracula,
-        additionalLanguages: ['powershell', 'diff'],
+        additionalLanguages: ['powershell', 'diff', 'bash'],
       },
     }),
 };
