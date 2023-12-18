@@ -75,6 +75,20 @@ const config = {
       }),
     ],
   ],
+  plugins: [
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'diffs',
+        path: 'diffs',
+        routeBasePath: 'diffs',
+        sidebarPath: './diff-sidebars.js',
+        editUrl:
+          'https://github.com/clearbluejar/ghidriff/tree/main/www/diffs',
+        // ... other options
+      },
+    ],
+  ],
 
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
@@ -97,6 +111,7 @@ const config = {
           },
           {
             type: 'docSidebar',
+            docsPluginId: 'diffs',
             sidebarId: 'diffSidebar',
             position: 'left',
             label: 'Diffs',
@@ -119,7 +134,7 @@ const config = {
             items: [
               {
                 label: 'Tutorial',
-                to: '/docs/intro',
+                to: '/docs/ghidriff',
               },
             ],
           },

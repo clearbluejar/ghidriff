@@ -1,8 +1,8 @@
 {
-  "label": "Tutorial",
+  "label": "Guides",
   "position": 2,
   "link": {
     "type": "generated-index",
-    "description": "5 minutes to learn the most important Docusaurus concepts."
+    "description": "Several short guides to get going with ghidriff..."
   }
 }

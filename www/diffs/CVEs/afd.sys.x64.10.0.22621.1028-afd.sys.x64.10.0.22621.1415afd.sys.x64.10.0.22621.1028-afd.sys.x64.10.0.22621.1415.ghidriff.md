@@ -1,3 +1,8 @@
+---
+sidebar_label: 'CVE-2023-21768'
+hide_table_of_contents: false
+---
+
 # afd.sys.x64.10.0.22621.608-afd.sys.x64.10.0.22621.1105 Diff
 
 ## TOC
