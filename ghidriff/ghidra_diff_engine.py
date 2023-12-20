@@ -182,7 +182,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            help='Verbose logging for analysis step.', action='store_true')
         group.add_argument('--min-func-len', help='Minimum function length to consider for diff',
                            type=int, default=10),
-        group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=True)
+        group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False)
 
         # TODO add following option
         # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
