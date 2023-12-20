@@ -1223,7 +1223,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             # sanity check - ensure both programs have symbols, or both don't
             sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
-            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analyiss or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'
+            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analysis or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'
 
         # Find (non function) symbols
         unmatched_nf_syms, _ = self.diff_nf_symbols(p1, p2)
