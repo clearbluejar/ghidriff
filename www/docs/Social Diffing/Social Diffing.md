@@ -1,6 +1,6 @@
 ---
-description: Sharing diff results
-img: /static/img/social-diffing.png
+description: Social Diffing with ghidriff - Github, GitLab, READMEs, Diffpreview.github.io
+image: /static/img/social-diffing.png
 ---
 
 ![Alt text](../../static/img/social-diffing.png)
