@@ -120,6 +120,9 @@ def correlate_implied_matches(matches, p1_missing, p2_missing, p1_matches, p2_ma
     if the calling function has been accepted, then accept the unmatched called function
     """
 
+    logger.info(f'Running correlator: Implied matches on p1:{len(p1_missing)} p2:{len(p1_missing)}')
+
+
     # build list of function entry points that have already been matched
     matched_src_addrs = {}
     matched_dst_addrs = {}
