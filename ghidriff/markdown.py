@@ -709,9 +709,10 @@ pie showData
         # Create Modified section
         md.new_header(1, 'Modified')
         md.new_paragraph(f"*Modified functions contain code changes*")
-        for i, modified in enumerate(funcs['modified']):
+        modified_with_code = 0
+        for modified in funcs['modified']:
 
-            if i > max_section_funcs:
+            if modified_with_code > max_section_funcs:
                 md.new_header(2, 'Max Modified Section Functions Reached Error')
                 md.new_line(f"{len(funcs['modified']) - max_section_funcs} Functions Ommited...")
                 self.logger.warn(f'Max Modified Section Functions {max_section_funcs} Reached')
@@ -727,6 +728,8 @@ pie showData
 
             # selectively include matches
             if 'code' in modified['diff_type']:
+
+                modified_with_code += 1
 
                 md.new_header(2, old_func_name)
 
@@ -767,7 +770,7 @@ pie showData
         md.new_list(slight_mods)
 
         # skip this section (as it is mostly a bonus) if this markdown is already too big
-        too_big = max_section_funcs < (len(funcs['added']) + len(funcs['deleted']) + len(funcs['modified']))
+        too_big = max_section_funcs < (len(funcs['added']) + len(funcs['deleted']) + modified_with_code)
 
         if too_big:
             md.new_header(2, 'Section Skipped')
@@ -776,10 +779,20 @@ pie showData
         else:
             for modified in funcs['modified']:
 
+                if modified_with_code > max_section_funcs:
+                    md.new_header(2, 'Max Modified (No Code Changes) Section Functions Reached Error')
+                    md.new_line(f"{len(funcs['modified']) - max_section_funcs} Functions Ommited...")
+                    self.logger.warn(f'Max Modified Section Functions {max_section_funcs} Reached')
+                    self.logger.warn(f"{len(funcs['modified']) - max_section_funcs} Functions Ommited...")
+                    break
+
                 mods = set(slight_mods).intersection(set(modified['diff_type']))
 
-                if 'code' not in modified['diff_type'] and len(mods) > 0:
+                # only show non code mods and skip if code m_ratio is same
+                if 'code' not in modified['diff_type'] and len(mods) > 0 and modified['m_ratio'] < 1.0:
 
+                    modified_with_code +=1
+                    
                     if modified['old']['external']:
                         old_func_name = modified['old']['fullname']
                         new_func_name = modified['old']['fullname']
