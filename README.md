@@ -79,6 +79,11 @@ See below for [CVE diffs and sample usage](#sample-usage)
 
 The heavy lifting of the binary analysis is done by Ghidra and the diffing is possible via Ghidra's Program API.  `ghidriff` provides a diffing [workflow](#engine), function matching, and resulting markdown and HTML diff output.
 
+## Docs
+
+- [ghidriff official Docs](https://clearbluejar.github.io/ghidriff)
+- [Blog Post](https://clearbluejar.github.io/posts/ghidriff-ghidra-binary-diffing-engine/)
+
 ## Engine
 
 <p align='center'>

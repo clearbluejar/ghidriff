@@ -4,7 +4,9 @@ image: /img/social-diffing.png
 ---
 
 ![Alt text](../../static/img/social-diffing.png)
-As the diff output of `ghidriff` is markdown, it can be shared almost anywhere.
+
+> If GitHub can provide “social coding”, ghidriff can provide “social diffing”. Since the diff output is in markdown, you can publish the diff wherever markdown is supported. All the sections within the markdown are deep linked, which is great for sharing and pointing out specific areas of interest. - [Ghidriff Blog Post](https://clearbluejar.github.io/posts/ghidriff-ghidra-binary-diffing-engine/#social-binary-diffing)
+
 
 ### Sample Diffs
 
@@ -46,8 +48,14 @@ Just copy paste to new file and make sure to set the filetype to `md`.
 
 ## Publishing on a blog
 
-See some of the samples posted in the diffs(/diffs). If the blog enginer can render markdown, it should work.
+See some of the samples posted in the [diffs](/diffs/category/). If the blog enginer can render markdown, it should work.
 
 
 ## Tweet with deep links
+
+> Here is an example of social diffing with CVE-2023-38140 from a recent post on Twitter. As each function is a deep-link, you can highlight (with deep-links) to the functions of interest. - [Ghidriff Blog Post](https://clearbluejar.github.io/posts/ghidriff-ghidra-binary-diffing-engine/#social-binary-diffing)
+> [![](https://clearbluejar.github.io/assets/img/2023-12-20-ghidriff-ghidra-binary-diffing-engine/cve-2023-38140.png)](https://twitter.com/clearbluejar/status/1711613511367868845)
+
+
+
 
