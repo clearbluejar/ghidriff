@@ -48,7 +48,7 @@ Just copy paste to new file and make sure to set the filetype to `md`.
 
 ## Publishing on a blog
 
-See some of the samples posted in the [diffs](/diffs/category/). If the blog enginer can render markdown, it should work.
+See some of the samples posted in the [diffs](/diffs/category/samples). If the blog enginer can render markdown, it should work.
 
 
 ## Tweet with deep links
