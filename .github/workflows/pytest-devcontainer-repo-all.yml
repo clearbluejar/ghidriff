@@ -5,7 +5,7 @@ name: Pytest Python Package Repo Devcontainer Across Versions
 
 on:
   push:
-    branches: [ "main", "fix-workflows" ]
+    branches: [ "main" ]
     paths:
       - 'ghidriff/**'
       - 'tests/**'
@@ -22,8 +22,16 @@ jobs:
       fail-fast: false
       matrix:
         # cover the latest and all versions of all subreleases   
-        # add "latest" when jpype is update for python 3.12     
-        image: ["10.4ghidra3.11python-bookworm","10.4ghidra3.9python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
+        image: [
+          "latest",
+          "11.0ghidra3.12python-bookworm",
+          "11.0ghidra3.11python-bookworm",
+          "10.4ghidra3.11python-bookworm",
+          "10.4ghidra3.9python-bookworm",
+          "10.3.3ghidra3.10python-bookworm", 
+          "10.2.3ghidra3.11python-bookworm", 
+          "10.1.5ghidra3.11python-bookworm" 
+          ]
 
     steps:
     - uses: actions/checkout@v3

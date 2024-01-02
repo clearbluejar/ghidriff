@@ -11,11 +11,58 @@
             "module": "ghidriff",
             "console": "integratedTerminal",
             "justMyCode": true,
-            // Don't edit env directly, they read from settings.json
-            // Add/delete new vars as needed
             "args": [
                 "bins/ntoskrnl.exe.x64.10.0.22621.1105",
                 "bins/ntoskrnl.exe.x64.10.0.22621.1194",
+            ]
+        },
+        {
+            "name": "ghidriff ntos gzf ",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "tests/data/bins/ntoskrnl.exe.x64.10.0.22621.2792.10-1-5.gzf",
+                "tests/data/bins/ntoskrnl.exe.x64.10.0.22621.2861.10-1-5.gzf",
+            ]
+        },
+        {
+            "name": "pytest afd",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "tests/data/bins/afd.sys.x64.10.0.22621.1028",
+                "tests/data/bins/afd.sys.x64.10.0.22621.1415",
+            ]
+        },
+        {
+            "name": "pytest afd both gzf",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "tests/data/bins/afd.sys.x64.10.0.22621.1028.gzf",
+                "tests/data/bins/afd.sys.x64.10.0.22621.1415.gzf",
+            ]
+        },
+        {
+            "name": "pytest afd gzf",
+            "type": "python",
+            "request": "launch",
+            "module": "ghidriff",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "tests/data/bins/afd.sys.x64.10.0.22621.1028.gzf",
+                "tests/data/bins/afd.sys.x64.10.0.22621.1415.gzf",
+                "tests/data/bins/afd.sys.x64.10.0.22621.1028.gzf",
             ]
         },
     ]

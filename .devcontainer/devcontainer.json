@@ -2,9 +2,8 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.245.2/containers/python-3
 {
 	"name": "ghidriff",
-	// image from https://github.com/clearbluejar/ghidra-python
-	//"image": "ghcr.io/clearbluejar/ghidra-python:latest",
-	"image": "ghcr.io/clearbluejar/ghidra-python:10.4ghidra3.11python-bookworm",
+	// image from https://github.com/clearbluejar/ghidra-python	
+	"image": "ghcr.io/clearbluejar/ghidra-python:11.0ghidra3.12python-bookworm",
 	// Configure tool-specific properties.
 	"customizations": {
 		// Configure properties specific to VS Code.
@@ -24,12 +23,12 @@
 				"python.linting.pydocstylePath": "/usr/local/py-utils/bin/pydocstyle",
 				"python.linting.pylintPath": "/usr/local/py-utils/bin/pylint",
 				// VS code settings for ghidra-stubs autocomplete
-				"python.analysis.stubPath": "${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/",
+				"python.analysis.stubPath": "${workspaceFolder}/.env/lib/python3.12/site-packages/ghidra-stubs/",
 				"python.autoComplete.extraPaths": [
-					"${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/"
+					"${workspaceFolder}/.env/lib/python3.12/site-packages/ghidra-stubs/"
 				],
 				"python.analysis.extraPaths": [
-					"${workspaceFolder}/.env/lib/python3.11/site-packages/ghidra-stubs/"
+					"${workspaceFolder}/.env/lib/python3.12/site-packages/ghidra-stubs/"
 				],
 				"[python]": {
 					"editor.formatOnSave": true,

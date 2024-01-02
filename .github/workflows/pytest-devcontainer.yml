@@ -5,7 +5,7 @@ name: Pytest Python Package Devcontainer
 
 on:
   push:
-    branches: [ "main", "fix-workflows" ]
+    branches: [ "main" ]
     paths:
       - 'ghidriff/**'
       - 'tests/**'
