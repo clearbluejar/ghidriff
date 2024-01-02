@@ -25,6 +25,7 @@ def test_gzf_import_program(shared_datadir: Path):
     test_name = 'test-imports'
     output_path = shared_datadir / test_name
     output_path.mkdir(exist_ok=True, parents=True)
+    symbols_path = shared_datadir / SYMBOLS_DIR
     bins_path = shared_datadir / BINS_DIR
     ghidra_project_path = output_path / 'ghidra_projects'
     ghidra_project_path.mkdir(exist_ok=True,parents=True)
@@ -48,7 +49,7 @@ def test_gzf_import_program(shared_datadir: Path):
     
     binary_paths = [path for path in [bins_path / name[0] for name in bins_to_import ]]    
     
-    args = parser.parse_args(['test', 'test2', '-p', str(ghidra_project_path.absolute())]) # these args will not be tested
+    args = parser.parse_args(['-s', str(symbols_path),'test', 'test2', '-p', str(ghidra_project_path.absolute())]) # these args will not be tested
 
     expected_names = [name for name in [name[1] for name in bins_to_import ]]
     
