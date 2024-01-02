@@ -7,6 +7,7 @@ from typing import List, Tuple, TYPE_CHECKING
 from .ghidra_diff_engine import GhidraDiffEngine
 from .implied_matches import correlate_implied_matches
 from .correlate_unmatched import correlate_unmatched
+from .bsim import correlate_bsim
 
 if TYPE_CHECKING:
     import ghidra
@@ -152,6 +153,10 @@ class VersionTrackingDiff(GhidraDiffEngine):
         self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
         monitor = ConsoleTaskMonitor()
+
+        # Correlate with BSIM
+
+        correlate_bsim(matches, p1,p2, monitor, self.logger)
 
         # Find unmatched functions
 
