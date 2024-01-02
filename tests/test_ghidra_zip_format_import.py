@@ -17,9 +17,10 @@ def test_diff_afd_cve_2023_21768_gzf(shared_datadir: Path):
     runs forked because each jpype jvm can only be initialized 1x
     """
 
-    if get_ghidra_version() < '10.4':
-        # gzf files were made with 10.4
-        print('Skip testing gzf on <10.4')
+    # check ghidra version and bail if old
+    if get_ghidra_version() < '11.0':
+        # gzf files were made with 11.0
+        print('Skip testing gzf on < 11.0')
         return
 
     test_name = 'cve-2023-21768-gzf'
@@ -32,19 +33,6 @@ def test_diff_afd_cve_2023_21768_gzf(shared_datadir: Path):
 
     old_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1028.gzf'
     new_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1415.gzf'
-
-    # TODO figure out why these download are unreliable
-    # for now just git clone ghidriff-test-data
-    # old_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1028'
-    # old_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/0C5C6994A8000/afd.sys'
-    # new_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1415'
-    # new_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/50989142A9000/afd.sys'
-
-    # download binaries
-    # download is unreliage
-    # headers = get_chrome_headers()
-    # old_bin_path.write_bytes(requests.get(old_url,headers=headers).content)
-    # new_bin_path.write_bytes(requests.get(new_url,headers=headers).content)
 
     assert old_bin_path.exists()
     assert new_bin_path.exists()
@@ -119,9 +107,9 @@ def test_diff_afd_cve_2023_21768_gzf_with_one_nongzf(shared_datadir: Path):
     """
 
     # check ghidra version and bail if old
-    if get_ghidra_version() < '10.4':
-        # gzf files were made with 10.4
-        print('Skip testing gzf on <10.4')
+    if get_ghidra_version() < '11.0':
+        # gzf files were made with 11.0
+        print('Skip testing gzf on < 11.0')
         return
 
     test_name = 'cve-2023-21768-gzf'
@@ -134,19 +122,6 @@ def test_diff_afd_cve_2023_21768_gzf_with_one_nongzf(shared_datadir: Path):
 
     old_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1028.gzf'
     new_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1415'
-
-    # TODO figure out why these download are unreliable
-    # for now just git clone ghidriff-test-data
-    # old_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1028'
-    # old_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/0C5C6994A8000/afd.sys'
-    # new_bin_path = shared_datadir / 'afd.sys.x64.10.0.22621.1415'
-    # new_url = 'https://msdl.microsoft.com/download/symbols/afd.sys/50989142A9000/afd.sys'
-
-    # download binaries
-    # download is unreliage
-    # headers = get_chrome_headers()
-    # old_bin_path.write_bytes(requests.get(old_url,headers=headers).content)
-    # new_bin_path.write_bytes(requests.get(new_url,headers=headers).content)
 
     assert old_bin_path.exists()
     assert new_bin_path.exists()
