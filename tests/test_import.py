@@ -25,11 +25,11 @@ def test_gzf_import_program(shared_datadir: Path):
     test_name = 'test-imports'
     output_path = shared_datadir / test_name
     output_path.mkdir(exist_ok=True, parents=True)
-    symbols_path = shared_datadir / SYMBOLS_DIR
     bins_path = shared_datadir / BINS_DIR
+    ghidra_project_path = output_path / 'ghidra_projects'
+    ghidra_project_path.mkdir(exist_ok=True,parents=True)
 
     # bins
-
     bins_to_import = [
         # bin path , expected program
         ['afd.sys.x64.10.0.22621.1028', 'afd.sys.x64.10.0.22621.1028-00a2b7'], #if a gzf file is used first, this becomes really unstable... 
@@ -38,7 +38,6 @@ def test_gzf_import_program(shared_datadir: Path):
         ['afd.sys.x64.10.0.22621.1415.gzf', 'afd.sys.x64.10.0.22621.1415.gzf-fc498a'],        
         ['ntoskrnl.exe.x64.10.0.22621.2792.10-1-5.gzf', 'ntoskrnl.exe.x64.10.0.22621.2792.10-1-5.gzf-acb020'],
         ['ntoskrnl.exe.x64.10.0.22621.2861.10-1-5.gzf', 'ntoskrnl.exe.x64.10.0.22621.2861.10-1-5.gzf-0e4e43'],
-        
     ]
 
     parser = get_parser()
@@ -49,7 +48,7 @@ def test_gzf_import_program(shared_datadir: Path):
     
     binary_paths = [path for path in [bins_path / name[0] for name in bins_to_import ]]    
     
-    args = parser.parse_args(['test', 'test2']) # these args will not be tested
+    args = parser.parse_args(['test', 'test2', '-p', str(ghidra_project_path.absolute())]) # these args will not be tested
 
     expected_names = [name for name in [name[1] for name in bins_to_import ]]
     
