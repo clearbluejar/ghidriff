@@ -789,7 +789,7 @@ pie showData
                 mods = set(slight_mods).intersection(set(modified['diff_type']))
 
                 # only show non code mods and skip if code m_ratio is same
-                if 'code' not in modified['diff_type'] and len(mods) > 0 and modified['m_ratio'] < 1.0:
+                if 'code' not in modified['diff_type'] and len(mods) > 0 and (modified['m_ratio'] < 1.0 or len(modified['diff']) == 0):
 
                     modified_with_code +=1
                     
