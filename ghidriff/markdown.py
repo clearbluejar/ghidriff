@@ -489,10 +489,10 @@ pie showData
         return pie_template.format(title=title, rows='\n'.join(rows))
 
     def _clean_md_header_lower(self, text):
-        return re.sub('[^a-z0-9_\-]', '', text.lower().replace(' ', '-'))
+        return re.sub(r'[^a-z0-9_\\-]', '', text.lower().replace(' ', '-'))
 
     def _clean_md_header(self, text):
-        return re.sub('[^A-Za-z0-9_\-]', '', text.replace(' ', '-'))
+        return re.sub(r'[^A-Za-z0-9_\\-]', '', text.replace(' ', '-'))
 
     def gen_pe_download_cmd(self, pdiff: dict) -> str:
         """
