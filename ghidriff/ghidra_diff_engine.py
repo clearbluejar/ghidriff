@@ -496,15 +496,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             has_pdb = pdb is not None
             pdb_loaded = pdb_attr.pdbLoaded
             prog_analyzed = pdb_attr.programAnalyzed
+            
+            bin_results.append([program.getDomainFile().name, imported, has_pdb, pdb_loaded, prog_analyzed])
 
-            # TODO only save if changes are made
-            # project.save(program)
             project.close(program)
 
-            bin_results.append([program.getExecutablePath(), imported, has_pdb, pdb_loaded, prog_analyzed])
-
         for result in bin_results:
-            self.logger.info('Program: %s imported: %s has_pdb: %s pdb_loaded: %s analyzed %s', *result)
+            self.logger.info('Program: %s imported: %s has_pdb: %s pdb_loaded: %s analyzed %s', *result)        
 
         return bin_results
 
