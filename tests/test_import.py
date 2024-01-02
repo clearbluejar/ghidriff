@@ -17,9 +17,9 @@ def test_gzf_import_program(shared_datadir: Path):
     Tests that gzf files contain expected programs
     """
 
-    if get_ghidra_version() < '11.0':
-        # gzf files were made with 11.0
-        print('Skip testing gzf on <11.0')
+    if get_ghidra_version() < '10.4':
+        # gzf files were made with 10.4
+        print('Skip testing gzf on < 10.4')
         return
 
     test_name = 'test-imports'
