@@ -865,8 +865,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         """
 
         path = Path(path)
-        pe_info = get_pe_extra_data(path)
-        url = get_microsoft_download_url(filename, pe_info['timestamp'], pe_info['image_size'])
+        try:
+            pe_info = get_pe_extra_data(path)
+            url = get_microsoft_download_url(filename, pe_info['timestamp'], pe_info['image_size'])
+        except:
+            self.logger.warn(f'PE Parsing error. Exception thrown parsing {path.name}')
+            url = None        
 
         # from ghidra.app.util.bin.format.pe import PortableExecutable
         # from ghidra.app.util.bin import FileByteProvider
