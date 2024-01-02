@@ -127,6 +127,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.launcher = launcher
         self.threaded = threaded
         self.max_workers = max_workers
+        if not self.threaded:
+            self.logger.warn('--no-threaded flag forcing max_workers to 1')
+            self.max_workers = 1
         self.max_section_funcs = max_section_funcs
         self.min_func_len = min_func_len
 
@@ -182,7 +185,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            help='Verbose logging for analysis step.', action='store_true')
         group.add_argument('--min-func-len', help='Minimum function length to consider for diff',
                            type=int, default=10),
-        group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False)
+        group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False, 
+                           action=argparse.BooleanOptionalAction)
 
         # TODO add following option
         # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
@@ -569,8 +573,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 self.decompilers[p1.name][i].closeProgram()
                 self.decompilers[p2.name][i].closeProgram()
         else:
-            self.decompilers[p1.name][0].closeProgram(p1)
-            self.decompilers[p2.name][0].closeProgram(p2)
+            self.decompilers[p1.name][0].closeProgram()
+            self.decompilers[p2.name][0].closeProgram()
 
         self.decompilers = {}
 
@@ -1288,45 +1292,43 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         # thread the symbol lookups
         #   esyms are memoized and can be later just read from memory
-        if self.threaded:
+       
 
-            esym_lookups = []
+        esym_lookups = []
 
-            esym_lookups.extend(deleted_strings)
-            esym_lookups.extend(added_strings)
-            esym_lookups.extend(unmatched)
+        esym_lookups.extend(deleted_strings)
+        esym_lookups.extend(added_strings)
+        esym_lookups.extend(unmatched)
 
-            # TODO consider removing this complexity
-            funcs_need_decomp.extend(unmatched)
+        # TODO consider removing this complexity
+        funcs_need_decomp.extend(unmatched)
 
-            for sym, sym2, match_types in matched:
+        for sym, sym2, match_types in matched:
 
-                if not self.syms_need_diff(sym, sym2, match_types, skip_types):
-                    continue
+            if not self.syms_need_diff(sym, sym2, match_types, skip_types):
+                continue
 
-                funcs_need_decomp.append(sym)
-                funcs_need_decomp.append(sym2)
+            funcs_need_decomp.append(sym)
+            funcs_need_decomp.append(sym2)
 
-            esym_lookups.extend(funcs_need_decomp)
+        esym_lookups.extend(funcs_need_decomp)
 
-            # TODO add code to symbols!
+        # there can be duplicate multiple function matches, just do this once
+        # esym_lookups = list(set(esym_lookups))
 
-            # there can be duplicate multiple function matches, just do this once
-            # esym_lookups = list(set(esym_lookups))
+        self.logger.info(f'Starting esym lookups for {len(esym_lookups)} symbols using {self.max_workers} threads')
 
-            self.logger.info(f'Starting esym lookups for {len(esym_lookups)} symbols using {self.max_workers} threads')
+        completed = 0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
+            futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 60, (sym in funcs_need_decomp), (self.use_calling_counts and sym in funcs_need_decomp))
+                        for thread_id, sym in enumerate(esym_lookups))
 
-            completed = 0
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                # futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
-                futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 60, (sym in funcs_need_decomp), (self.use_calling_counts and sym in funcs_need_decomp))
-                           for thread_id, sym in enumerate(esym_lookups))
-
-                for future in concurrent.futures.as_completed(futures):
-                    result = future.result()
-                    completed += 1
-                    if (completed % int((len(esym_lookups) * .05) + 1) == 0):
-                        self.logger.info(f'Completed {completed} at {int(completed/len(esym_lookups)*100)}%')
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                completed += 1
+                if (completed % int((len(esym_lookups) * .05) + 1) == 0):
+                    self.logger.info(f'Completed {completed} at {int(completed/len(esym_lookups)*100)}%')
 
         for sym in deleted_symbols:
             symbols['deleted'].append(sym.name)
