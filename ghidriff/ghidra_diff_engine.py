@@ -154,6 +154,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         # if looking up more than calling_count_funcs_limit symbols, skip function counts
         self.use_calling_counts = use_calling_counts
+        self.bsim = args.bsim
 
         self.logger.debug(f'{vars(self)}')
 
@@ -186,6 +187,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--min-func-len', help='Minimum function length to consider for diff',
                            type=int, default=10),
         group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False, 
+                           action=argparse.BooleanOptionalAction)
+        group.add_argument('--bsim', help='Toggle using BSIM correlation', default=True, 
                            action=argparse.BooleanOptionalAction)
 
         # TODO add following option
@@ -302,7 +305,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True), 'parent':  parent, 'refcount': sym.getReferenceCount(), 'reftypes': ref_types,  'calling': calling,
                                        'address': str(sym.getAddress()), 'sym_type': str(sym.getSymbolType()), 'sym_source': str(sym.source), 'external': sym.external}
-
             else:
                 # proces function
 
@@ -345,7 +347,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                             code = err
 
                 if use_calling_counts:
-                    MAX_FUNC_REFS = 2000
+                    MAX_FUNC_REFS = 200
 
                     for f in func.getCalledFunctions(monitor):
                         count = 0
