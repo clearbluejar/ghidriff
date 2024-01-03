@@ -71,7 +71,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             engine_file_log_level: int = logging.INFO,
             max_section_funcs: int = 200,
             min_func_len: int = 10,
-            use_calling_counts: bool = True) -> None:
+            use_calling_counts: bool = True,
+            bsim: bool = True) -> None:
+            
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -154,7 +156,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         # if looking up more than calling_count_funcs_limit symbols, skip function counts
         self.use_calling_counts = use_calling_counts
-        self.bsim = args.bsim
+        self.bsim = bsim
 
         self.logger.debug(f'{vars(self)}')
 
