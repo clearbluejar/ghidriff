@@ -629,7 +629,8 @@ pie showData
 
         md.new_header(2, 'Diff Stats')
         md.new_paragraph(self.gen_table_from_dict(['Stat', 'Value'], pdiff['stats']))
-        md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats']['match_types'], 'Match Types'))
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats']['match_types'], 'All Matches'))
+        md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats']['first_matches'], 'First Matches'))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(pdiff['stats'], 'Diff Stats', include_keys=[
                          'added_funcs_len', 'deleted_funcs_len', 'modified_funcs_len']))
         md.new_paragraph(self.gen_mermaid_pie_from_dict(
