@@ -355,8 +355,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                             self.logger.debug(f'Skipping {func} count calling, too many refs: {ref_count}')
                             called_funcs.append(f'{f}')
                         else:
-                            for ref in f.symbol.references:
-                                if func.getBody().contains(ref.fromAddress, ref.fromAddress):
+                            for ref in f.symbol.references:                                
+                                if func.getBody().contains(ref.getFromAddress(), ref.getFromAddress()):
                                     count += 1
                             called_funcs.append(f'{f}-{count}')
 
@@ -369,7 +369,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                             calling_funcs.append(f'{f}')
                         else:
                             for ref in func.symbol.references:
-                                if f.getBody().contains(ref.fromAddress, ref.fromAddress):
+                                if f.getBody().contains(ref.getFromAddress(), ref.getFromAddress()):
                                     count += 1
                             calling_funcs.append(f'{f}-{count}')
                 else:
@@ -1289,6 +1289,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         added_funcs = []
         modified_funcs = []
         all_match_types = []
+        all_first_matches = []
         all_diff_types = []
         funcs_need_decomp = []
 
@@ -1358,7 +1359,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         for sym, sym2, match_types in matched:
 
             first_match = match_types[0]
-            all_match_types.append(first_match)
+            all_first_matches.append(first_match)
+            all_match_types.extend(match_types)
 
             if not self.syms_need_diff(sym, sym2, match_types, skip_types):
                 continue
@@ -1482,7 +1484,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             'match_types': Counter(all_match_types), 'items_to_process': items_to_process, 'diff_types': Counter(all_diff_types), 'unmatched_funcs_len': unmatched_funcs_len,
             'total_funcs_len': total_funcs_len, 'matched_funcs_len': matched_funcs_len, 'matched_funcs_with_code_changes_len': matched_funcs_with_code_changes_len,
             'matched_funcs_with_non_code_changes_len': matched_funcs_with_non_code_changes_len, 'matched_funcs_no_changes_len': matched_funcs_no_changes_len,
-            'match_func_similarity_percent': match_func_similarity_percent, 'func_match_overall_percent': func_match_overall_percent}
+            'match_func_similarity_percent': match_func_similarity_percent, 'func_match_overall_percent': func_match_overall_percent, 'first_matches': Counter(all_first_matches)}
 
         pdiff['symbols'] = symbols
         pdiff['strings'] = strings
