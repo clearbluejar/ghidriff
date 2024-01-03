@@ -66,6 +66,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             ('ExactInstructionsFunctionHasher', ExactInstructionsFunctionHasher.INSTANCE, True, False),
             (StructuralGraphExactHasher.MATCH_TYPE, StructuralGraphExactHasher(), True, False),
             ('ExactMnemonicsFunctionHasher', ExactMnemonicsFunctionHasher.INSTANCE, True, False),
+            ('BSIM', None, True, True), # not a true function hasher
             (BulkInstructionsHasher.MATCH_TYPE, BulkInstructionsHasher(), True, False),
             (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False),
             (StringsRefsHasher.MATCH_TYPE, StringsRefsHasher(), True, False),
@@ -75,7 +76,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
             (StructuralGraphHasher.MATCH_TYPE, StructuralGraphHasher(), True, True),
             # WARN: one_to_many=True flag allows for false negatives
             (BulkBasicBlockMnemonicHasher.MATCH_TYPE, BulkBasicBlockMnemonicHasher(), True, True),
-
             (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False),
             (StringsRefsHasher.MATCH_TYPE, StringsRefsHasher(), True, False),
             (StrUniqueFuncRefsHasher.MATCH_TYPE, StrUniqueFuncRefsHasher(), True, False),
@@ -117,9 +117,11 @@ class VersionTrackingDiff(GhidraDiffEngine):
         self.logger.info(f'Match count {matchedSymbols.size() - skipped}')
         self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
-        # Run Function Hash Correlators
 
-        for cor in func_correlators:
+        # Run Function Hash Correlators
+        # Each round of matching will "accept" the matches and subtract them from the unmatched functions
+        # This is why the order of correlators matter
+        for cor in func_correlators:            
 
             start = time()
 
@@ -129,17 +131,21 @@ class VersionTrackingDiff(GhidraDiffEngine):
             self.logger.debug(f'hasher: {hasher}')
             self.logger.info(f'name: {name} one_to_one: {one_to_one} one_to_many: {one_to_many}')
 
-            func_matches = MatchFunctions.matchFunctions(
-                p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
+            if name == 'BSIM':                
+                correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger, p1_addr_set=p1_unmatched, p2_addr_set=p2_unmatched, enabled=self.bsim)
+            else:
+                func_matches = MatchFunctions.matchFunctions(
+                    p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
+
+                for match in func_matches:
+                    p1_matches.add(match.aFunctionAddress)
+                    p2_matches.add(match.bFunctionAddress)
+                    matches.setdefault((match.aFunctionAddress, match.bFunctionAddress), {}).setdefault(name, 0)
+                    matches[(match.aFunctionAddress, match.bFunctionAddress)][name] += 1
 
             end = time()
 
-            for match in func_matches:
-                p1_matches.add(match.aFunctionAddress)
-                p2_matches.add(match.bFunctionAddress)
-                matches.setdefault((match.aFunctionAddress, match.bFunctionAddress), {}).setdefault(name, 0)
-                matches[(match.aFunctionAddress, match.bFunctionAddress)][name] += 1
-
+            # subtract unmatched functions
             p1_unmatched = p1_unmatched.subtract(p1_matches)
             p2_unmatched = p2_unmatched.subtract(p2_matches)
 
@@ -153,12 +159,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
         self.logger.info(Counter([tuple(x) for x in matches.values()]))
 
         monitor = ConsoleTaskMonitor()
-
-        # Correlate with BSIM
-        if self.get_ghidra_version() >= '11.0':
-            correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger)
-        else:
-            self.logger.info(f"Skipping BSIM correlator. Current Ghidra {self.get_ghidra_version()} but need 11.0+")
 
         # Find unmatched functions
 
@@ -275,6 +275,9 @@ class VersionTrackingDiff(GhidraDiffEngine):
             for sym in sorted(functions, key=lambda x: x.getProgram().getFunctionManager().getFunctionAt(x.address).body.numAddresses, reverse=True):
                 func = sym.getProgram().getFunctionManager().getFunctionAt(sym.address)
                 in_p1 = (func.getProgram().name == p1.name)
+
+                if hasher is None:
+                    continue
 
                 func_hash = hasher.hash(func, dummy)
                 func_len = func.getBody().getNumAddresses()

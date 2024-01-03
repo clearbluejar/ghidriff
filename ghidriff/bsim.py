@@ -5,17 +5,27 @@
 # auto tracking lets you run autoversiontracking first (which runs all 8 correlators)
 # then it runs BSIM
 
-def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None, seed_match_types=['SymbolsHash', ]):
+def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None, seed_match_types=None, p1_addr_set=None, p2_addr_set=None, enabled=True):
     """
-    matches: previously matched functions
-    p1:  
+    matches: previously matched functions used for seeds
+    seed_match_types: the types of matches to consider for seeds
     """
+
+    if not enabled:
+        logger.info(f"Skipping BSIM correlator. BSIM disabled with arg --no-bsim")
+        return
+
+    from ghidra.feature.vt import api as vtapi
+
+    if not hasattr(vtapi,'BSimProgramCorrelatorFactory'):
+        logger.info(f"Skipping BSIM correlator. BSIM not present in this version of Ghidra")
+        return
 
     from ghidra.feature.vt.api.main import VTMatchInfo, VTAssociationType, VTSession, VTScore
     from ghidra.feature.vt.api import BSimProgramCorrelatorFactory, BSimProgramCorrelator
-    from ghidra.feature.vt.api.correlator.program import SymbolNameProgramCorrelatorFactory
     from ghidra.feature.vt.api.db import VTSessionDB
 
+    
     # see Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/gui/task/CreateManualMatchTask.java#L62 
     def _create_match_info(match, match_set, p1, p2) -> VTMatchInfo:
         info: VTMatchInfo = VTMatchInfo(match_set)
@@ -42,16 +52,16 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
     
     bsim_factory = BSimProgramCorrelatorFactory()
     options = bsim_factory.createDefaultOptions()
-    session: VTSession = VTSessionDB.createVTSession(bsim_factory.name, p1, p2, Object())
+    session_ref = Object()
+    session: VTSession = VTSessionDB.createVTSession(bsim_factory.name, p1, p2, session_ref)
 
-    # symbol_factory = SymbolNameProgramCorrelatorFactory()
-    # options = symbol_factory.createDefaultOptions()
-    # symbol_correlator = symbol_factory.createCorrelator(p1,p1_addr_set,p2,p2_addr_set, options)
-    
     # create match set of already accepted matches using fake correlator
     transaction = session.startTransaction('seed')
     #match_set = session.createMatchSet(symbol_correlator)
     match_set = session.getManualMatchSet()
+
+    if seed_match_types is None:
+        seed_match_types = ['SymbolsHash','ExactBytesFunctionHasher','ExactInstructionsFunctionHasher', 'StructuralGraphExactHasher','ExactMnemonicsFunctionHasher']
 
     for match, m_types in matches.items():
         # if the match type is in the allowed seed_types create a seed match
@@ -59,6 +69,10 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
             vt_match_info = _create_match_info(match,match_set, p1, p2)
             match_set.addMatch(vt_match_info)
     
+    # Print all match sets from session
+    match_sets = session.getMatchSets()
+    for match_set in match_sets:
+        logger.info(f'{match_set}')
 
     ## BSIM will seed using accepted matches Ghidra/Features/VersionTrackingBSim/src/main/java/ghidra/feature/vt/api/BSimProgramCorrelatorMatching.java#L558-L595
     for match in match_set.getMatches():        
@@ -66,25 +80,29 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
     
     session.endTransaction(int(transaction), True)
 
-    # instantiate bsim and find matches
+    # instantiate bsim and find matches 
 
     transaction = session.startTransaction(bsim_factory.name);
 
-    p1_addr_set = p1.memory.loadedAndInitializedAddressSet
-    p2_addr_set = p2.memory.loadedAndInitializedAddressSet
+    # if not AddrSetView is defined, use the entire loaded mem
+    if p1_addr_set is None:
+        p1_addr_set = p1.memory.loadedAndInitializedAddressSet
+    if p2_addr_set is None:
+        p2_addr_set = p2.memory.loadedAndInitializedAddressSet
 
     bsim_correlator: BSimProgramCorrelator = bsim_factory.createCorrelator(p1,p1_addr_set,p2,p2_addr_set, options)
     bsim_correlator.correlate(session,monitor)
     session.endTransaction(int(transaction), True)
+    
 
     # Print all match sets from session
     match_sets = session.getMatchSets()
     for match_set in match_sets:
-        logger.info(f'{match_set}')
-
 
         # updated ghidriff matches with BSIM findings
         if match_set.getProgramCorrelatorName() == bsim_factory.name:
+
+            logger.info(f'{match_set}')
 
             for bsim_match in match_set.getMatches():
                 # Correlate function as Implied Match
@@ -93,3 +111,7 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
                 matches[(bsim_match.sourceAddress, bsim_match.destinationAddress)][name] += 1
                 p1_matches.add(bsim_match.sourceAddress)
                 p2_matches.add(bsim_match.destinationAddress)    
+
+
+    # release object?
+    session.release(session_ref)
