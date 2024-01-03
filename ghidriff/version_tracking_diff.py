@@ -155,8 +155,10 @@ class VersionTrackingDiff(GhidraDiffEngine):
         monitor = ConsoleTaskMonitor()
 
         # Correlate with BSIM
-
-        correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger)
+        if self.get_ghidra_version() >= '11.0':
+            correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger)
+        else:
+            self.logger.info(f"Skipping BSIM correlator. Current Ghidra {self.get_ghidra_version()} but need 11.0+")
 
         # Find unmatched functions
 
