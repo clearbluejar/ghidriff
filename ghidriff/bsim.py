@@ -1,5 +1,4 @@
-# https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/VersionTrackingBSim/src/main/java/ghidra/feature/vt/api/BSimProgramCorrelator.java
-
+# Ghidra/Features/VersionTrackingBSim/src/main/java/ghidra/feature/vt/api/BSimProgramCorrelator.java
 
 # this should be called after several reliable correlators have taken place
 # we need reliable matches to seed BSIM
@@ -61,9 +60,8 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
             match_set.addMatch(vt_match_info)
     
 
-    ## BSIM will seed using accepted matches https://github.com/NationalSecurityAgency/ghidra/blob/master/Ghidra/Features/VersionTrackingBSim/src/main/java/ghidra/feature/vt/api/BSimProgramCorrelatorMatching.java#L558-L595
-    for match in match_set.getMatches():
-        print(match)
+    ## BSIM will seed using accepted matches Ghidra/Features/VersionTrackingBSim/src/main/java/ghidra/feature/vt/api/BSimProgramCorrelatorMatching.java#L558-L595
+    for match in match_set.getMatches():        
         match.association.setAccepted()
     
     session.endTransaction(int(transaction), True)
@@ -83,6 +81,9 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
     match_sets = session.getMatchSets()
     for match_set in match_sets:
         logger.info(f'{match_set}')
+
+
+        # updated ghidriff matches with BSIM findings
         if match_set.getProgramCorrelatorName() == bsim_factory.name:
 
             for bsim_match in match_set.getMatches():
@@ -91,9 +92,4 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
                 matches.setdefault((bsim_match.sourceAddress, bsim_match.destinationAddress), {}).setdefault(name, 0)
                 matches[(bsim_match.sourceAddress, bsim_match.destinationAddress)][name] += 1
                 p1_matches.add(bsim_match.sourceAddress)
-                p2_matches.add(bsim_match.destinationAddress)
-
-
-
-    # updated ghidriff matches with BSIM findings
-    
+                p2_matches.add(bsim_match.destinationAddress)    
