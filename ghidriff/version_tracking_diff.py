@@ -156,7 +156,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         # Correlate with BSIM
 
-        correlate_bsim(matches, p1,p2, monitor, self.logger)
+        correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger)
 
         # Find unmatched functions
 
