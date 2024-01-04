@@ -331,6 +331,25 @@ class GhidriffMarkdown:
 
         return table
 
+    def gen_strings_ref_table(self, str_data) -> str:
+
+        table_list = []
+        table_list.extend(['String', 'Ref Count', 'Ref Func'])
+        column_len = len(table_list)
+
+        count = 1
+        for item in str_data:
+            
+            name = item['name']
+            ref_count = item['refcount']
+            calling = ','.join(item['calling'])
+            table_list.extend([name,ref_count,calling])
+            count += 1
+
+        diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
+
+        return diff_table
+    
     def gen_strings_diff(self, deleted_strings: dict, added_strings: dict):
 
         added = [f'{item["name"]}\n' for item in added_strings]
@@ -644,6 +663,12 @@ pie showData
 
             md.new_header(3, 'Strings Diff', add_table_of_contents='n')
             md.new_paragraph(self.gen_strings_diff(pdiff['strings']['deleted'], pdiff['strings']['added']))
+            md.new_header(3, 'String References', add_table_of_contents='n')
+            md.new_header(4, 'Old', add_table_of_contents='n')
+            md.new_paragraph(self.gen_strings_ref_table(pdiff['strings']['deleted']))
+            md.new_header(4, 'New', add_table_of_contents='n')
+            md.new_paragraph(self.gen_strings_ref_table(pdiff['strings']['added']))
+            
         else:
             md.new_paragraph('*No string differences found*\n')
 
