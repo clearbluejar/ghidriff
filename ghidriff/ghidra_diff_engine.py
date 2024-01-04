@@ -72,7 +72,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             max_section_funcs: int = 200,
             min_func_len: int = 10,
             use_calling_counts: bool = True,
-            bsim: bool = True) -> None:
+            bsim: bool = True,
+            bsim_full: bool = False) -> None:
             
 
         # setup engine logging
@@ -157,6 +158,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # if looking up more than calling_count_funcs_limit symbols, skip function counts
         self.use_calling_counts = use_calling_counts
         self.bsim = bsim
+        self.bsim_full = bsim_full
 
         self.logger.debug(f'{vars(self)}')
 
@@ -189,8 +191,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--min-func-len', help='Minimum function length to consider for diff',
                            type=int, default=10),
         group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False, 
-                           action=argparse.BooleanOptionalAction)
+                           action=argparse.BooleanOptionalAction)        
+        
+        group = parser.add_argument_group('BSIM Options')
         group.add_argument('--bsim', help='Toggle using BSIM correlation', default=True, 
+                           action=argparse.BooleanOptionalAction)
+        group.add_argument('--bsim-full', help='Slower but better matching. Use only when needed', default=False, 
                            action=argparse.BooleanOptionalAction)
 
         # TODO add following option
@@ -457,7 +463,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             if not project.getRootFolder().getFile(program_name):
                 self.logger.info(f'Importing {program_path} as {program_name}')
                 program = project.importProgram(program_path)
-                project.saveAs(program, "/", program_name, True)
+                project.saveAs(program, "/", program_name, True)                
             else:
                 self.logger.info(f'Opening {program_path}')
                 program = self.project.openProgram("/", program_name, False)
@@ -825,6 +831,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             else:
                 self.logger.info(f"Analysis already complete.. skipping {program}!")
         finally:
+            # from java.io import File
+            # self.project.saveAsPackedFile(program,File(f'/tmp/{program.name}.gzf'), True)
             self.project.close(program)
 
         self.logger.info(f"Analysis for {df_or_prog} complete")

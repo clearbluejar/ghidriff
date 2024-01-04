@@ -6,7 +6,7 @@ from typing import List, Tuple, TYPE_CHECKING
 
 from .ghidra_diff_engine import GhidraDiffEngine
 from .implied_matches import correlate_implied_matches
-from .correlate_unmatched import correlate_unmatched
+from .decomp_correlate import decomp_correlate
 from .bsim import correlate_bsim
 
 if TYPE_CHECKING:
@@ -61,12 +61,12 @@ class VersionTrackingDiff(GhidraDiffEngine):
         # tuples of correlators instances
         # ( name, hasher, one_to_one, one_to_many)
         # DO NOT CHANGE ORDER UNLESS INTENDED, ORDER HAS MAJOR IMPACT ON ACCURACY AND EFFICIENCY
-        func_correlators = [
+        func_correlators = [            
             ('ExactBytesFunctionHasher', ExactBytesFunctionHasher.INSTANCE, True, False),
             ('ExactInstructionsFunctionHasher', ExactInstructionsFunctionHasher.INSTANCE, True, False),
             (StructuralGraphExactHasher.MATCH_TYPE, StructuralGraphExactHasher(), True, False),
             ('ExactMnemonicsFunctionHasher', ExactMnemonicsFunctionHasher.INSTANCE, True, False),
-            ('BSIM', None, True, True), # not a true function hasher
+            ('BSIM', None, True, True), # not a true function hasher            
             (BulkInstructionsHasher.MATCH_TYPE, BulkInstructionsHasher(), True, False),
             (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False),
             (StringsRefsHasher.MATCH_TYPE, StringsRefsHasher(), True, False),
@@ -119,6 +119,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
 
         # Run Function Hash Correlators
+
+        func_matches = None
         # Each round of matching will "accept" the matches and subtract them from the unmatched functions
         # This is why the order of correlators matter
         for cor in func_correlators:            
@@ -131,8 +133,13 @@ class VersionTrackingDiff(GhidraDiffEngine):
             self.logger.debug(f'hasher: {hasher}')
             self.logger.info(f'name: {name} one_to_one: {one_to_one} one_to_many: {one_to_many}')
 
-            if name == 'BSIM':                
-                correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger, p1_addr_set=p1_unmatched, p2_addr_set=p2_unmatched, enabled=self.bsim)
+            if name == 'BSIM':             
+                if self.bsim_full:
+                    # slower, but uses full adddress space for matching
+                    correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger,enabled=self.bsim)
+                else:
+                    # only matches on functions that have no match
+                    correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger, p1_addr_set=p1_unmatched, p2_addr_set=p2_unmatched, enabled=self.bsim)
             else:
                 func_matches = MatchFunctions.matchFunctions(
                     p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
@@ -142,6 +149,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
                     p2_matches.add(match.bFunctionAddress)
                     matches.setdefault((match.aFunctionAddress, match.bFunctionAddress), {}).setdefault(name, 0)
                     matches[(match.aFunctionAddress, match.bFunctionAddress)][name] += 1
+                
+                self.logger.info(f'Match count: {func_matches.size()}')
 
             end = time()
 
@@ -150,7 +159,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             p2_unmatched = p2_unmatched.subtract(p2_matches)
 
             self.logger.info(f'{name} Exec time: {end-start:.4f} secs')
-            self.logger.info(f'Match count: {func_matches.size()}')
+            
 
             # kill noisy monitor after first run
             monitor = ConsoleTaskMonitor().DUMMY_MONITOR
@@ -184,7 +193,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         p2_missing = self.get_funcs_from_addr_set(p2, p2_unmatched)
 
         # attempt to correlate amongst unmatched functions
-        correlate_unmatched(self, matches, p1_missing, p2_missing, p1_matches, p2_matches)
+        decomp_correlate(self, matches, p1_missing, p2_missing, p1_matches, p2_matches)
 
         p1_unmatched = p1_unmatched.subtract(p1_matches)
         p2_unmatched = p2_unmatched.subtract(p2_matches)

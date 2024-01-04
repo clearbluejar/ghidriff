@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from ghidra_builtins import *
 
 
-def correlate_unmatched(self, matches, p1_missing, p2_missing, p1_matches, p2_matches):
+def decomp_correlate(self, matches, p1_missing, p2_missing, p1_matches, p2_matches):
     """
     from all of the unmatched functions remaining, see if any should be matched by decomp
     This is slow, but sometimes necessary
@@ -14,7 +14,7 @@ def correlate_unmatched(self, matches, p1_missing, p2_missing, p1_matches, p2_ma
     # only attempt if there is something to match
     if len(p1_missing) > 0 and len(p2_missing) > 0:
 
-        self.logger.info(f'Attempting to correlate unmatched functions p1:{len(p1_missing)} p2:{len(p1_missing)}')
+        self.logger.info(f'Attempting to Decomp Correlate unmatched functions p1:{len(p1_missing)} p2:{len(p1_missing)}')
 
         for p1_func in p1_missing:
 
