@@ -64,7 +64,9 @@ def main():
                                      engine_log_level=args.log_level,
                                      engine_file_log_level=args.file_log_level,
                                      min_func_len=args.min_func_len,
-                                     use_calling_counts=args.use_calling_counts
+                                     use_calling_counts=args.use_calling_counts,
+                                     bsim=args.bsim,
+                                     bsim_full=args.bsim_full
                                      )
 
     d.setup_project(binary_paths, project_path, project_name, symbols_path)

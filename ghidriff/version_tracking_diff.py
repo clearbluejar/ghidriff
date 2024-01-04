@@ -66,7 +66,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             ('ExactInstructionsFunctionHasher', ExactInstructionsFunctionHasher.INSTANCE, True, False),
             (StructuralGraphExactHasher.MATCH_TYPE, StructuralGraphExactHasher(), True, False),
             ('ExactMnemonicsFunctionHasher', ExactMnemonicsFunctionHasher.INSTANCE, True, False),
-            ('BSIM', None, True, True), # not a true function hasher
+            ('BSIM', None, True, False), # not a true function hasher
             (BulkInstructionsHasher.MATCH_TYPE, BulkInstructionsHasher(), True, False),
             (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False),
             (StringsRefsHasher.MATCH_TYPE, StringsRefsHasher(), True, False),
