@@ -61,12 +61,12 @@ class VersionTrackingDiff(GhidraDiffEngine):
         # tuples of correlators instances
         # ( name, hasher, one_to_one, one_to_many)
         # DO NOT CHANGE ORDER UNLESS INTENDED, ORDER HAS MAJOR IMPACT ON ACCURACY AND EFFICIENCY
-        func_correlators = [            
+        func_correlators = [
             ('ExactBytesFunctionHasher', ExactBytesFunctionHasher.INSTANCE, True, False),
             ('ExactInstructionsFunctionHasher', ExactInstructionsFunctionHasher.INSTANCE, True, False),
             (StructuralGraphExactHasher.MATCH_TYPE, StructuralGraphExactHasher(), True, False),
             ('ExactMnemonicsFunctionHasher', ExactMnemonicsFunctionHasher.INSTANCE, True, False),
-            ('BSIM', None, True, True), # not a true function hasher            
+            ('BSIM', None, True, True), # not a true function hasher
             (BulkInstructionsHasher.MATCH_TYPE, BulkInstructionsHasher(), True, False),
             (SigCallingCalledHasher.MATCH_TYPE, SigCallingCalledHasher(), True, False),
             (StringsRefsHasher.MATCH_TYPE, StringsRefsHasher(), True, False),
@@ -119,8 +119,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
 
         # Run Function Hash Correlators
-
-        func_matches = None
         # Each round of matching will "accept" the matches and subtract them from the unmatched functions
         # This is why the order of correlators matter
         for cor in func_correlators:            
