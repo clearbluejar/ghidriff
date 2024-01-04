@@ -21,7 +21,7 @@ With the introduction of BSIM in Ghidra 11.0 a new power has been brought to `gh
 
 ## BSIM correlator first impressions
 - The BSIM correlator is great for matching. The overall improvement for #ghidriff is a net plus, but some custom #ghidriff correlators were already providing similar structural matching (not as good, but similar) 💪
-- Speculation: 🧐 BSIM is the reason why Ghidra Version Tracking was lacking structural matching heuristics. This is why ghidriff has its own [structural function matching](). BSIM is a more accurate and powerful version. 
+- Speculation: 🧐 BSIM is the reason why Ghidra Version Tracking was lacking structural matching heuristics. This is why ghidriff has its own [structural function matching](https://github.com/clearbluejar/ghidriff/blob/main/ghidriff/correlators.py#L14-L103). BSIM is a more accurate and powerful version. 
 - Adding BSIM to #ghidriff slows it down a bit. This is because BSIM decompiles all functions to match based on data flow and call graphs, and #ghidriff similarly already does this to make matching decisions. It has been optimized. 🤓 
 
 ## ghidriff BSIM correlations options
