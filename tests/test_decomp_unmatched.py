@@ -84,11 +84,8 @@ def test_diff_ntoskrnl_decomp_unmatched(shared_datadir: Path):
                          max_section_funcs=args.max_section_funcs,
                          md_title=args.md_title)
 
-    if d.get_ghidra_version() < '11.0':
-        # decomp match only happens when BSIM isn't there
-        assert pdiff['stats']['match_types']['Decomp Match'] == 29
-    else:        
-        assert pdiff['stats']['match_types']['Decomp Match'] == 0
+
+    assert pdiff['stats']['match_types']['Decomp Match'] == 29
 
     assert len(pdiff['functions']['added']) == 0
     assert len(pdiff['functions']['deleted']) == 0
