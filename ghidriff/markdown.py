@@ -423,11 +423,7 @@ end
         new_bin = pdiff['new_meta']['Program Name']
 
         for i, func in enumerate(pdiff['functions']['added']):
-            if func['external']:
-                # remove :: from external names
-                name = func['fullname'].replace('::', '-')
-            else:
-                name = func['name']
+            name = func['fullname'].replace('::', '-')
             added.append(self._clean_md_header(name))
 
             if max_section_funcs and i > max_section_funcs:
@@ -436,10 +432,7 @@ end
                 break
 
         for i, func in enumerate(pdiff['functions']['deleted']):
-            if func['external']:
-                name = func['fullname'].replace('::', '-')
-            else:
-                name = func['name']
+            name = func['fullname'].replace('::', '-')
             deleted.append(self._clean_md_header(name))
 
             if max_section_funcs and i > max_section_funcs:
@@ -684,10 +677,7 @@ pie showData
                 self.logger.warn(f"{len(funcs['deleted']) - max_section_funcs} Functions Ommited...")
                 break
 
-            if esym['external']:
-                md.new_header(2, esym['fullname'])
-            else:
-                md.new_header(2, esym['name'])
+            md.new_header(2, esym['fullname'])
             md.new_header(3, "Function Meta", add_table_of_contents='n')
             md.new_paragraph(self.gen_esym_table(old_name, esym))
 
@@ -714,10 +704,7 @@ pie showData
                 self.logger.warn(f"{len(funcs['added']) - max_section_funcs} Functions Ommited...")
                 break
 
-            if esym['external']:
-                md.new_header(2, esym['fullname'])
-            else:
-                md.new_header(2, esym['name'])
+            md.new_header(2, esym['fullname'])
             md.new_header(3, "Function Meta", add_table_of_contents='n')
             md.new_paragraph(self.gen_esym_table(new_name, esym))
 
@@ -746,11 +733,7 @@ pie showData
                 break
 
             diff = None
-
-            if modified['old']['external']:
-                old_func_name = modified['old']['name']
-            else:
-                old_func_name = modified['old']['fullname']
+            old_func_name = modified['old']['fullname']
 
             # selectively include matches
             if 'code' in modified['diff_type']:
