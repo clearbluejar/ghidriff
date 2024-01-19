@@ -449,7 +449,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             if bin_hash in bin_hashes:
                 self.logger.warn(f'Duplicate file detected {import_paths[i]} with sha1: {bin_hash}')
-                import_paths.pop(i)
             else:
                 bin_hashes.append(bin_hash)
 
@@ -471,6 +470,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             self.logger.info(f'Loaded {program}')
 
             proj_programs.append(program)
+
+        # Print of project files
+        self.logger.info('Project Files:')
+        for df in self.project.getRootFolder().getFiles():
+            self.logger.info(df)
 
         # Setup Symbols Server
         if not self.no_symbols:
@@ -1422,6 +1426,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                                      fromfile=from_file_name, tofile=to_file_name)))  # ignores name changes
 
             if len(only_code_diff) > 0 and (mnemonics_ratio < 1.0 or blocks_ratio < 1.0):
+
+                # handle bad match external match (sometimes occurs with implied matches)
+                if ratio == 0.0 and (blocks_ratio == 0.0):
+                    self.logger.info(f'Skipping match: {ematch_1['name']} -  {ematch_2['name']} with match_types: {match_types}! Ratio {ratio} B Ratio: {blocks_ratio}')
+                    continue
 
                 # TODO remove this hack to find false positives
                 # potential decompile jumptable issue ghidra/issues/2452
