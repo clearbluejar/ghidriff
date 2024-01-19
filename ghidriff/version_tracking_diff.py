@@ -214,12 +214,18 @@ class VersionTrackingDiff(GhidraDiffEngine):
         # get external funcs (these are still interesting)
         for func in p1.functionManager.getExternalFunctions():
             key = func.getName(True)
+            # Apple Machos Specific (externals provide no relevant info)
+            if "<EXTERNAL>::EXT_FUN_" in key:
+                continue
             p1_externals[key] = func
 
         p2_externals = {}
         # get external funcs (these are still interesting)
         for func in p2.functionManager.getExternalFunctions():
             key = func.getName(True)
+            # Apple Machos Specific (externals provide no relevant info)
+            if "<EXTERNAL>::EXT_FUN_" in key:
+                continue
             p2_externals[key] = func
 
         deleted_externs = list(set(p1_externals.keys()).difference(p2_externals.keys()))
