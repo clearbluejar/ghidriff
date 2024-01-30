@@ -352,9 +352,13 @@ class GhidriffMarkdown:
     
     def gen_strings_diff(self, deleted_strings: dict, added_strings: dict):
 
-        added = [f'{item["name"]}\n' for item in added_strings]
+        def _clean_string(name: str):
+            clean = re.sub(r'_[_a-f0-9]+$','',name)
+            return clean.rstrip('_')
 
-        deleted = [f'{item["name"]}\n' for item in deleted_strings]
+        added = sorted([f'{_clean_string(item["name"])}\n' for item in added_strings])
+
+        deleted = sorted([f'{_clean_string(item["name"])}\n' for item in deleted_strings])
 
         diff = ''.join(list(difflib.unified_diff(deleted, added,
                                                  lineterm='\n', fromfile='deleted strings', tofile='added strings')))
