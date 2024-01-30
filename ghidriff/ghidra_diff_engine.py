@@ -71,7 +71,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             engine_file_log_level: int = logging.INFO,
             max_section_funcs: int = 200,
             min_func_len: int = 10,
-            use_calling_counts: bool = True,
+            use_calling_counts: bool = False,
             bsim: bool = True,
             bsim_full: bool = False) -> None:
             
@@ -1497,8 +1497,14 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             [mod_func for mod_func in modified_funcs if 'code' not in mod_func['diff_type']])
         matched_funcs_no_changes_len = matched_funcs_len - \
             matched_funcs_with_code_changes_len - matched_funcs_with_non_code_changes_len
-        match_func_similarity_percent = f'{((matched_funcs_no_changes_len / matched_funcs_len)*100):.4f}%'
-        func_match_overall_percent = f'{((matched_funcs_len / total_funcs_len)*100):.4f}%'
+        
+        match_func_similarity_percent = 0.0
+        func_match_overall_percent = 0.0
+
+        if matched_funcs_len > 0 and len(modified_funcs > 0):
+            match_func_similarity_percent = f'{((matched_funcs_no_changes_len / matched_funcs_len)*100):.4f}%'
+        if total_funcs_len > 0 and len(modified_funcs > 0):
+            func_match_overall_percent = f'{((matched_funcs_len / total_funcs_len)*100):.4f}%'
 
         pdiff['stats'] = {'added_funcs_len': len(added_funcs), 'deleted_funcs_len': len(deleted_funcs), 'modified_funcs_len': len(modified_funcs), 'added_symbols_len': len(
             symbols['added']), 'deleted_symbols_len': len(symbols['deleted']), 'diff_time': elapsed, 'deleted_strings_len': len(deleted_strings), 'added_strings_len': len(added_strings),
