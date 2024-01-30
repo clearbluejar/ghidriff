@@ -21,8 +21,6 @@ class VersionTrackingDiff(GhidraDiffEngine):
     ghidra/tree/master/Ghidra/Features/VersionTracking
     """
 
-    MIN_FUNC_LEN = 10
-
     def find_matches(
         self,
         p1: "ghidra.program.model.listing.Program",
@@ -140,7 +138,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
                     correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger, p1_addr_set=p1_unmatched, p2_addr_set=p2_unmatched, enabled=self.bsim)
             else:
                 func_matches = MatchFunctions.matchFunctions(
-                    p1, p1_unmatched, p2, p2_unmatched, self.MIN_FUNC_LEN, one_to_one, one_to_many, hasher, monitor)
+                    p1, p1_unmatched, p2, p2_unmatched, self.min_func_len, one_to_one, one_to_many, hasher, monitor)
 
                 for match in func_matches:
                     p1_matches.add(match.aFunctionAddress)
