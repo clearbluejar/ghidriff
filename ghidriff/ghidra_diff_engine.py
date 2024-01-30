@@ -1429,7 +1429,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 # handle bad match external match (sometimes occurs with implied matches)
                 if ratio == 0.0 and (blocks_ratio == 0.0):
-                    self.logger.info(f'Skipping match: {ematch_1['name']} -  {ematch_2['name']} with match_types: {match_types}! Ratio {ratio} B Ratio: {blocks_ratio}')
+                    self.logger.info(f"Skipping match: {ematch_1['name']} -  {ematch_2['name']} with match_types: {match_types}! Ratio {ratio} B Ratio: {blocks_ratio}")
                     continue
 
                 # TODO remove this hack to find false positives
