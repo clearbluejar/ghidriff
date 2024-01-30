@@ -96,13 +96,13 @@ def test_diff_ios_dylib_arm64(shared_datadir: Path):
 
 
 @pytest.mark.forked
-def test_diff_macos_dylib_x64(shared_datadir: Path):
+def test_diff_macos_macho_x64(shared_datadir: Path):
     """
     Tests end to end diff of CVE
     runs forked because each jpype jvm can only be initialized 1x
     """
 
-    test_name = 'lipIPTelephony-dylib-CVE-2023-32412'
+    test_name = 'contacts'
     output_path = shared_datadir / test_name
     output_path.mkdir(exist_ok=True, parents=True)
     symbols_path = shared_datadir / SYMBOLS_DIR
@@ -111,8 +111,8 @@ def test_diff_macos_dylib_x64(shared_datadir: Path):
     ghidra_project_path.mkdir(exist_ok=True,parents=True)
 
     # setup bins
-    old_bin_path = bins_path / 'libIPTelephony.dylib.x86_64.1897-Mac_13.3.1_22E261'
-    new_bin_path = bins_path / 'libIPTelephony.dylib.x86_64.1898-Mac_13.4_22F66'
+    old_bin_path = bins_path / 'Contacts.mac.x86_64.2563-Mac14.0-23A344'
+    new_bin_path = bins_path / 'Contacts.mac.x86_64.2565-Mac14.1-23B74'
 
     assert old_bin_path.exists()
     assert new_bin_path.exists()
@@ -177,6 +177,10 @@ def test_diff_macos_dylib_x64(shared_datadir: Path):
                          max_section_funcs=args.max_section_funcs,
                          md_title=args.md_title)
 
-    assert len(pdiff['functions']['modified']) == 4
-    assert len(pdiff['functions']['added']) == 2
+    # no changes
+    assert len(pdiff['functions']['modified']) == 0
+    assert len(pdiff['functions']['added']) == 0
     assert len(pdiff['functions']['deleted']) == 0
+
+    # 100 % match
+    assert pdiff['stats']['func_match_overall_percent'] == '100.0000%'
