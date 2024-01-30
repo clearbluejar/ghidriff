@@ -1501,9 +1501,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         match_func_similarity_percent = 0.0
         func_match_overall_percent = 0.0
 
-        if matched_funcs_len > 0 and len(modified_funcs > 0):
+        if matched_funcs_len > 0:
             match_func_similarity_percent = f'{((matched_funcs_no_changes_len / matched_funcs_len)*100):.4f}%'
-        if total_funcs_len > 0 and len(modified_funcs > 0):
+        if total_funcs_len > 0:
             func_match_overall_percent = f'{((matched_funcs_len / total_funcs_len)*100):.4f}%'
 
         pdiff['stats'] = {'added_funcs_len': len(added_funcs), 'deleted_funcs_len': len(deleted_funcs), 'modified_funcs_len': len(modified_funcs), 'added_symbols_len': len(
