@@ -12,7 +12,7 @@ from typing import List, Tuple, Union, TYPE_CHECKING
 from argparse import Namespace
 import logging
 
-from pyhidra.launcher import PyhidraLauncher, GHIDRA_INSTALL_DIR
+from pyhidra.launcher import PyhidraLauncher
 from .utils import sha1_file, get_microsoft_download_url, get_pe_extra_data
 from .markdown import GhidriffMarkdown
 
@@ -45,7 +45,7 @@ class HeadlessLoggingPyhidraLauncher(PyhidraLauncher):
                 log = File(self.log_path)
                 config.setApplicationLogFile(log)
 
-            Application.initializeApplication(self.layout, config)
+            Application.initializeApplication(self._layout, config)
 
 
 class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
@@ -118,16 +118,17 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.logger.debug(f'Starting JVM with args: {launcher.vm_args}')
 
         launcher.start()
+        self.launcher = launcher
 
-        self.logger.info(f'GHIDRA_INSTALL_DIR: {GHIDRA_INSTALL_DIR}')
-        app_prop = launcher.layout.getApplicationProperties()
+        self.logger.info(f'GHIDRA_INSTALL_DIR: {self.launcher._install_dir}')
+        app_prop = launcher._layout.getApplicationProperties()
         self.logger.info(
             f'GHIDRA {app_prop.applicationVersion}  Build Date: {app_prop.applicationBuildDate} Release: {app_prop.applicationReleaseName}')
         self.logger.info(f"Engine Args:")
         for arg in vars(args):
             self.logger.info('\t%-20s%s', f'{arg}:', vars(args)[arg])
 
-        self.launcher = launcher
+        
         self.threaded = threaded
         self.max_workers = max_workers
         if not self.threaded:
@@ -216,9 +217,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
     def get_ghidra_version(self) -> str:
 
-        from pyhidra.version import get_ghidra_version
-
-        return get_ghidra_version()
+        return self.launcher.app_info.version
 
     def get_default_args(self) -> list:
         """
