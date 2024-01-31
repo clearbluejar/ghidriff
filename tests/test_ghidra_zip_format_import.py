@@ -1,10 +1,10 @@
 from pathlib import Path
 import json
 import pytest
-from pyhidra.version import get_ghidra_version
+from pyhidra import HeadlessPyhidraLauncher
 
 
-from ghidriff import get_parser, get_engine_classes, VersionTrackingDiff, GhidraDiffEngine
+from ghidriff import get_parser, VersionTrackingDiff, GhidraDiffEngine
 
 SYMBOLS_DIR = 'symbols'
 BINS_DIR = 'bins'
@@ -18,7 +18,8 @@ def test_diff_afd_cve_2023_21768_gzf(shared_datadir: Path):
     """
 
     # check ghidra version and bail if old
-    if get_ghidra_version() < '11.0':
+    
+    if HeadlessPyhidraLauncher().app_info.version < '11.0':
         # gzf files were made with 11.0
         print('Skip testing gzf on < 11.0')
         return
@@ -109,7 +110,7 @@ def test_diff_afd_cve_2023_21768_gzf_with_one_nongzf(shared_datadir: Path):
     """
 
     # check ghidra version and bail if old
-    if get_ghidra_version() < '11.0':
+    if HeadlessPyhidraLauncher().app_info.version < '11.0':
         # gzf files were made with 11.0
         print('Skip testing gzf on < 11.0')
         return

@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 import pytest
-from pyhidra.version import get_ghidra_version
+from pyhidra import HeadlessPyhidraLauncher
 
 
 from ghidriff import get_parser, get_engine_classes, VersionTrackingDiff, GhidraDiffEngine
@@ -17,7 +17,7 @@ def test_gzf_import_program(shared_datadir: Path):
     Tests that gzf files contain expected programs
     """
 
-    if get_ghidra_version() < '11.0':
+    if HeadlessPyhidraLauncher().app_info.version < '11.0':
         # gzf files were made with 11.0
         print('Skip testing gzf on < 11.0')
         return
