@@ -22,8 +22,14 @@ jobs:
       fail-fast: false
       matrix:
         # cover the latest and all versions of all subreleases        
-        image: ["10.4ghidra3.11python-bookworm", "10.4ghidra3.9python-bookworm", "10.3.3ghidra3.10python-bookworm", "10.2.3ghidra3.11python-bookworm", "10.1.5ghidra3.11python-bookworm" ]
-    
+        image: [
+          "latest",
+          "11.0.1ghidra3.12python-bookworm",
+          "11.0ghidra3.11python-bookworm",
+          "10.4ghidra3.11python-bookworm",
+          "10.4ghidra3.9python-bookworm",
+          "10.3.3ghidra3.10python-bookworm", 
+          ]
     container:
         image: ghcr.io/clearbluejar/ghidra-python:${{ matrix.image }}
         env:
