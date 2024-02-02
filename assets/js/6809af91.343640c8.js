@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkwww=self.webpackChunkwww||[]).push([[560],{2904:e=>{e.exports=JSON.parse('{"title":"Samples","description":"A collection of ghidriff diffs...","slug":"/category/samples","permalink":"/ghidriff/diffs/category/samples","navigation":{"next":{"title":"CVEs","permalink":"/ghidriff/diffs/category/cves"}}}')}}]);
