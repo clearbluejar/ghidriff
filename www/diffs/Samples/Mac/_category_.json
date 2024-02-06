@@ -1,6 +1,13 @@
 {
     "link": {
         "type": "generated-index",
-        "description": "Sample Mac Diffs"
-    }
+        "description": "Mac Diffs",
+        "image": "../../static/img/ghidriff-learning-mac.jpeg"
+    },
+
+    "position": 2.5,
+    "label": "Mac Diffs",
+    "collapsible": true,
+    "collapsed": false,
+
 }

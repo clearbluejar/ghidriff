@@ -1,5 +1,5 @@
 ---
-description: Diffing a ntoskrnl.exe - KB5022913 - 11-22H2 - CVE-2023-2342
+description: Diffing ntoskrnl.exe - KB5022913 - 11-22H2 - CVE-2023-2342
 ---
 
 ### Diffing a Windows Kernel 

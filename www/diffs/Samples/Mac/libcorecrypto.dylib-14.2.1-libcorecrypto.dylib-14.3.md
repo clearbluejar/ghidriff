@@ -1,3 +1,7 @@
+---
+hide_table_of_contents: true
+---
+
 # libcorecrypto.dylib-14.2.1-libcorecrypto.dylib-14.3 Diff
 
 # TOC
