@@ -339,11 +339,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                     for block in basic_blocks:
                         code_units = func.getProgram().getListing().getCodeUnits(block, True)
+                        units = []
                         for code in code_units:
-                            blocks.append(str(code.mnemonicString))
+                            units.append(str(code.mnemonicString))
 
-                    # sort - This case handles the case for compiler optimizations
-                    blocks = sorted(blocks)
+                        # sort - This case handles the case for compiler optimizations
+                        blocks.extend(sorted(units))
 
                     if not func.external:
                         error, code = self.decompile_func(func.program, func, timeout,)
