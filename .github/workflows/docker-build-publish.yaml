@@ -1,5 +1,8 @@
 name: Docker-PyPi-Build-Publish
 
+# this workflow will publish the latest ghidriff image from the repo Dockerfile
+# it will match the release based on the most recent release in pypi
+
 # This workflow uses actions that are not certified by GitHub.
 # They are provided by a third-party and are governed by
 # separate terms of service, privacy policy, and support
@@ -89,7 +92,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
+          # cache-from: type=gha
+          no-cache: true
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64          
 
