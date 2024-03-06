@@ -143,6 +143,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # Setup decompiler interface
         self.decompilers = {}
 
+        # Setup bsim db
+        self.bsim_db = {}
+
         self.project: "ghidra.base.project.GhidraProject" = None
 
         self.version = __version__
@@ -197,8 +200,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group = parser.add_argument_group('BSIM Options')
         group.add_argument('--bsim', help='Toggle using BSIM correlation', default=True, 
                            action=argparse.BooleanOptionalAction)
-        group.add_argument('--bsim-full', help='Slower but better matching. Use only when needed', default=False, 
+        group.add_argument('--bsim-full', help='Slower. BSIM will match across entire addr space.', default=False, 
                            action=argparse.BooleanOptionalAction)
+        # group.add_argument('--bsim-db', help='BSIM db url(s) to query', action='append', nargs='+')
+        # group.add_argument('--min-match-const', help='BSIM db url(s) to query', action='append', nargs='+')
+
 
         # TODO add following option
         # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
@@ -1180,6 +1186,110 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             new_code = code.split('{', 1)[1].splitlines(True)
 
         return new_code
+    
+
+    def init_bsim_db(self, prog: "ghidra.program.model.listing.Program"):
+
+        import ghidra.features.bsim.query.BSimClientFactory as BSimClientFactory
+
+        db_key = str(prog.getExecutableMD5())
+
+        if self.bsim_db.get(db_key) is None:
+            DATABASE_URL = 'file:///workspaces/ghidriff/test.mv.db'
+            url = BSimClientFactory.deriveBSimURL(DATABASE_URL)
+            database = BSimClientFactory.buildClient(url,False)
+            if not database.initialize():
+                print(database.getLastError().message)
+                raise 'DatabaseconnectionError'
+            
+            self.bsim_db.setdefault(db_key,database)
+        
+        return self.bsim_db.get(db_key)
+    
+
+    def shutdown_bsim_dbs(self):
+
+        for db_key in self.bsim_db.keys():
+            self.bsim_db[db_key].close()
+
+
+        
+    def query_bsim(self, funcs: List[Union['ghidra.program.model.listing.Function','ghidra.program.model.symbol.Symbol']]):
+        from ghidra.program.model.symbol import Symbol
+        
+        import ghidra.features.bsim.query.GenSignatures as GenSignatures
+        import ghidra.features.bsim.query.protocol.QueryNearest as QueryNearest
+
+
+        MATCHES_PER_FUNC = 100
+        SIMILARITY_BOUND = 0.7
+        CONFIDENCE_BOUND = 0.0
+
+        gensig = None
+        database = None
+
+        for func in funcs:
+
+            prog = func.getProgram()
+
+            if isinstance(func, Symbol):
+                # translate to func
+                query_func = prog.functionManager.getFunctionAt(func.address)
+                if query_func is None:
+                    continue
+            else:
+                query_func = func
+
+            # get db based on prog name memoize
+            database = self.init_bsim_db(prog)
+
+            gensig = GenSignatures(True)
+            gensig.setVectorFactory(database.getLSHVectorFactory())
+            gensig.openProgram(prog,None,None,None,None,None)
+            
+            gensig.scanFunction(query_func)
+
+            query = QueryNearest()
+            query.manage = gensig.getDescriptionManager()
+            query.max = MATCHES_PER_FUNC
+            query.thresh = SIMILARITY_BOUND
+            query.signifthresh = CONFIDENCE_BOUND
+
+            database = self.init_bsim_db(prog)
+
+            print(f'Querying: {query_func}')
+            response = database.query(query)
+            if response is None:
+                print(database.getLastError().message)
+                raise 'DatabaseQueryError'
+            simIter = response.result.iterator()
+            while simIter.hasNext():
+                sim = simIter.next()
+                base = sim.getBase()
+                exe = base.getExecutableRecord()
+                print("Source executable: %s; source function: %s" % (exe.getNameExec(),base.getFunctionName()))
+                subIter = sim.iterator()
+                while subIter.hasNext():
+                    note = subIter.next()
+                    fdesc = note.getFunctionDescription()
+                    if fdesc.getCallgraphRecord() is not None:
+                        print(fdesc.getCallgraphRecord())
+                    exerec = fdesc.getExecutableRecord()
+                    print("Executable: %s" % exerec.getNameExec())
+                    print("Matching Function name: %s " % fdesc.getFunctionName())
+                    print("Similarity: %f" % note.getSimilarity())
+                    print("Significance: %f\n" % note.getSignificance())
+        if gensig is not None:         
+            gensig.dispose()
+        # if database is not None:
+        #     database.close()
+
+
+
+    
+
+        
+
 
     def diff_bins(
             self,
@@ -1292,6 +1402,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 else:
                     added_symbols.append(sym)
 
+        self.query_bsim(unmatched)
+
         symbols = {}
         funcs = {}
         strings = {}
@@ -1398,12 +1510,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             old_mnemonics = ematch_1['mnemonics']
             new_mnemonics = ematch_2['mnemonics']
 
-            mnemonics_ratio = round(difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio(), 2)
+            mnemonics_ratio = round(difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio(), 4)
 
             old_blocks = ematch_1['blocks']
             new_blocks = ematch_2['blocks']
 
-            blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio(), 2)
+            blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio(), 4)
 
             self.normalize_ghidra_decomp(old_code)
             self.normalize_ghidra_decomp(new_code)
@@ -1473,6 +1585,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             all_diff_types.extend(diff_type)
 
+            if 'code' in diff_type:
+                self.query_bsim([sym])
+
             modified_funcs.append({'old': ematch_1, 'new': ematch_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
                                   'i_ratio': instructions_ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_types': match_types})
 
@@ -1530,6 +1645,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             if pdiff['old_meta'].get(pe_key) is not None:
                 pdiff['old_pe_url'] = self.get_pe_download_url(old, pdiff['old_meta'][pe_key])
+            else:
+                self.logger.warn('Missing pe information. Not able to generate MSDL download link')
+
+            if pdiff['new_meta'].get(pe_key) is not None:
                 pdiff['new_pe_url'] = self.get_pe_download_url(new, pdiff['new_meta'][pe_key])
             else:
                 self.logger.warn('Missing pe information. Not able to generate MSDL download link')
