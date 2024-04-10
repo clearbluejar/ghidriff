@@ -1713,7 +1713,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 max_section_funcs=max_section_funcs,
                 title=md_title)
 
-            with md_path.open('w') as f:
+            with md_path.open('w', encoding='utf-8') as f:
                 f.write(diff_text)
 
         if write_json:
