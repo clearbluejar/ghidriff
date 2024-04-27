@@ -73,7 +73,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             min_func_len: int = 10,
             use_calling_counts: bool = False,
             bsim: bool = True,
-            bsim_full: bool = False) -> None:
+            bsim_full: bool = False,
+            gdts: list = []) -> None:
             
 
         # setup engine logging
@@ -158,8 +159,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         # if looking up more than calling_count_funcs_limit symbols, skip function counts
         self.use_calling_counts = use_calling_counts
+
         self.bsim = bsim
         self.bsim_full = bsim_full
+
+        self.gdts = gdts
 
         self.logger.debug(f'{vars(self)}')
 
@@ -192,7 +196,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--min-func-len', help='Minimum function length to consider for diff',
                            type=int, default=10),
         group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False, 
-                           action=argparse.BooleanOptionalAction)        
+                           action=argparse.BooleanOptionalAction)
+        group.add_argument('--gdt',action='append', help='Path to GDT file for analysis', default=[])
         
         group = parser.add_argument_group('BSIM Options')
         group.add_argument('--bsim', help='Toggle using BSIM correlation', default=True, 
@@ -736,33 +741,33 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         self.logger.info(f'Symbol Server Configured path: {symbolServerService.toString().strip()}')
 
-    # def apply_gdt(self, program: "ghidra.program.model.listing.Program", gdt_path:  Union[str, Path], verbose: bool = False):
-    #     """
-    #     Apply GDT to program
-    #     """
+    def apply_gdt(self, program: "ghidra.program.model.listing.Program", gdt_path:  Union[str, Path], verbose: bool = False):
+        """
+        Apply GDT to program
+        """
 
-    #     from ghidra.app.cmd.function import ApplyFunctionDataTypesCmd
-    #     from ghidra.program.model.symbol import SourceType
-    #     from java.io import File
-    #     from java.util import List
-    #     from ghidra.program.model.data import FileDataTypeManager
-    #     from ghidra.util.task import ConsoleTaskMonitor
+        from ghidra.app.cmd.function import ApplyFunctionDataTypesCmd
+        from ghidra.program.model.symbol import SourceType
+        from java.io import File
+        from java.util import List
+        from ghidra.program.model.data import FileDataTypeManager
+        from ghidra.util.task import ConsoleTaskMonitor
 
-    #     gdt_path = Path(gdt_path)
+        gdt_path = Path(gdt_path)
 
-    #     if verbose:
-    #         print('Enabling verbose gdt..')
-    #         monitor = ConsoleTaskMonitor()
-    #     else:
-    #         monitor = ConsoleTaskMonitor().DUMMY_MONITOR
+        if verbose:
+            print('Enabling verbose gdt..')
+            monitor = ConsoleTaskMonitor()
+        else:
+            monitor = ConsoleTaskMonitor().DUMMY_MONITOR
 
-    #     archiveGDT = File(gdt_path)
-    #     archiveDTM = FileDataTypeManager.openFileArchive(archiveGDT, False)
-    #     always_replace = True
-    #     createBookmarksEnabled = True
-    #     cmd = ApplyFunctionDataTypesCmd(List.of(archiveDTM), None, SourceType.USER_DEFINED,
-    #                                     always_replace, createBookmarksEnabled)
-    #     cmd.applyTo(program, monitor)
+        archiveGDT = File(gdt_path)
+        archiveDTM = FileDataTypeManager.openFileArchive(archiveGDT, False)
+        always_replace = True
+        createBookmarksEnabled = True
+        cmd = ApplyFunctionDataTypesCmd(List.of(archiveDTM), None, SourceType.USER_DEFINED,
+                                        always_replace, createBookmarksEnabled)
+        cmd.applyTo(program, monitor)
 
     def analyze_program(self, df_or_prog: Union["ghidra.framework.model.DomainFile", "ghidra.program.model.listing.Program"], require_symbols: bool, force_analysis: bool = False, verbose_analysis: bool = False):
 
@@ -781,9 +786,15 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         self.logger.info(f"Analyzing: {program}")
 
-        # gdt_names = [name for name in program.getDataTypeManager().getSourceArchives()]
-        # if len(gdt_names) > 0:
-        #     print(f'Using file gdts: {gdt_names}')
+        for gdt in self.gdts:
+            self.logger.info(f"Loading GDT: {gdt}")    
+            if not Path(gdt).exists():
+                raise FileNotFoundError(f'GDT Path not found {gdt}')
+            self.apply_gdt(program,gdt)
+
+        gdt_names = [name for name in program.getDataTypeManager().getSourceArchives()]
+        if len(gdt_names) > 0:
+            print(f'Using file gdts: {gdt_names}')
 
         try:
             if verbose_analysis or self.verbose_analysis:
@@ -814,7 +825,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 # TODO make this argument optional, or provide custom analyzer config parsing
                 # This really helps with decompilation, was turned off by default in 10.x
-                # self.set_analysis_option_bool(program, 'Decompiler Parameter ID', True)
+                self.set_analysis_option_bool(program, 'Decompiler Parameter ID', True)
 
                 if self.no_symbols:
                     self.logger.warn(f'Disabling symbols for analysis! --no-symbols flag: {self.no_symbols}')

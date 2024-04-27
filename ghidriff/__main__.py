@@ -66,7 +66,8 @@ def main():
                                      min_func_len=args.min_func_len,
                                      use_calling_counts=args.use_calling_counts,
                                      bsim=args.bsim,
-                                     bsim_full=args.bsim_full
+                                     bsim_full=args.bsim_full,
+                                     gdts=args.gdt
                                      )
 
     d.setup_project(binary_paths, project_path, project_name, symbols_path)
