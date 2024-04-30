@@ -1736,11 +1736,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 # give line ending md despite html so it will render in gists and vscode
                 sxs_diff_path = sxs_output_path / Path('.'.join([name, _clean_func(func_name), 'md']))
-                sxs_diff_path.write_text(sxs_diff_html)
+                sxs_diff_path.write_text(sxs_diff_html, encoding='utf-8')
 
             combined_sxs_diff_html = GhidriffMarkdown.gen_combined_sxs_html_from_pdiff(pdiff)
             combined_sxs_diff_path = sxs_output_path / Path('.'.join([name, 'combined', 'html']))
-            combined_sxs_diff_path.write_text(combined_sxs_diff_html)
+            combined_sxs_diff_path.write_text(combined_sxs_diff_html, encoding='utf-8')
 
         if write_diff:
             self.logger.info(f'Wrote {md_path}')
