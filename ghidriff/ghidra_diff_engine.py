@@ -277,6 +277,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
     def enhance_sym(self, sym: 'ghidra.program.model.symbol.Symbol', thread_id: int = 0, timeout: int = 15, get_decomp_info: bool = False, use_calling_counts: bool = False) -> dict:
         """
         Standardize enhanced symbol. Use esym_memo to speed things up.
+        esyms are memoized and can be later just read from memory
         Inspired by Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/api/main/VTMatchInfo.java
         timeout is for decompiler. -1 is infinite, and too long
         """
@@ -1264,7 +1265,17 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # Find functions matches
         unmatched, matched, skip_types = self.find_matches(p1, p2)
 
-        # dedupe unmatched funcs with syms by names (rare but somtimes Ghidra symbol types get crossed, or pdb parsing issues)
+        self.logger.info('Generating matches json...')
+        address_matches = {}
+        name_matches = {}
+        for sym1,sym2,m_types in matched:
+            address_matches.setdefault(str(sym1.address),[]).append([str(sym2.address),m_types])
+            name_matches.setdefault(str(sym1.getName(True)),[]).append([str(sym2.getName(True)),m_types])
+
+        pdiff['matches'] = {}
+        pdiff['matches']['address_matches'] = address_matches
+        pdiff['matches']['name_matches'] = name_matches
+            
         self.logger.info('Deduping symbols and functions...')
 
         dupes = []
@@ -1321,10 +1332,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         funcs_need_decomp = []
 
         self.logger.info('Sorting functions...')
-
-        # thread the symbol lookups
-        #   esyms are memoized and can be later just read from memory
-       
 
         esym_lookups = []
 
@@ -1688,7 +1695,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         max_section_funcs: int = None,
         md_title: str = None,
         write_diff: bool = True,
-        write_json: bool = True
+        write_json: bool = True,
+        write_matches: bool = True
 
     ) -> None:
         """
@@ -1733,10 +1741,18 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             json_path = json_base_path / Path(name + '.json')
             self.logger.info(f'Writing pdiff json...')
 
-            with json_path.open('w') as f:
-                json.dump(pdiff, f, indent=4)
+            with json_path.open('w', encoding='utf-8') as f:
+                json.dump(pdiff, f, indent=2)
 
-        sxs_count = 0
+        if write_matches:
+            json_base_path = output_path / 'json'
+            json_base_path.mkdir(exist_ok=True)
+            matches_json_path = json_base_path / Path(name + '.matches.json')
+            self.logger.info(f'Writing matches json...')
+
+            with matches_json_path.open('w', encoding='utf-8') as f:
+                json.dump(pdiff['matches'], f, indent=2)
+
         if side_by_side:
             sxs_output_path = output_path / Path('sxs_html')
             sxs_output_path.mkdir(exist_ok=True)
@@ -1753,9 +1769,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             combined_sxs_diff_path = sxs_output_path / Path('.'.join([name, 'combined', 'html']))
             combined_sxs_diff_path.write_text(combined_sxs_diff_html, encoding='utf-8')
 
+
         if write_diff:
-            self.logger.info(f'Wrote {md_path}')
+            self.logger.info(f'Wrote {md_path} (size: {round(md_path.stat().st_size/1000)}K)')
         if write_json:
-            self.logger.info(f'Wrote {json_path}')
+            self.logger.info(f'Wrote {json_path} (size: {round(json_path.stat().st_size/1000)}K)')
+        if write_matches:
+            self.logger.info(f'Wrote {matches_json_path} (size: {round(matches_json_path.stat().st_size/1000)}K)')
         if side_by_side:
             self.logger.info(f'Wrote {len(sxs_diff_htmls)} sxs hmtl diffs to {sxs_output_path}')
