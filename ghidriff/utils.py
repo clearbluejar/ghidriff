@@ -65,3 +65,21 @@ def get_microsoft_download_url(filename, timestamp, virtual_size):
     virtual_size = format(virtual_size, 'X')
 
     return f'https://msdl.microsoft.com/download/symbols/{filename}/{timestamp}{virtual_size}/{filename}'
+
+
+# utils from Pyhidra
+
+def get_private_class(path: str):
+    from java.lang import ClassLoader
+    from jpype import JClass
+
+    gcl = ClassLoader.getSystemClassLoader()
+    return JClass(path, loader=gcl)
+
+
+def set_field(cls, fname, value, obj=None):
+    cls = cls.class_
+    field = cls.getDeclaredField(fname)
+    field.setAccessible(True)
+    field.set(obj, value)
+    field.setAccessible(False)
