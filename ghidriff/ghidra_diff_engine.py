@@ -75,7 +75,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             bsim: bool = True,
             bsim_full: bool = False,
             gdts: list = []) -> None:
-            
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -129,7 +128,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         for arg in vars(args):
             self.logger.info('\t%-20s%s', f'{arg}:', vars(args)[arg])
 
-        
         self.threaded = threaded
         self.max_workers = max_workers
         if not self.threaded:
@@ -195,14 +193,14 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            help='Verbose logging for analysis step.', action='store_true')
         group.add_argument('--min-func-len', help='Minimum function length to consider for diff',
                            type=int, default=10),
-        group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False, 
+        group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False,
                            action=argparse.BooleanOptionalAction)
-        group.add_argument('--gdt',action='append', help='Path to GDT file for analysis', default=[])
-        
+        group.add_argument('--gdt', action='append', help='Path to GDT file for analysis', default=[])
+
         group = parser.add_argument_group('BSIM Options')
-        group.add_argument('--bsim', help='Toggle using BSIM correlation', default=True, 
+        group.add_argument('--bsim', help='Toggle using BSIM correlation', default=True,
                            action=argparse.BooleanOptionalAction)
-        group.add_argument('--bsim-full', help='Slower but better matching. Use only when needed', default=False, 
+        group.add_argument('--bsim-full', help='Slower but better matching. Use only when needed', default=False,
                            action=argparse.BooleanOptionalAction)
 
         # TODO add following option
@@ -371,7 +369,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                             self.logger.debug(f'Skipping {func} count calling, too many refs: {ref_count}')
                             called_funcs.append(f'{f}')
                         else:
-                            for ref in f.symbol.references:                                
+                            for ref in f.symbol.references:
                                 if func.getBody().contains(ref.getFromAddress(), ref.getFromAddress()):
                                     count += 1
                             called_funcs.append(f'{f}-{count}')
@@ -468,7 +466,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             if not project.getRootFolder().getFile(program_name):
                 self.logger.info(f'Importing {program_path} as {program_name}')
                 program = project.importProgram(program_path)
-                project.saveAs(program, "/", program_name, True)                
+                project.saveAs(program, "/", program_name, True)
             else:
                 self.logger.info(f'Opening {program_path}')
                 program = self.project.openProgram("/", program_name, False)
@@ -496,8 +494,15 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             if not self.no_symbols:
                 # Enable Remote Symbol Servers
-                PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
-                PdbAnalyzer.setAllowRemoteOption(program, True)
+
+                if hasattr(PdbUniversalAnalyzer, 'setAllowUntrustedOption'):
+                    # Ghidra 11.2 +
+                    PdbUniversalAnalyzer.setAllowUntrustedOption(program, True)
+                    PdbAnalyzer.setAllowUntrustedOption(program, True)
+                else:
+                    # Ghidra < 11.2
+                    PdbUniversalAnalyzer.setAllowRemoteOption(program, True)
+                    PdbAnalyzer.setAllowRemoteOption(program, True)
 
                 pdb = self.get_pdb(program)
             else:
@@ -505,7 +510,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 pdb = self.get_pdb(program, allow_remote=False)
 
                 if pdb:
-                    err = f'Symbols are disabled, but the symbol is already downloaded {pdb}. Delete symbol or remove --no-symbol flag'
+                    err = f'Symbols are disabled, but the symbol is already downloaded {
+                        pdb}. Delete symbol or remove --no-symbol flag'
                     self.logger.error(err)
                     raise FileExistsError(err)
 
@@ -520,13 +526,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             has_pdb = pdb is not None
             pdb_loaded = pdb_attr.pdbLoaded
             prog_analyzed = pdb_attr.programAnalyzed
-            
+
             bin_results.append([program.getDomainFile().name, imported, has_pdb, pdb_loaded, prog_analyzed])
 
             project.close(program)
 
         for result in bin_results:
-            self.logger.info('Program: %s imported: %s has_pdb: %s pdb_loaded: %s analyzed %s', *result)        
+            self.logger.info('Program: %s imported: %s has_pdb: %s pdb_loaded: %s analyzed %s', *result)
 
         return bin_results
 
@@ -644,7 +650,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from pdb_ import PdbPlugin
 
         if allow_remote:
-            find_opts = FindOption.of(FindOption.ALLOW_REMOTE)
+            if hasattr(FindOption, 'ALLOW_UNTRUSTED'):
+                # Ghidra 11.2 +
+                find_opts = FindOption.of(FindOption.ALLOW_UNTRUSTED)
+            else:
+                # Ghidra < 11.2
+                find_opts = FindOption.of(FindOption.ALLOW_REMOTE)
         else:
             find_opts = FindOption.NO_OPTIONS
 
@@ -788,10 +799,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.logger.info(f"Analyzing: {program}")
 
         for gdt in self.gdts:
-            self.logger.info(f"Loading GDT: {gdt}")    
+            self.logger.info(f"Loading GDT: {gdt}")
             if not Path(gdt).exists():
                 raise FileNotFoundError(f'GDT Path not found {gdt}')
-            self.apply_gdt(program,gdt)
+            self.apply_gdt(program, gdt)
 
         gdt_names = [name for name in program.getDataTypeManager().getSourceArchives()]
         if len(gdt_names) > 0:
@@ -898,7 +909,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             url = get_microsoft_download_url(filename, pe_info['timestamp'], pe_info['image_size'])
         except:
             self.logger.warn(f'PE Parsing error. Exception thrown parsing {path.name}')
-            url = None        
+            url = None
 
         # from ghidra.app.util.bin.format.pe import PortableExecutable
         # from ghidra.app.util.bin import FileByteProvider
@@ -1253,11 +1264,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         if not force_diff and not self.force_diff:
             # ensure architectures match
-            assert p1.languageID == p2.languageID, f'p1: {p1.name}:{p1.languageID} != p2: {p2.name}:{p2.languageID}. The arch or processor does not match. Add --force-diff to ignore this assert'
+            assert p1.languageID == p2.languageID, f'p1: {p1.name}:{p1.languageID} != p2: {p2.name}:{
+                p2.languageID}. The arch or processor does not match. Add --force-diff to ignore this assert'
 
             # sanity check - ensure both programs have symbols, or both don't
             sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
-            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analysis or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'
+            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {
+                sym_count_diff}! Likely bad analysis or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'
 
         # Find (non function) symbols
         unmatched_nf_syms, _ = self.diff_nf_symbols(p1, p2)
@@ -1268,14 +1281,14 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.logger.info('Generating matches json...')
         address_matches = {}
         name_matches = {}
-        for sym1,sym2,m_types in matched:
-            address_matches.setdefault(str(sym1.address),[]).append([str(sym2.address),m_types])
-            name_matches.setdefault(str(sym1.getName(True)),[]).append([str(sym2.getName(True)),m_types])
+        for sym1, sym2, m_types in matched:
+            address_matches.setdefault(str(sym1.address), []).append([str(sym2.address), m_types])
+            name_matches.setdefault(str(sym1.getName(True)), []).append([str(sym2.getName(True)), m_types])
 
         pdiff['matches'] = {}
         pdiff['matches']['address_matches'] = address_matches
         pdiff['matches']['name_matches'] = name_matches
-            
+
         self.logger.info('Deduping symbols and functions...')
 
         dupes = []
@@ -1361,7 +1374,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             # futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 15, (sym in funcs_need_decomp), (use_calling_counts and sym in funcs_need_decomp))
             futures = (executor.submit(self.enhance_sym, sym, thread_id % self.max_workers, 60, (sym in funcs_need_decomp), (self.use_calling_counts and sym in funcs_need_decomp))
-                        for thread_id, sym in enumerate(esym_lookups))
+                       for thread_id, sym in enumerate(esym_lookups))
 
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
@@ -1447,7 +1460,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 # handle bad match external match (sometimes occurs with implied matches)
                 if ratio == 0.0 and (blocks_ratio == 0.0):
-                    self.logger.info(f"Skipping match: {ematch_1['name']} -  {ematch_2['name']} with match_types: {match_types}! Ratio {ratio} B Ratio: {blocks_ratio}")
+                    self.logger.info(f"Skipping match: {ematch_1['name']} -  {ematch_2['name']
+                                                                              } with match_types: {match_types}! Ratio {ratio} B Ratio: {blocks_ratio}")
                     continue
 
                 # TODO remove this hack to find false positives
@@ -1515,7 +1529,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             [mod_func for mod_func in modified_funcs if 'code' not in mod_func['diff_type']])
         matched_funcs_no_changes_len = matched_funcs_len - \
             matched_funcs_with_code_changes_len - matched_funcs_with_non_code_changes_len
-        
+
         match_func_similarity_percent = 0.0
         func_match_overall_percent = 0.0
 
@@ -1745,13 +1759,17 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 json.dump(pdiff, f, indent=2)
 
         if write_matches:
-            json_base_path = output_path / 'json'
-            json_base_path.mkdir(exist_ok=True)
-            matches_json_path = json_base_path / Path(name + '.matches.json')
-            self.logger.info(f'Writing matches json...')
 
-            with matches_json_path.open('w', encoding='utf-8') as f:
-                json.dump(pdiff['matches'], f, indent=2)
+            if pdiff.get('matches') is not None:
+                json_base_path = output_path / 'json'
+                json_base_path.mkdir(exist_ok=True)
+                matches_json_path = json_base_path / Path(name + '.matches.json')
+                self.logger.info(f'Writing matches json...')
+
+                with matches_json_path.open('w', encoding='utf-8') as f:
+                    json.dump(pdiff['matches'], f, indent=2)
+            else:
+                self.logger.warn('No matches key found in pdiff')
 
         if side_by_side:
             sxs_output_path = output_path / Path('sxs_html')
@@ -1769,12 +1787,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             combined_sxs_diff_path = sxs_output_path / Path('.'.join([name, 'combined', 'html']))
             combined_sxs_diff_path.write_text(combined_sxs_diff_html, encoding='utf-8')
 
-
         if write_diff:
             self.logger.info(f'Wrote {md_path} (size: {round(md_path.stat().st_size/1000)}K)')
         if write_json:
             self.logger.info(f'Wrote {json_path} (size: {round(json_path.stat().st_size/1000)}K)')
-        if write_matches:
+        if write_matches and pdiff.get('matches') is not None:
             self.logger.info(f'Wrote {matches_json_path} (size: {round(matches_json_path.stat().st_size/1000)}K)')
         if side_by_side:
             self.logger.info(f'Wrote {len(sxs_diff_htmls)} sxs hmtl diffs to {sxs_output_path}')
