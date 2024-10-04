@@ -1263,13 +1263,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         if not force_diff and not self.force_diff:
             # ensure architectures match
-            assert p1.languageID == p2.languageID, f'p1: {p1.name}:{p1.languageID} != p2: {p2.name}:{
-                p2.languageID}. The arch or processor does not match. Add --force-diff to ignore this assert'
+            assert p1.languageID == p2.languageID, f'p1: {p1.name}:{p1.languageID} != p2: {p2.name}:{p2.languageID}. The arch or processor does not match. Add --force-diff to ignore this assert'  # nopep8
 
             # sanity check - ensure both programs have symbols, or both don't
             sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
-            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {
-                sym_count_diff}! Likely bad analysis or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'
+            assert sym_count_diff < 4000, f'Symbols counts between programs ({p1.name} and {p2.name}) are too high {sym_count_diff}! Likely bad analysis or only one binary has symbols! Check Ghidra analysis or pdb! Add --force-diff to ignore this assert'  # nopep8
 
         # Find (non function) symbols
         unmatched_nf_syms, _ = self.diff_nf_symbols(p1, p2)
@@ -1459,8 +1457,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 # handle bad match external match (sometimes occurs with implied matches)
                 if ratio == 0.0 and (blocks_ratio == 0.0):
-                    self.logger.info(f"Skipping match: {ematch_1['name']} -  {ematch_2['name']
-                                                                              } with match_types: {match_types}! Ratio {ratio} B Ratio: {blocks_ratio}")
+                    self.logger.info(f"Skipping match: {ematch_1['name']} -  {ematch_2['name']} with match_types: {match_types}! Ratio {ratio} B Ratio: {blocks_ratio}")  # nopep8
                     continue
 
                 # TODO remove this hack to find false positives
