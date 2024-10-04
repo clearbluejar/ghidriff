@@ -510,8 +510,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 pdb = self.get_pdb(program, allow_remote=False)
 
                 if pdb:
-                    err = f'Symbols are disabled, but the symbol is already downloaded {
-                        pdb}. Delete symbol or remove --no-symbol flag'
+                    err = f'Symbols are disabled, but the symbol is already downloaded {pdb}. Delete symbol or remove --no-symbol flag'  # nopep8
                     self.logger.error(err)
                     raise FileExistsError(err)
 

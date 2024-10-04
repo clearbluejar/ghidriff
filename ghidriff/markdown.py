@@ -67,8 +67,7 @@ class GhidriffMarkdown:
             if len(items) > max_items:
                 show_items = [item for i, item in enumerate(items) if i <= max_items]
                 hide_itmes = [item for i, item in enumerate(items) if i > max_items]
-                data = f'<details><summary>Expand for full list:<br>{
-                    "<br>".join(show_items)}</summary>{"<br>".join(hide_itmes)}</details>'
+                data = f'<details><summary>Expand for full list:<br>{"<br>".join(show_items)}</summary>{"<br>".join(hide_itmes)}</details>'  # nopep8
             else:
                 data = f'{"<br>".join(items)}'
         else:
