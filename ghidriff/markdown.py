@@ -67,7 +67,8 @@ class GhidriffMarkdown:
             if len(items) > max_items:
                 show_items = [item for i, item in enumerate(items) if i <= max_items]
                 hide_itmes = [item for i, item in enumerate(items) if i > max_items]
-                data = f'<details><summary>Expand for full list:<br>{"<br>".join(show_items)}</summary>{"<br>".join(hide_itmes)}</details>'
+                data = f'<details><summary>Expand for full list:<br>{
+                    "<br>".join(show_items)}</summary>{"<br>".join(hide_itmes)}</details>'
             else:
                 data = f'{"<br>".join(items)}'
         else:
@@ -339,21 +340,21 @@ class GhidriffMarkdown:
 
         count = 1
         for item in str_data:
-            
+
             name = item['name']
             ref_count = item['refcount']
             calling = ','.join(item['calling'])
-            table_list.extend([name,ref_count,calling])
+            table_list.extend([name, ref_count, calling])
             count += 1
 
         diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
 
         return diff_table
-    
+
     def gen_strings_diff(self, deleted_strings: dict, added_strings: dict):
 
         def _clean_string(name: str):
-            clean = re.sub(r'_[_a-f0-9]+$','',name)
+            clean = re.sub(r'_[_a-f0-9]+$', '', name)
             return clean.rstrip('_')
 
         added = sorted([f'{_clean_string(item["name"])}\n' for item in added_strings])
@@ -665,7 +666,7 @@ pie showData
             md.new_paragraph(self.gen_strings_ref_table(pdiff['strings']['deleted']))
             md.new_header(4, 'New', add_table_of_contents='n')
             md.new_paragraph(self.gen_strings_ref_table(pdiff['strings']['added']))
-            
+
         else:
             md.new_paragraph('*No string differences found*\n')
 
@@ -804,8 +805,8 @@ pie showData
                 # only show non code mods and skip if code m_ratio is same
                 if 'code' not in modified['diff_type'] and len(mods) > 0 and (modified['m_ratio'] < 1.0 or len(modified['diff']) == 0):
 
-                    modified_with_code +=1
-                    
+                    modified_with_code += 1
+
                     if modified['old']['external']:
                         old_func_name = modified['old']['fullname']
                         new_func_name = modified['old']['fullname']
