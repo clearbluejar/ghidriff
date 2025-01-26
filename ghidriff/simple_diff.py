@@ -157,8 +157,8 @@ class SimpleDiff(GhidraDiffEngine):
         for sym in modified_new:
             self.logger.info(sym)
 
-        p1_modified = []
-        p2_modified = []
+        p1_modified = {}
+        p2_modified = {}
 
         # Find modified functions based on compare_key
         for sym in p1.getSymbolTable().getDefinedSymbols():
@@ -166,14 +166,14 @@ class SimpleDiff(GhidraDiffEngine):
             if "function".lower() in sym.getSymbolType().toString().lower():
                 func = p1.functionManager.getFunctionAt(sym.getAddress())
                 if (_get_compare_key(sym, func)) in modified_old:
-                    p1_modified.append(sym)
+                    p1_modified[(sym.getName(True), func.parameterCount)] = sym
 
         for sym in p2.getSymbolTable().getDefinedSymbols():
 
             if "function".lower() in sym.getSymbolType().toString().lower():
                 func = p2.functionManager.getFunctionAt(sym.getAddress())
                 if (_get_compare_key(sym, func)) in modified_new:
-                    p2_modified.append(sym)
+                    p2_modified[(sym.getName(True), func.parameterCount)] = sym
 
         self.logger.info("\nmodified_old_modified")
         for sym in p1_modified:
@@ -190,23 +190,21 @@ class SimpleDiff(GhidraDiffEngine):
         self.logger.info("\nMatching functions...")
 
         # match by name and paramcount
-        for sym in p1_modified:
-            for sym2 in p2_modified:
-
+        for sym in p1_modified.values():
+            func = p1.functionManager.getFunctionAt(sym.getAddress())
+            matcher = (sym.getName(True), func.parameterCount) 
+            if matcher in p2_modified:
+                sym2 = p2_modified[matcher]
                 if sym2 in matched:
                     continue
 
-                func = p1.functionManager.getFunctionAt(sym.getAddress())
-                func2 = p2.functionManager.getFunctionAt(sym2.getAddress())
+                self.logger.info("FullName + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
+                match_type = 'FullName:Param'
+                matched.append(sym)
+                matched.append(sym2)
+                matches.append([sym, sym2, match_type])
 
-                if sym.getName(True) == sym2.getName(True) and func.parameterCount == func2.parameterCount:
-                    self.logger.info("FullName + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
-                    match_type = 'FullName:Param'
-                    matched.append(sym)
-                    matched.append(sym2)
-                    matches.append([sym, sym2, match_type])
-
-        for sym in p1_modified:
+        for sym in p1_modified.values():
             found = False
 
             if sym in matched:
@@ -219,7 +217,7 @@ class SimpleDiff(GhidraDiffEngine):
                 match_type = 'Direct'
                 self.logger.info(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
             else:
-                for sym2 in p2_modified:
+                for sym2 in p2_modified.values():
                     if sym2 in matched:
                         continue
 
@@ -238,7 +236,7 @@ class SimpleDiff(GhidraDiffEngine):
                 self.logger.info(f"Deleted func found: {sym}")
                 unmatched.append(sym)
 
-        for sym in p2_modified:
+        for sym in p2_modified.values():
             found = False
             match_type = None
 
@@ -252,7 +250,7 @@ class SimpleDiff(GhidraDiffEngine):
                 match_type = 'Direct'
                 self.logger.info(f"direct getsymbol match {sym.getName(True)} {sym2.getName(True)}")
             else:
-                for sym2 in p1_modified:
+                for sym2 in p1_modified.values():
                     if sym2 in matched:
                         continue
 
