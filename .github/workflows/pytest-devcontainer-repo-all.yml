@@ -3,7 +3,7 @@
 
 name: Pytest Local Repo Devcontainer Across Versions
 
-on:
+on: 
   push:
     branches: [ "main" ]
     paths:
@@ -26,8 +26,8 @@ jobs:
         # cover the latest and all versions of all subreleases   
         image: [
           "latest",
+          "11.2.1ghidra3.10python-bookworm",
           "11.3ghidra3.12python-bookworm",
-          "11.2.1ghidra3.10python-bookworm"
           "11.1.1ghidra3.12python-bookworm",
           "11.0.3ghidra3.11python-bookworm",
           "10.4ghidra3.11python-bookworm",
