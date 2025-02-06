@@ -12,7 +12,7 @@ from typing import List, Tuple, Union, TYPE_CHECKING
 from argparse import Namespace
 import logging
 
-from pyhidra.launcher import PyhidraLauncher
+from pyghidra.launcher import PyGhidraLauncher
 from .utils import sha1_file, get_microsoft_download_url, get_pe_extra_data
 from .markdown import GhidriffMarkdown
 
@@ -25,10 +25,10 @@ if TYPE_CHECKING:
     from ghidra_builtins import *
 
 
-class HeadlessLoggingPyhidraLauncher(PyhidraLauncher):
+class HeadlessLoggingPyGhidraLauncher(PyGhidraLauncher):
     """
-    Headless pyhidra launcher
-    Slightly Modified from Pyhidra to allow the Ghidra log path to be set
+    Headless pyghidra launcher
+    Slightly Modified from PyGhidra to allow the Ghidra log path to be set
     """
 
     def __init__(self, verbose=False, log_path=None):
@@ -36,7 +36,7 @@ class HeadlessLoggingPyhidraLauncher(PyhidraLauncher):
         self.log_path = log_path
 
     def _launch(self):
-        from pyhidra.launcher import _silence_java_output
+        from pyghidra.launcher import _silence_java_output
         from ghidra.framework import Application, HeadlessGhidraApplicationConfiguration
         from java.io import File
         with _silence_java_output(not self.verbose, not self.verbose):
@@ -89,8 +89,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         else:
             self.logger.warn('Engine File Log: {engine_log_path}')
 
-        # Init Pyhidra
-        launcher = HeadlessLoggingPyhidraLauncher(verbose=verbose, log_path=engine_log_path)
+        # Init PyGhidra
+        launcher = HeadlessLoggingPyGhidraLauncher(verbose=verbose, log_path=engine_log_path)
 
         # JVM Settings
 
@@ -301,8 +301,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 ref_types = set()
 
                 for ref in sym.references:
-                    ref_types.add(ref.referenceType.toString())
-                    f = prog.getFunctionManager().getFunctionContaining(ref.fromAddress)
+                    ref_types.add(ref.getReferenceType().toString())
+                    f = prog.getFunctionManager().getFunctionContaining(ref.getFromAddress())
                     if f:
                         calling.add(f.getName())
 
@@ -333,7 +333,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                     # instruction and mnemonic bulker
                     for code in code_units:
                         instructions.append(str(code))
-                        mnemonics.append(str(code.mnemonicString))
+                        mnemonics.append(str(code.getMnemonicString))
 
                     from ghidra.program.model.block import BasicBlockModel
 

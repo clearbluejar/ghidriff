@@ -54,12 +54,12 @@ jobs:
         # install ghidriff package and testing reqs
         pip install ".[testing]"
         ls -R /root
-        #pyhidra &
+        #pyghidra &
         #sleep 10
         #killall python
         # source .env/bin/activate
-        # #init pyhidra
-        python -m pyhidra.install_plugins        
+        # #init pyghidra
+        python -m pyghidra.install_plugins        
         # pushd /tmp
         # popd
         # download data to shared test data

@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 import pytest
-from pyhidra import HeadlessPyhidraLauncher
+from pyghidra import HeadlessPyGhidraLauncher
 
 
 from ghidriff import get_parser, VersionTrackingDiff, GhidraDiffEngine
@@ -18,8 +18,8 @@ def test_diff_afd_cve_2023_21768_gzf(shared_datadir: Path):
     """
 
     # check ghidra version and bail if old
-    
-    if HeadlessPyhidraLauncher().app_info.version < '11.0':
+
+    if HeadlessPyGhidraLauncher().app_info.version < '11.0':
         # gzf files were made with 11.0
         print('Skip testing gzf on < 11.0')
         return
@@ -29,10 +29,10 @@ def test_diff_afd_cve_2023_21768_gzf(shared_datadir: Path):
     output_path.mkdir(exist_ok=True, parents=True)
     symbols_path = shared_datadir / SYMBOLS_DIR
     bins_path = shared_datadir / BINS_DIR
-    bins_path = shared_datadir / BINS_DIR    
+    bins_path = shared_datadir / BINS_DIR
     ghidra_project_path = output_path / 'ghidra_projects'
-    ghidra_project_path.mkdir(exist_ok=True,parents=True)
-    
+    ghidra_project_path.mkdir(exist_ok=True, parents=True)
+
     # setup bins
     old_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1028.gzf'
     new_bin_path = bins_path / 'afd.sys.x64.10.0.22621.1415.gzf'
@@ -44,7 +44,8 @@ def test_diff_afd_cve_2023_21768_gzf(shared_datadir: Path):
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
-    args = parser.parse_args(['-s', str(symbols_path), str(old_bin_path.absolute()), str(new_bin_path.absolute()), '-p', str(ghidra_project_path.absolute())])
+    args = parser.parse_args(['-s', str(symbols_path), str(old_bin_path.absolute()),
+                             str(new_bin_path.absolute()), '-p', str(ghidra_project_path.absolute())])
 
     engine_log_path = output_path / parser.get_default('log_path')
 
@@ -110,7 +111,7 @@ def test_diff_afd_cve_2023_21768_gzf_with_one_nongzf(shared_datadir: Path):
     """
 
     # check ghidra version and bail if old
-    if HeadlessPyhidraLauncher().app_info.version < '11.0':
+    if HeadlessPyGhidraLauncher().app_info.version < '11.0':
         # gzf files were made with 11.0
         print('Skip testing gzf on < 11.0')
         return
@@ -121,8 +122,7 @@ def test_diff_afd_cve_2023_21768_gzf_with_one_nongzf(shared_datadir: Path):
     symbols_path = shared_datadir / SYMBOLS_DIR
     bins_path = shared_datadir / BINS_DIR
     ghidra_project_path = output_path / 'ghidra_projects'
-    ghidra_project_path.mkdir(exist_ok=True,parents=True)
-    
+    ghidra_project_path.mkdir(exist_ok=True, parents=True)
 
     # setup bins
 
@@ -136,7 +136,8 @@ def test_diff_afd_cve_2023_21768_gzf_with_one_nongzf(shared_datadir: Path):
 
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
-    args = parser.parse_args(['-s', str(symbols_path), str(old_bin_path.absolute()), str(new_bin_path.absolute()), '-p', str(ghidra_project_path.absolute())])
+    args = parser.parse_args(['-s', str(symbols_path), str(old_bin_path.absolute()),
+                             str(new_bin_path.absolute()), '-p', str(ghidra_project_path.absolute())])
 
     engine_log_path = output_path / parser.get_default('log_path')
 
