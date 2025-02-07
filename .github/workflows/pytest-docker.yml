@@ -4,12 +4,12 @@
 name: Pytest Python Package In Docker Image
 
 on:
-  push:
-    # branches: [ "main" ]
-    paths:
-      # - 'ghidriff/**'
-      # - 'tests/**'
-      - '.github/workflows/pytest-docker.yml'
+  # push:
+  #   # branches: [ "main" ]
+  #   paths:
+  #     # - 'ghidriff/**'
+  #     # - 'tests/**'
+  #     - '.github/workflows/pytest-docker.yml'
   # pull_request:
   #   branches: [ "main" ]
   workflow_dispatch:
@@ -24,11 +24,10 @@ jobs:
         # cover the latest and all versions of all subreleases        
         image: [
           "latest",
-          "11.1.2ghidra3.12python-bookworm",
-          "11.0.3ghidra3.11python-bookworm",
-          "10.4ghidra3.11python-bookworm",
-          "10.4ghidra3.9python-bookworm",
-          "10.3.3ghidra3.10python-bookworm", 
+          "11.3ghidra3.12python-bookworm",
+          "11.3ghidra3.11python-bookworm",
+          "11.3ghidra3.10python-bookworm",
+          # "11.3ghidra3.9python-bookworm",
           ]
     container:
         image: ghcr.io/clearbluejar/ghidra-python:${{ matrix.image }}
