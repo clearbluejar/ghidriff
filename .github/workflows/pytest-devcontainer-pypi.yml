@@ -23,12 +23,9 @@ jobs:
         image: [
           "latest",
           "11.3ghidra3.12python-bookworm",
-          "11.2.1ghidra3.10python-bookworm",
-          "11.1.2ghidra3.12python-bookworm",
-          "11.0.3ghidra3.11python-bookworm",
-          "10.4ghidra3.11python-bookworm",
-          "10.4ghidra3.9python-bookworm",
-          "10.3.3ghidra3.10python-bookworm", 
+          "11.3ghidra3.11python-bookworm",
+          "11.3ghidra3.10python-bookworm",
+          # "11.3ghidra3.9python-bookworm",
           ]
     steps:
     - uses: actions/checkout@v3
