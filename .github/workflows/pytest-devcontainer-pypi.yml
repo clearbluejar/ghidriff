@@ -22,11 +22,10 @@ jobs:
         # cover the latest and all versions of all subreleases   
         image: [
           "latest",
-          "11.1.2ghidra3.12python-bookworm",
-          "11.0.3ghidra3.11python-bookworm",
-          "10.4ghidra3.11python-bookworm",
-          "10.4ghidra3.9python-bookworm",
-          "10.3.3ghidra3.10python-bookworm", 
+          "11.3ghidra3.12python-bookworm",
+          "11.3ghidra3.11python-bookworm",
+          "11.3ghidra3.10python-bookworm",
+          # "11.3ghidra3.9python-bookworm",
           ]
     steps:
     - uses: actions/checkout@v3
@@ -57,7 +56,7 @@ jobs:
           pip install "ghidriff[testing]"
           pip list
           # install plugins before use
-          python -m pyhidra.install_plugins
+          python -m pyghidra.install_plugins
           # download data to shared test data
           if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
           pytest -rA -n auto

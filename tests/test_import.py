@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 import pytest
-from pyhidra import HeadlessPyhidraLauncher
+from pyghidra import HeadlessPyGhidraLauncher
 
 
 from ghidriff import get_parser, get_engine_classes, VersionTrackingDiff, GhidraDiffEngine
@@ -17,7 +17,7 @@ def test_gzf_import_program(shared_datadir: Path):
     Tests that gzf files contain expected programs
     """
 
-    if HeadlessPyhidraLauncher().app_info.version < '11.0':
+    if HeadlessPyGhidraLauncher().app_info.version < '11.0':
         # gzf files were made with 11.0
         print('Skip testing gzf on < 11.0')
         return
@@ -28,15 +28,16 @@ def test_gzf_import_program(shared_datadir: Path):
     symbols_path = shared_datadir / SYMBOLS_DIR
     bins_path = shared_datadir / BINS_DIR
     ghidra_project_path = output_path / 'ghidra_projects'
-    ghidra_project_path.mkdir(exist_ok=True,parents=True)
+    ghidra_project_path.mkdir(exist_ok=True, parents=True)
 
     # bins
     bins_to_import = [
         # bin path , expected program
-        ['afd.sys.x64.10.0.22621.1028', 'afd.sys.x64.10.0.22621.1028-00a2b7'], #if a gzf file is used first, this becomes really unstable... 
+        # if a gzf file is used first, this becomes really unstable...
+        ['afd.sys.x64.10.0.22621.1028', 'afd.sys.x64.10.0.22621.1028-00a2b7'],
         ['afd.sys.x64.10.0.22621.1415', 'afd.sys.x64.10.0.22621.1415-095200'],
-        ['afd.sys.x64.10.0.22621.1028.gzf', 'afd.sys.x64.10.0.22621.1028.gzf-338a92'],        
-        ['afd.sys.x64.10.0.22621.1415.gzf', 'afd.sys.x64.10.0.22621.1415.gzf-fc498a'],        
+        ['afd.sys.x64.10.0.22621.1028.gzf', 'afd.sys.x64.10.0.22621.1028.gzf-338a92'],
+        ['afd.sys.x64.10.0.22621.1415.gzf', 'afd.sys.x64.10.0.22621.1415.gzf-fc498a'],
         ['ntoskrnl.exe.x64.10.0.22621.2792.10-1-5.gzf', 'ntoskrnl.exe.x64.10.0.22621.2792.10-1-5.gzf-acb020'],
         ['ntoskrnl.exe.x64.10.0.22621.2861.10-1-5.gzf', 'ntoskrnl.exe.x64.10.0.22621.2861.10-1-5.gzf-0e4e43'],
     ]
@@ -46,13 +47,14 @@ def test_gzf_import_program(shared_datadir: Path):
     GhidraDiffEngine.add_ghidra_args_to_parser(parser)
 
     engine_log_path = output_path / parser.get_default('log_path')
-    
-    binary_paths = [path for path in [bins_path / name[0] for name in bins_to_import ]]    
-    
-    args = parser.parse_args(['-s', str(symbols_path),'test', 'test2', '-p', str(ghidra_project_path.absolute())]) # these args will not be tested
 
-    expected_names = [name for name in [name[1] for name in bins_to_import ]]
-    
+    binary_paths = [path for path in [bins_path / name[0] for name in bins_to_import]]
+
+    args = parser.parse_args(['-s', str(symbols_path), 'test', 'test2', '-p',
+                             str(ghidra_project_path.absolute())])  # these args will not be tested
+
+    expected_names = [name for name in [name[1] for name in bins_to_import]]
+
     binary_paths = [Path(path) for path in binary_paths]
 
     if any([not path.exists() for path in binary_paths]):
@@ -62,7 +64,7 @@ def test_gzf_import_program(shared_datadir: Path):
     import uuid
     # ensure fresh test each time
     project_name = f'import-test-{uuid.uuid4()}'
-    #project_name = f'import-test'
+    # project_name = f'import-test'
 
     DiffEngine: GhidraDiffEngine = VersionTrackingDiff
 
@@ -89,8 +91,7 @@ def test_gzf_import_program(shared_datadir: Path):
     #     print(data)
     #     assert expected_names[i] == data[0]
 
-    for i,import_path in enumerate(binary_paths):
+    for i, import_path in enumerate(binary_paths):
         imports_result = d.setup_project([binary_paths[i]], args.project_location, project_name, args.symbols_path)
-        #d.project.wait()
+        # d.project.wait()
         assert expected_names[i] == imports_result[0][0]
-

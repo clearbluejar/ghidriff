@@ -67,7 +67,7 @@ def get_microsoft_download_url(filename, timestamp, virtual_size):
     return f'https://msdl.microsoft.com/download/symbols/{filename}/{timestamp}{virtual_size}/{filename}'
 
 
-# utils from Pyhidra
+# utils from PyGhidra
 
 def get_private_class(path: str):
     from java.lang import ClassLoader

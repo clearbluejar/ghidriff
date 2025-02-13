@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     import ghidra
     from ghidra_builtins import *
 
+
 @JImplements(FunctionHasher, deferred=True)
 class StructuralGraphHasher:
     """
@@ -347,7 +348,7 @@ def get_defined_data(program: "ghidra.program.model.listing.Program"):
                         # its a string, find which functions use it
                         for ref in sym.references:
                             # print(ref.referenceType.toString())
-                            f = program.getFunctionManager().getFunctionContaining(ref.fromAddress)
+                            f = program.getFunctionManager().getFunctionContaining(ref.getFromAddress())
                             if f is not None:
                                 func_str_map.setdefault(f.entryPoint, []).append(str(data))
 
@@ -452,7 +453,7 @@ def get_func_to_switch(program: "ghidra.program.model.listing.Program"):
             # if f is None:
             #     for ref in sym.references:
             #         # print(ref.referenceType.toString())
-            #         f = program.getFunctionManager().getFunctionContaining(ref.fromAddress)
+            #         f = program.getFunctionManager().getFunctionContaining(ref.getFromAddress())
             #         if f is not None:
             #             func_switch_map.setdefault(f.entryPoint, []).append(str(sym))
             # else:
@@ -461,7 +462,7 @@ def get_func_to_switch(program: "ghidra.program.model.listing.Program"):
                 func_switch_map.setdefault(f.entryPoint, []).append(str(sym))
             for ref in sym.references:
                 # print(ref.referenceType.toString())
-                f = program.getFunctionManager().getFunctionContaining(ref.fromAddress)
+                f = program.getFunctionManager().getFunctionContaining(ref.getFromAddress())
                 if f is not None:
                     func_switch_map.setdefault(f.entryPoint, []).append(str(sym))
 

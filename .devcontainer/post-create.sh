@@ -24,8 +24,8 @@ fi
 # install local workspace and test requirements
 pip install -e ".[testing]"
 
-# initialize pyhidra
-python -m pyhidra.install_plugins
+# initialize pyghidra
+python -m pyghidra.install_plugins
 
 # git clone test data if dir doesn't exist
 TEST_DATA_PATH="tests/data"
