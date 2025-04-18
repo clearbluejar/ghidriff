@@ -74,7 +74,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             use_calling_counts: bool = False,
             bsim: bool = True,
             bsim_full: bool = False,
-            gdts: list = []) -> None:
+            gdts: list = [],
+            base_address: int = None) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -162,14 +163,25 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.bsim_full = bsim_full
 
         self.gdts = gdts
+        self.base_address = base_address
 
         self.logger.debug(f'{vars(self)}')
 
-    @ staticmethod
+    @staticmethod
     def add_ghidra_args_to_parser(parser: argparse.ArgumentParser) -> None:
         """
         Add required Ghidra args to a parser
         """
+
+        def _parse_ba(input_str: str) -> int:
+            try:
+                # Check if the string is hexadecimal
+                if input_str.lower().startswith("0x") or any(char in "abcdefABCDEF" for char in input_str):
+                    return int(input_str, 16)  # Convert from hexadecimal
+                else:
+                    return int(input_str, 10)  # Convert from decimal
+            except ValueError:
+                raise ValueError(f"Invalid input string: {input_str}. Ensure it's a valid hex or decimal value.")
 
         group = parser.add_argument_group('Ghidra Project Options')
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='ghidra_projects')
@@ -196,6 +208,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False,
                            action=argparse.BooleanOptionalAction)
         group.add_argument('--gdt', action='append', help='Path to GDT file for analysis', default=[])
+        group.add_argument('--ba', '--base-address', dest='base_address', type=_parse_ba,
+                           help='Set base address from both programs. 0x2000 or 8192')
 
         group = parser.add_argument_group('BSIM Options')
         group.add_argument('--bsim', help='Toggle using BSIM correlation', default=True,
@@ -472,6 +486,16 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 program = self.project.openProgram("/", program_name, False)
 
             self.logger.info(f'Loaded {program}')
+
+            # set base address if provided
+            img_base = program.getImageBase()
+            if self.base_address is not None and self.base_address != img_base.offset:
+                self.logger.info(f'Setting {program} base address: 0x{img_base} to {hex(self.base_address)}')
+                new_image_base = img_base.getNewAddress(self.base_address)
+                program.setImageBase(new_image_base, True)
+                project.save(program)
+            else:
+                self.logger.info(f'Image base address: 0x{img_base}')
 
             proj_programs.append(program)
 
@@ -1044,7 +1068,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return funcs
 
-    @ abstractmethod
+    @abstractmethod
     def find_matches(
             self,
             p1: "ghidra.program.model.listing.Program",

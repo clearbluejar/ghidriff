@@ -67,7 +67,8 @@ def main():
                                      use_calling_counts=args.use_calling_counts,
                                      bsim=args.bsim,
                                      bsim_full=args.bsim_full,
-                                     gdts=args.gdt
+                                     gdts=args.gdt,
+                                     base_address=args.base_address
                                      )
 
     d.setup_project(binary_paths, project_path, project_name, symbols_path)
