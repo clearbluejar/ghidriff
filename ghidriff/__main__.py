@@ -68,7 +68,8 @@ def main():
                                      bsim=args.bsim,
                                      bsim_full=args.bsim_full,
                                      gdts=args.gdt,
-                                     base_address=args.base_address
+                                     base_address=args.base_address,
+                                     program_options=args.program_options
                                      )
 
     d.setup_project(binary_paths, project_path, project_name, symbols_path)
