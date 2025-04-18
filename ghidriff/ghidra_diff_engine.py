@@ -218,6 +218,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='ghidra_projects')
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='ghidriff')
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='symbols')
+        group.add_argument('-g', '--gzfs-path', help='Location to store GZFs of analyzed binaries', default='gzfs')
         group.add_argument('--ba', '--base-address', dest='base_address', type=_parse_ba,
                            help='Set base address from both programs. 0x2000 or 8192'),
         group.add_argument('--program-options', type=_load_program_options,
@@ -455,7 +456,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             project_location: Union[str, Path],
             project_name: str,
             symbols_path: Union[str, Path],
+            gzfs_path: Union[str, Path] = None,
             symbol_urls: list = None,
+
     ) -> list:
         """
         Setup and verify Ghidra Project
@@ -470,6 +473,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         project_location = Path(project_location) / project_name
         project_location.mkdir(exist_ok=True, parents=True)
+
+        if gzfs_path is not None:
+            gzfs_path = Path(gzfs_path)
+            gzfs_path.mkdir(exist_ok=True, parents=True)
+        self.gzfs_path = gzfs_path
+
         pdb = None
 
         self.logger.info(f'Setting Up Ghidra Project...')
@@ -922,8 +931,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             else:
                 self.logger.info(f"Analysis already complete.. skipping {program}!")
         finally:
-            # from java.io import File
-            # self.project.saveAsPackedFile(program,File(f'/tmp/{program.name}.gzf'), True)
+            # optionally save GZF
+            if self.gzfs_path is not None:
+                from java.io import File
+                self.project.saveAsPackedFile(program, File((self.gzfs_path / f"{df_or_prog.getName()}.gzf").absolute()), True)
             self.project.close(program)
 
         self.logger.info(f"Analysis for {df_or_prog} complete")
