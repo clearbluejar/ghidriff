@@ -138,8 +138,12 @@ Each implementation leverages the base class, and implements `find_changes`.
 ## Usage
 
 ```bash
-usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--threaded | --no-threaded] [--force-analysis] [--force-diff] [--no-symbols] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
-                [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--log-path LOG_PATH] [--va] [--min-func-len MIN_FUNC_LEN] [--use-calling-counts USE_CALLING_COUNTS] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags] [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS]
+usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION]
+                [-n PROJECT_NAME] [-s SYMBOLS_PATH] [-g GZFS_PATH] [--ba BASE_ADDRESS] [--program-options PROGRAM_OPTIONS] [--threaded | --no-threaded]
+                [--force-analysis] [--force-diff] [--no-symbols] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+                [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--log-path LOG_PATH] [--va] [--min-func-len MIN_FUNC_LEN]
+                [--use-calling-counts | --no-use-calling-counts] [--gdt GDT] [--bsim | --no-bsim] [--bsim-full | --no-bsim-full]
+                [--max-ram-percent MAX_RAM_PERCENT] [--print-flags] [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS]
                 [--md-title MD_TITLE]
                 old new [new ...]
 
@@ -166,6 +170,7 @@ There are quite a few options here, and some complexity. Generally you can succe
 <details><summary>Show Extended Usage</summary>
 
 ```bash
+
 Ghidra Project Options:
   -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
                         Ghidra Project Path (default: ghidra_projects)
@@ -173,6 +178,12 @@ Ghidra Project Options:
                         Ghidra Project Name (default: ghidriff)
   -s SYMBOLS_PATH, --symbols-path SYMBOLS_PATH
                         Ghidra local symbol store directory (default: symbols)
+  -g GZFS_PATH, --gzfs-path GZFS_PATH
+                        Location to store GZFs of analyzed binaries (default: gzfs)
+  --ba BASE_ADDRESS, --base-address BASE_ADDRESS
+                        Set base address from both programs. 0x2000 or 8192 (default: None)
+  --program-options PROGRAM_OPTIONS
+                        Path to json file with Program Options (custom analyzer settings) (default: None)
 
 Engine Options:
   --threaded, --no-threaded
@@ -189,8 +200,14 @@ Engine Options:
                         Verbose logging for analysis step. (default: False)
   --min-func-len MIN_FUNC_LEN
                         Minimum function length to consider for diff (default: 10)
-  --use-calling-counts USE_CALLING_COUNTS
-                        Add calling/called reference counts (default: True)
+  --use-calling-counts, --no-use-calling-counts
+                        Add calling/called reference counts (default: False)
+  --gdt GDT             Path to GDT file for analysis (default: [])
+
+BSIM Options:
+  --bsim, --no-bsim     Toggle using BSIM correlation (default: True)
+  --bsim-full, --no-bsim-full
+                        Slower but better matching. Use only when needed (default: False)
 
 JVM Options:
   --max-ram-percent MAX_RAM_PERCENT
@@ -207,6 +224,58 @@ Markdown Options:
 ```
 
 </details>
+
+### Using Custom Analyzer Settings
+
+If you want to configure specific analyzers for your Ghidra binary analysis, set a custom program_options.json with `--program-options`.
+
+```bash
+ghidriff --prog-options prog_options.json tapisrv.dll.x64.10.0.10240.20708 tapisrv.dll.x64.10.0.10240.20708
+```
+
+The `program_options.json` would need to look something like this:
+
+<details>
+
+```json
+{
+    "program_options": {
+        "binary_name": null,
+        "Analyzers": {
+            "ASCII Strings": "true",
+            "ASCII Strings.Create Strings Containing Existing Strings": "true",
+            "ASCII Strings.Create Strings Containing References": "true",
+            "ASCII Strings.Force Model Reload": "true",
+            "ASCII Strings.Minimum String Length": "LEN_5",
+            "ASCII Strings.Model File": "StringModel.sng",
+            "ASCII Strings.Require Null Termination for String": "true",
+            "ASCII Strings.Search Only in Accessible Memory Blocks": "true",
+            "ASCII Strings.String Start Alignment": "ALIGN_1",
+            "ASCII Strings.String end alignment": "4",
+            "Aggressive Instruction Finder": "false",
+            "Aggressive Instruction Finder.Create Analysis Bookmarks": "true",
+            "Apply Data Archives": "true",
+            "Apply Data Archives.Archive Chooser": "[Auto-Detect]",
+            "Apply Data Archives.Create Analysis Bookmarks": "true",
+            "Apply Data Archives.GDT User File Archive Path": null,
+            "Apply Data Archives.User Project Archive Path": null,
+            "Call Convention ID": "true",
+        }
+    }
+}
+```
+
+</details>
+
+The custom settings will then be used for your binary analysis.
+
+### Setting a Custom Image Base Address (Bootloaders, etc.)
+
+If you are reverse engineering firmware or other fun binary and want to change the base address for the binary, use the `--base-address` parameter to change the base address.
+
+```bash
+$ ghidriff --base-address 0x80000 STM32F103C-firmware.bin STM32F103Ca-firmware.bin
+```
 
 ## Quick Start Environment Setup
 
@@ -225,6 +294,13 @@ PS C:\Users\user> pip install ghidriff
 ```bash
 export GHIDRA_INSTALL_DIR="/path/to/ghidra/"
 pip install ghidriff
+```
+
+### UV
+
+```bash
+export GHIDRA_INSTALL_DIR="/path/to/ghidra/"
+uvx ghidriff
 ```
 
 ## Ghidriff in a Box 
