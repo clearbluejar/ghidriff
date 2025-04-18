@@ -75,7 +75,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             bsim: bool = True,
             bsim_full: bool = False,
             gdts: list = [],
-            base_address: int = None) -> None:
+            base_address: int = None,
+            program_options: dict = None) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -164,6 +165,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         self.gdts = gdts
         self.base_address = base_address
+        if program_options is not None:
+            self.program_options = json.loads(Path(program_options).read_text())
+        else:
+            self.program_options = None
 
         self.logger.debug(f'{vars(self)}')
 
@@ -183,10 +188,40 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             except ValueError:
                 raise ValueError(f"Invalid input string: {input_str}. Ensure it's a valid hex or decimal value.")
 
+        def _load_program_options(file_path: str) -> int:
+
+            # try:
+            # Ensure the input is a valid Path object
+            path = Path(file_path)
+
+            # Check if the file exists and is a valid JSON file
+            if not path.is_file():
+                raise FileNotFoundError(f"The file '{file_path}' does not exist.")
+
+            # Load the JSON content
+
+            data = None
+            try:
+                data = json.loads(path.read_text())
+            except Exception as ex:
+                raise argparse.ArgumentTypeError(
+                    f"Json {path.absolute()} could not be loaded as json. Check file. Exception:{ex}")
+
+            # Check for the existence of keys
+            if not data.get('program_options') or not data['program_options'].get('Analyzers'):
+                raise argparse.ArgumentTypeError(
+                    f"Missing keys in json: {path.absolute()}. Missing 'program_options' or 'Analyzers' key.")
+
+            return file_path
+
         group = parser.add_argument_group('Ghidra Project Options')
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='ghidra_projects')
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='ghidriff')
         group.add_argument('-s', '--symbols-path', help='Ghidra local symbol store directory', default='symbols')
+        group.add_argument('--ba', '--base-address', dest='base_address', type=_parse_ba,
+                           help='Set base address from both programs. 0x2000 or 8192'),
+        group.add_argument('--program-options', type=_load_program_options,
+                           help='Path to json file with Program Options (custom analyzer settings)')
 
         group = parser.add_argument_group('Engine Options')
         group.add_argument('--threaded', help='Use threading during import, analysis, and diffing. Recommended',
@@ -208,8 +243,6 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False,
                            action=argparse.BooleanOptionalAction)
         group.add_argument('--gdt', action='append', help='Path to GDT file for analysis', default=[])
-        group.add_argument('--ba', '--base-address', dest='base_address', type=_parse_ba,
-                           help='Set base address from both programs. 0x2000 or 8192')
 
         group = parser.add_argument_group('BSIM Options')
         group.add_argument('--bsim', help='Toggle using BSIM correlation', default=True,
@@ -844,7 +877,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             force_reload_for_symbols = False
 
             if force_reload_for_symbols:
-                self.set_analysis_option_bool(program, 'PDB Universal', True)
+                self.set_analysis_option(program, 'PDB Universal', True)
                 self.logger.info('Symbols missing. Re-analysis is required. Setting PDB Universal: True')
                 self.logger.debug(f'pdb loaded: {pdb_attr.isPdbLoaded()} prog analyzed: {pdb_attr.isProgramAnalyzed()}')
 
@@ -854,17 +887,25 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 # handle large binaries more efficiently
                 # see ghidra/issues/4573 (turn off feature Shared Return Calls )
                 if program and program.getFunctionManager().getFunctionCount() > 1000:
-                    self.logger.warn(f"Turning off 'Shared Return Calls' for {program}")
-                    self.set_analysis_option_bool(
-                        program, 'Shared Return Calls.Assume Contiguous Functions Only', False)
+                    if self.program_options is not None and self.program_options['program_options']['Analyzers'].get('Shared Return Calls.Assume Contiguous Functions Only') is None:
+                        self.logger.warn(f"Turning off 'Shared Return Calls' for {program}")
+                        self.set_analysis_option(
+                            program, 'Shared Return Calls.Assume Contiguous Functions Only', False)
 
-                # TODO make this argument optional, or provide custom analyzer config parsing
                 # This really helps with decompilation, was turned off by default in 10.x
-                self.set_analysis_option_bool(program, 'Decompiler Parameter ID', True)
+                # Will set by default unless specified by user
+                if self.program_options is not None and self.program_options['program_options']['Analyzers'].get('Decompiler Parameter ID') is None:
+                    self.set_analysis_option(program, 'Decompiler Parameter ID', True)
+
+                if self.program_options:
+                    analyzer_options = self.program_options['program_options']['Analyzers']
+                    for k, v in analyzer_options.items():
+                        self.logger.info(f"Setting prog option:{k} with value:{v}")
+                        self.set_analysis_option(program, k, v)
 
                 if self.no_symbols:
                     self.logger.warn(f'Disabling symbols for analysis! --no-symbols flag: {self.no_symbols}')
-                    self.set_analysis_option_bool(program, 'PDB Universal', False)
+                    self.set_analysis_option(program, 'PDB Universal', False)
 
                 self.logger.info(f'Starting Ghidra analysis of {program}...')
                 try:
@@ -1000,6 +1041,83 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return options
 
+    def set_analysis_option(
+        self,
+        prog: "ghidra.program.model.listing.Program",
+        option_name: str,
+        value: bool
+    ) -> None:
+        """
+        Set boolean program analysis options
+        Inspired by: Ghidra/Features/Base/src/main/java/ghidra/app/script/GhidraScript.java#L1272
+        """
+
+        from ghidra.program.model.listing import Program
+
+        prog_options = prog.getOptions(Program.ANALYSIS_PROPERTIES)
+
+        # prog_options = prog.getOptions(name)
+        options = {}
+
+        for propName in prog_options.getOptionNames():
+            prog_options.getType(propName)
+
+        option_type = prog_options.getType(option_name)
+
+        match str(option_type):
+            case "INT_TYPE":
+                self.logger.debug(f'Setting type: INT')
+                prog_options.setInt(option_name, int(value))
+            case "LONG_TYPE":
+                self.logger.debug(f'Setting type: LONG')
+                prog_options.setLong(option_name, int(value))
+            case "STRING_TYPE":
+                self.logger.debug(f'Setting type: STRING')
+                prog_options.setString(option_name, value)
+            case "DOUBLE_TYPE":
+                self.logger.debug(f'Setting type: DOUBLE')
+                prog_options.setDouble(option_name, float(value))
+            case "FLOAT_TYPE":
+                self.logger.debug(f'Setting type: FLOAT')
+                prog_options.setFloat(option_name, float(value))
+            case "BOOLEAN_TYPE":
+                self.logger.debug(f'Setting type: BOOLEAN')
+                if isinstance(value, str):
+                    temp_bool = value.lower()
+                    if temp_bool in {"true", "false"}:
+                        prog_options.setBoolean(option_name, temp_bool == "true")
+                elif isinstance(value, bool):
+                    prog_options.setBoolean(option_name, value)
+                else:
+                    raise ValueError(f"Failed to setBoolean on {option_name} {option_type}")
+
+            case "ENUM_TYPE":
+                self.logger.debug(f'Setting type: ENUM')
+                enum_for_option = prog_options.getEnum(option_name, None)
+                if enum_for_option is None:
+                    raise ValueError(
+                        f"Attempted to set an Enum option {option_name} without an " + "existing enum value alreday set.")
+
+                from java.lang import Enum
+                new_enum = None
+                try:
+                    new_enum = Enum.valueOf(enum_for_option.getClass(), value)
+                except:
+                    for enumValue in enum_for_option.values():
+                        if value == enumValue.toString():
+                            new_enum = enumValue
+                            break
+
+                if new_enum is None:
+                    raise ValueError(
+                        f"Attempted to set an Enum option {option_name} without an " + "existing enum value alreday set.")
+
+                prog_options.setEnum(option_name, new_enum)
+
+            case _:
+                # do nothing; don't allow user to set these options (doesn't make any sense)
+                self.logger.warning(f'option {option_type} set not supported, ignoring')
+
     def set_analysis_option_bool(
         self,
         prog: "ghidra.program.model.listing.Program",
@@ -1014,6 +1132,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from ghidra.program.model.listing import Program
 
         prog_options = prog.getOptions(Program.ANALYSIS_PROPERTIES)
+
+        # prog_options = prog.getOptions(name)
+        options = {}
+
+        for propName in prog_options.getOptionNames():
+            options[propName] = prog_options.getValueAsString(propName)
+            prog_options.getType(propName)
 
         prog_options.setBoolean(option_name, value)
 
