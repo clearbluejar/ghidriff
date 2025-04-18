@@ -19,7 +19,7 @@ def test_custom_base_addr_hex_afd(shared_datadir: Path):
     runs forked because each jpype jvm can only be initialized 1x
     """
 
-    test_name = 'test_afd_prog_options'
+    test_name = 'test_custom_base_addr_hex_afd'
     output_path = shared_datadir / test_name
     output_path.mkdir(exist_ok=True, parents=True)
     symbols_path = shared_datadir / SYMBOLS_DIR
@@ -118,7 +118,7 @@ def test_custom_base_addr_dec_afd(shared_datadir: Path):
     runs forked because each jpype jvm can only be initialized 1x
     """
 
-    test_name = 'test_afd_prog_options'
+    test_name = 'test_custom_base_addr_dec_afd'
     output_path = shared_datadir / test_name
     output_path.mkdir(exist_ok=True, parents=True)
     symbols_path = shared_datadir / SYMBOLS_DIR

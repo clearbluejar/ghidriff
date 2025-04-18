@@ -10,13 +10,13 @@ PROG_OPTIONS_DIR = 'prog_options'
 
 
 @pytest.mark.forked
-def test_custom_program_options_afd_cve_2023_21768(shared_datadir: Path):
+def test_custom_program_options_afd(shared_datadir: Path):
     """
     Tests end to end diff of CVE
     runs forked because each jpype jvm can only be initialized 1x
     """
 
-    test_name = 'test_afd_prog_options'
+    test_name = 'test_custom_program_options_afd'
     output_path = shared_datadir / test_name
     output_path.mkdir(exist_ok=True, parents=True)
     symbols_path = shared_datadir / SYMBOLS_DIR
