@@ -37,6 +37,11 @@ def main():
     else:
         symbols_path = Path(args.symbols_path)
 
+    if args.gzfs_path == parser.get_default('gzfs_path'):
+        gzfs_path = output_path / parser.get_default('gzfs_path')
+    else:
+        gzfs_path = Path(args.gzfs_path)
+
     binary_paths = args.old + [bin for sublist in args.new for bin in sublist]
 
     binary_paths = [Path(path) for path in binary_paths]
@@ -72,7 +77,7 @@ def main():
                                      program_options=args.program_options
                                      )
 
-    d.setup_project(binary_paths, project_path, project_name, symbols_path)
+    d.setup_project(binary_paths, project_path, project_name, symbols_path, gzfs_path)
 
     d.analyze_project()
 
