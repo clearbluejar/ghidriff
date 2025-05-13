@@ -24,8 +24,6 @@ fi
 # install local workspace and test requirements
 pip install -e ".[testing]"
 
-# initialize pyghidra
-python -m pyghidra.install_plugins
 
 # git clone test data if dir doesn't exist
 TEST_DATA_PATH="tests/data"
@@ -36,6 +34,9 @@ if [ ! -d "$TEST_DATA_PATH" ] ; then
     git remote set-url origin git@github.com:clearbluejar/ghidriff-test-data.git
     popd
 fi
+
+# init pyghidra
+python tests/init_pyghidra.py 
 
 # Setup Ghidra Dev for Reference
 # git clone https://github.com/NationalSecurityAgency/ghidra.git ~/ghidra-master

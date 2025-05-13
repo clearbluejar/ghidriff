@@ -56,7 +56,7 @@ jobs:
           pip install "ghidriff[testing]"
           pip list
           # install plugins before use
-          # python -m pyghidra.install_plugins
+          python tests/init_pyghidra.py
           # download data to shared test data
           if [ ! -d "tests/data" ]; then git clone https://github.com/clearbluejar/ghidriff-test-data.git tests/data; fi
           pytest -rA -n auto

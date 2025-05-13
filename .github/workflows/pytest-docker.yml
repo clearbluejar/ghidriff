@@ -58,7 +58,7 @@ jobs:
         #killall python
         # source .env/bin/activate
         # #init pyghidra
-        # python -m pyghidra.install_plugins        
+        python tests/init_pyghidra.py        
         # pushd /tmp
         # popd
         # download data to shared test data
