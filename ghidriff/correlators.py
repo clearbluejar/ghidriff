@@ -58,7 +58,7 @@ class StructuralGraphHasher:
 
         return hash((fname, num_basic_blocks, num_edges_of_blocks, num_call_subfunctions, func.body.numAddresses, func.parameterCount, sym.referenceCount))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
 
@@ -99,12 +99,12 @@ class StructuralGraphExactHasher:
 
         return hash((num_basic_blocks, num_call_subfunctions, num_edges_of_blocks))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
 
 
-@ JImplements(FunctionHasher, deferred=True)
+@JImplements(FunctionHasher, deferred=True)
 class BulkInstructionsHasher:
     """
     Hash from instructions sorted and hashed
@@ -115,7 +115,7 @@ class BulkInstructionsHasher:
     MIN_FUNC_LEN = 10
     MATCH_TYPE = 'BulkInstructionHash'
 
-    @ JOverride
+    @JOverride
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
 
         instructions = []
@@ -128,12 +128,12 @@ class BulkInstructionsHasher:
 
         return hash(tuple(sorted(instructions)))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
 
 
-@ JImplements(FunctionHasher, deferred=True)
+@JImplements(FunctionHasher, deferred=True)
 class BulkMnemonicHasher:
     """
     Hash from function mnemonics sorted
@@ -144,7 +144,7 @@ class BulkMnemonicHasher:
     MIN_FUNC_LEN = 10
     MATCH_TYPE = 'BulkMnemonicHash'
 
-    @ JOverride
+    @JOverride
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
 
         mnemonics = []
@@ -157,12 +157,12 @@ class BulkMnemonicHasher:
 
         return hash(tuple(sorted(mnemonics)))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
 
 
-@ JImplements(FunctionHasher, deferred=True)
+@JImplements(FunctionHasher, deferred=True)
 class BulkBasicBlockMnemonicHasher:
     """
     Hash from function basic blocks mnemonics sorted
@@ -173,7 +173,7 @@ class BulkBasicBlockMnemonicHasher:
     MIN_FUNC_LEN = 10
     MATCH_TYPE = 'BulkBasicBlockMnemonicHash'
 
-    @ JOverride
+    @JOverride
     def hash(self, func: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
 
         from ghidra.program.model.block import BasicBlockModel
@@ -189,7 +189,7 @@ class BulkBasicBlockMnemonicHasher:
 
         return hash(tuple(sorted(blocks)))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
 
@@ -210,7 +210,7 @@ class NamespaceNameParamHasher:
 
         return hash((func.getName(True), func.parameterCount))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
 
@@ -329,7 +329,13 @@ def get_defined_data(program: "ghidra.program.model.listing.Program"):
     from ghidra.program.model.data import StringDataInstance
     from ghidra.program.util import DefinedDataIterator
 
-    for data in DefinedDataIterator.definedStrings(program):
+    if hasattr(DefinedDataIterator, 'definedStrings'):
+        str_data_iter = DefinedDataIterator.definedStrings(program)
+    else:
+        from ghidra.program.model.data import StringDataType
+        str_data_iter = DefinedDataIterator.byDataType(program, lambda x: isinstance(x, StringDataType))
+
+    for data in str_data_iter:
         sdi_str = StringDataInstance.getStringDataInstance(data)
         s = sdi_str.getStringValue()
         if s != None:
@@ -503,6 +509,6 @@ class SwitchSigHasher:
 
         return hash(tuple([sig, tuple(switch_syms)]))
 
-    @ JOverride
+    @JOverride
     def commonBitCount(self, funcA: 'ghidra.program.model.listing.Function', funcB: 'ghidra.program.model.listing.Function', monitor: 'ghidra.util.task.TaskMonitor') -> int:
         raise NotImplementedError
