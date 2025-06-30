@@ -467,6 +467,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         3. Configure and verify symbols
         """
         from ghidra.base.project import GhidraProject
+        from ghidra.util.exception import NotFoundException
         from java.io import IOException
         from ghidra.app.plugin.core.analysis import PdbAnalyzer
         from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
@@ -489,7 +490,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         try:
             project = GhidraProject.openProject(project_location, project_name, True)
             self.logger.info(f'Opened project: {project.project.name}')
-        except IOException:
+        except (IOException, NotFoundException):
             project = GhidraProject.createProject(project_location, project_name, False)
             self.logger.info(f'Created project: {project.project.name}')
 
