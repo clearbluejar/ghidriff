@@ -467,6 +467,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         3. Configure and verify symbols
         """
         from ghidra.base.project import GhidraProject
+        from ghidra.util.exception import NotFoundException
         from java.io import IOException
         from ghidra.app.plugin.core.analysis import PdbAnalyzer
         from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
@@ -486,10 +487,16 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # Open/Create project
         project = None
 
+        if self.project is not None:
+            self.logger.warning("Project Already Open! Closing project and saving")
+            self.project.project.save()
+            self.project.close()
+            self.project = None
+
         try:
-            project = GhidraProject.openProject(project_location, project_name, True)
+            project = GhidraProject.openProject(project_location, project_name, False)
             self.logger.info(f'Opened project: {project.project.name}')
-        except IOException:
+        except (IOException, NotFoundException):
             project = GhidraProject.createProject(project_location, project_name, False)
             self.logger.info(f'Created project: {project.project.name}')
 
@@ -947,11 +954,17 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         """
         self.logger.info(f'Starting analysis for {len(self.project.getRootFolder().getFiles())} binaries')
 
+        completed_count = 0
+        prog_count = len([domainFile for domainFile in self.project.getRootFolder().getFiles()
+                         if domainFile.getContentType() == 'Program'])
+
         if self.threaded:
             with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = (executor.submit(self.analyze_program, *[domainFile, require_symbols, force_analysis, verbose_analysis])
                            for domainFile in self.project.getRootFolder().getFiles() if domainFile.getContentType() == 'Program')
                 for future in concurrent.futures.as_completed(futures):
+                    completed_count += 1
+                    self.logger.info(f"Analyis % complete: {round(completed_count/prog_count, 2)*100}")
                     prog = future.result()
         else:
             for domainFile in self.project.getRootFolder().getFiles():
