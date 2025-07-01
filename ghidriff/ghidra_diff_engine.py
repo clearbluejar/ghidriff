@@ -494,7 +494,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             self.project = None
 
         try:
-            project = GhidraProject.openProject(project_location, project_name, False)
+            project = GhidraProject.openProject(project_location, project_name, True)
             self.logger.info(f'Opened project: {project.project.name}')
         except (IOException, NotFoundException):
             project = GhidraProject.createProject(project_location, project_name, False)
