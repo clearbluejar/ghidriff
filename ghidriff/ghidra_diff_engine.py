@@ -925,6 +925,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 self.logger.info(f'Starting Ghidra analysis of {program}...')
                 try:
+                    # temp fix for #125
+                    # introduces random delay time before analysis start
+                    import time
+                    import random
+                    sleep_duration = random.uniform(3, 7)
+                    time.sleep(sleep_duration)
+                    #####
                     flat_api.analyzeAll(program)
                     if hasattr(GhidraProgramUtilities, 'setAnalyzedFlag'):
                         GhidraProgramUtilities.setAnalyzedFlag(program, True)
