@@ -817,6 +817,8 @@ pie showData
 
                         ignore_called = False
                         ignore_calling = False
+                        called_set = set()
+                        calling_set = set()
 
                         if len(modified['old']['called']) > 0 and len(modified['new']['called']) > 0:
                             called_set = set(modified['old']['called']).difference(modified['new']['called'])
