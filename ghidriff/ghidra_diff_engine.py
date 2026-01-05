@@ -1575,7 +1575,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             elost = self.enhance_sym(lost)
 
             # deleted func
-            if lost.getProgram().getName() == p1.getName():
+            if lost.getProgram().getUniqueProgramID() == p1.getUniqueProgramID():
                 deleted_funcs.append(elost)
             else:
                 added_funcs.append(elost)
