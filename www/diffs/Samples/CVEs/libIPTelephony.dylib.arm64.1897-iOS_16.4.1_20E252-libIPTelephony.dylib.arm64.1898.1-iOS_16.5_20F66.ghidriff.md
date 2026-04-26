@@ -1641,7 +1641,7 @@ pie showData
 # Modified (No Code Changes)
 
 
-*Slightly modified functions have no code changes, rather differnces in:*
+*Slightly modified functions have no code changes, rather differences in:*
 - refcount
 - length
 - called

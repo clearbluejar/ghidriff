@@ -779,7 +779,7 @@ pie showData
         slight_mods = ['refcount', 'length', 'called', 'calling', 'name', 'fullname']
 
         md.new_header(1, 'Modified (No Code Changes)')
-        md.new_paragraph(f"*Slightly modified functions have no code changes, rather differnces in:*")
+        md.new_paragraph(f"*Slightly modified functions have no code changes, rather differences in:*")
         md.new_list(slight_mods)
 
         # skip this section (as it is mostly a bonus) if this markdown is already too big

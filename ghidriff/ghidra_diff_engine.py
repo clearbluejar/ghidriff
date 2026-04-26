@@ -608,13 +608,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return bin_results
 
-    def setup_decompliers(
+    def setup_decompilers(
         self,
         p1: "ghidra.program.model.listing.Program",
         p2: "ghidra.program.model.listing.Program"
     ) -> bool:
         """
-        Setup decompliers to use during diff bins. Each one must be initialized with a program.
+        Setup decompilers to use during diff bins. Each one must be initialized with a program.
         """
 
         from ghidra.app.decompiler import DecompInterface
@@ -653,7 +653,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             self.decompilers[p1.name].setdefault('available', []).append(0)
             self.decompilers[p2.name].setdefault('available', []).append(0)
 
-        self.logger.info(f'Setup {decompiler_count} decompliers')
+        self.logger.info(f'Setup {decompiler_count} decompilers')
 
         return True
 
@@ -663,7 +663,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         p2: "ghidra.program.model.listing.Program"
     ) -> bool:
         """
-        Shutdown decompliers
+        Shutdown decompilers
         """
 
         if self.threaded:
@@ -1436,7 +1436,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             p2 = self.project.openProgram("/", p2_name, True)
 
         # setup decompilers
-        self.setup_decompliers(p1, p2)
+        self.setup_decompilers(p1, p2)
 
         self.logger.info(f"Loaded old program: {p1.name}")
         self.logger.info(f"Loaded new program: {p2.name}")

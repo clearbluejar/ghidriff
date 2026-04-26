@@ -236,7 +236,7 @@ INFO  -----------------------------------------------------
 INFO | ghidriff | Analysis for ghidriff-ntoskrnl.exe.10.0.22621.1344-ntoskrnl.exe.10.0.22621.1413:/ntoskrnl.exe.10.0.22621.1413 complete
 INFO | ghidriff | Analysis for ghidriff-ntoskrnl.exe.10.0.22621.1344-ntoskrnl.exe.10.0.22621.1413:/ntoskrnl.exe.10.0.22621.1344 complete
 INFO | ghidriff | Diffing bins: ntoskrnl.exe.10.0.22621.1344 - ntoskrnl.exe.10.0.22621.1413
-INFO | ghidriff | Setup 16 decompliers
+INFO | ghidriff | Setup 16 decompilers
 INFO | ghidriff | Loaded old program: ntoskrnl.exe.10.0.22621.1344
 INFO | ghidriff | Loaded new program: ntoskrnl.exe.10.0.22621.1413
 INFO | ghidriff | p1 sym count: reported: 244603 analyzed: 16772
