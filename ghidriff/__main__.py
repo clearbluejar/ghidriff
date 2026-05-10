@@ -75,6 +75,7 @@ def main():
                                      gdts=args.gdt,
                                      base_address=args.base_address,
                                      program_options=args.program_options,
+                                     import_plan=args.import_plan,
                                      decompiler_timeout=args.decompiler_timeout
                                      )
 
