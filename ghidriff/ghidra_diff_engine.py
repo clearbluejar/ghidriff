@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 import json
 import difflib
@@ -27,6 +28,18 @@ from ghidriff import __version__
 if TYPE_CHECKING:
     import ghidra
     from ghidra_builtins import *
+
+
+@dataclass(frozen=True)
+class GhidraProjectSpec:
+    """
+    Normalized Ghidra project location details.
+    """
+
+    project_location: Path
+    project_name: str
+    gpr_path: Path
+    was_gpr_path: bool
 
 
 class HeadlessLoggingPyGhidraLauncher(PyGhidraLauncher):
@@ -81,6 +94,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             gdts: list = None,
             base_address: int = None,
             program_options: dict = None,
+            import_plan: Union[str, Path, dict] = None,
             decompiler_timeout: int = 60) -> None:
 
         # setup engine logging
@@ -180,6 +194,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             self.program_options = json.loads(Path(program_options).read_text())
         else:
             self.program_options = None
+        self.import_plan = self.load_import_plan(import_plan)
 
         self.logger.debug(f'{vars(self)}')
 
@@ -200,6 +215,40 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             applicationVersion=app_info.version,
             applicationBuildDate=app_info.build_date,
             applicationReleaseName=app_info.release_name,
+        )
+
+    @staticmethod
+    def normalize_project_spec(
+        project_location: Union[str, Path],
+        project_name: str,
+        default_project_name: str = "ghidriff",
+    ) -> GhidraProjectSpec:
+        """
+        Normalize directory and .gpr project inputs.
+
+        A .gpr file fully identifies the Ghidra project, so --project-name is
+        rejected unless it is still at the parser default.
+        """
+
+        project_location = Path(project_location)
+
+        if project_location.suffix.lower() == ".gpr":
+            if project_name != default_project_name:
+                raise ValueError("Cannot use --project-name when specifying a .gpr file.")
+
+            resolved_project_name = project_location.stem
+            return GhidraProjectSpec(
+                project_location=project_location.parent,
+                project_name=resolved_project_name,
+                gpr_path=project_location,
+                was_gpr_path=True,
+            )
+
+        return GhidraProjectSpec(
+            project_location=project_location,
+            project_name=project_name,
+            gpr_path=project_location / f"{project_name}.gpr",
+            was_gpr_path=False,
         )
 
     def check_runtime_compatibility(self, ghidra_version: str) -> None:
@@ -267,6 +316,22 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             return file_path
 
+        def _load_import_plan(file_path: str) -> str:
+            path = Path(file_path)
+
+            if not path.is_file():
+                raise FileNotFoundError(f"The file '{file_path}' does not exist.")
+
+            try:
+                data = json.loads(path.read_text())
+            except Exception as ex:
+                raise argparse.ArgumentTypeError(
+                    f"Json {path.absolute()} could not be loaded as json. Check file. Exception:{ex}")
+
+            GhidraDiffEngine.validate_import_plan(data, path)
+
+            return file_path
+
         group = parser.add_argument_group('Ghidra Project Options')
         group.add_argument('-p', '--project-location', help='Ghidra Project Path', default='ghidra_projects')
         group.add_argument('-n', '--project-name', help='Ghidra Project Name', default='ghidriff')
@@ -276,6 +341,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            help='Set base address from both programs. 0x2000 or 8192'),
         group.add_argument('--program-options', type=_load_program_options,
                            help='Path to json file with Program Options (custom analyzer settings)')
+        group.add_argument('--import-plan', type=_load_import_plan,
+                           help='Path to json file with loader/language/compiler/program-name import options')
 
         group = parser.add_argument_group('Engine Options')
         group.add_argument('--threaded', help='Use threading during import, analysis, and diffing. Recommended',
@@ -506,6 +573,128 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return self.esym_memo[key]
 
+    @staticmethod
+    def validate_import_plan(data: dict, path: Path = None) -> None:
+        """
+        Validate the small ghidriff import-plan schema.
+        """
+
+        source = f"{path.absolute()}: " if path else ""
+        if not isinstance(data, dict):
+            raise argparse.ArgumentTypeError(f"{source}import plan must be a JSON object.")
+
+        allowed_top_keys = {"defaults", "imports"}
+        unexpected = set(data) - allowed_top_keys
+        if unexpected:
+            raise argparse.ArgumentTypeError(
+                f"{source}unexpected import plan keys: {', '.join(sorted(unexpected))}.")
+
+        allowed_import_keys = {"loader", "language", "compiler", "program_name"}
+        for section_name in ("defaults", "imports"):
+            section = data.get(section_name, {})
+            if not isinstance(section, dict):
+                raise argparse.ArgumentTypeError(f"{source}{section_name} must be a JSON object.")
+
+        defaults = data.get("defaults", {})
+        unexpected = set(defaults) - allowed_import_keys
+        if unexpected:
+            raise argparse.ArgumentTypeError(
+                f"{source}unexpected defaults keys: {', '.join(sorted(unexpected))}.")
+        for option_name, option_value in defaults.items():
+            if option_value is not None and not isinstance(option_value, str):
+                raise argparse.ArgumentTypeError(f"{source}defaults.{option_name} must be a string or null.")
+
+        for import_key, options in data.get("imports", {}).items():
+            if not isinstance(import_key, str):
+                raise argparse.ArgumentTypeError(f"{source}import keys must be strings.")
+            if not isinstance(options, dict):
+                raise argparse.ArgumentTypeError(f"{source}import entry {import_key!r} must be a JSON object.")
+            unexpected = set(options) - allowed_import_keys
+            if unexpected:
+                raise argparse.ArgumentTypeError(
+                    f"{source}unexpected keys for import {import_key!r}: {', '.join(sorted(unexpected))}.")
+            for option_name, option_value in options.items():
+                if option_value is not None and not isinstance(option_value, str):
+                    raise argparse.ArgumentTypeError(
+                        f"{source}{import_key!r}.{option_name} must be a string or null.")
+
+    @classmethod
+    def load_import_plan(cls, import_plan: Union[str, Path, dict, None]) -> dict:
+        """
+        Load and validate optional per-binary import options.
+        """
+
+        if import_plan is None:
+            return {"defaults": {}, "imports": {}}
+
+        if isinstance(import_plan, dict):
+            data = import_plan
+            path = None
+        else:
+            path = Path(import_plan)
+            data = json.loads(path.read_text())
+
+        cls.validate_import_plan(data, path)
+        return {"defaults": data.get("defaults", {}), "imports": data.get("imports", {})}
+
+    def get_import_plan_options(self, program_path: Union[str, Path]) -> dict:
+        """
+        Return merged default and per-path import options for a binary path.
+        """
+
+        path = Path(program_path)
+        imports = self.import_plan.get("imports", {})
+        options = dict(self.import_plan.get("defaults", {}))
+
+        for key in (str(path), str(path.absolute()), path.name):
+            if key in imports:
+                options.update(imports[key])
+                break
+
+        return {key: value for key, value in options.items() if value is not None}
+
+    def get_project_program_name(self, program_path: Union[str, Path]) -> str:
+        """
+        Return the Ghidra project program name for a binary path.
+        """
+
+        import_options = self.get_import_plan_options(program_path)
+        return import_options.get("program_name") or self.gen_proj_bin_name_from_path(Path(program_path))
+
+    def import_program_with_plan(self, project, program_path: Union[str, Path], import_options: dict):
+        """
+        Import a program using optional loader/language/compiler values.
+
+        Ghidra's overloads differ depending on which import options are present.
+        pyghidra owns the low-level validation helpers; ghidriff only maps its
+        import-plan config into the matching Ghidra import call.
+        """
+
+        loader = import_options.get("loader")
+        language = import_options.get("language")
+        compiler = import_options.get("compiler")
+
+        if loader is not None:
+            from java.lang import ClassLoader
+            from jpype import JClass
+            loader = JClass(loader, ClassLoader.getSystemClassLoader())
+
+        if language is not None:
+            from pyghidra.core import _get_compiler_spec, _get_language
+            lang = _get_language(language)
+            comp = _get_compiler_spec(lang, compiler)
+            if loader is not None:
+                return project.importProgram(program_path, loader, lang, comp)
+            return project.importProgram(program_path, lang, comp)
+
+        if compiler is not None:
+            raise ValueError("Import plan compiler requires a language.")
+
+        if loader is not None:
+            return project.importProgram(program_path, loader)
+
+        return project.importProgram(program_path)
+
     def setup_project(
             self,
             binary_paths: List[Union[str, Path]],
@@ -528,7 +717,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from ghidra.app.plugin.core.analysis import PdbAnalyzer
         from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
 
-        project_location = Path(project_location) / project_name
+        project_spec = self.normalize_project_spec(project_location, project_name)
+        project_name = project_spec.project_name
+        if project_spec.was_gpr_path:
+            project_location = project_spec.project_location
+        else:
+            project_location = project_spec.project_location / project_name
         project_location.mkdir(exist_ok=True, parents=True)
 
         if gzfs_path is not None:
@@ -578,13 +772,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # Import binaries and configure symbols
         for program_path in import_paths:
 
-            # add sha1 to prevent files with same name collision
-            program_name = self.gen_proj_bin_name_from_path(program_path)
+            import_options = self.get_import_plan_options(program_path)
+            program_name = self.get_project_program_name(program_path)
 
             # Import binaries and configure symbols
             if not project.getRootFolder().getFile(program_name):
-                self.logger.info(f'Importing {program_path} as {program_name}')
-                program = project.importProgram(program_path)
+                self.logger.info(f'Importing {program_path} as {program_name} with options: {import_options}')
+                program = self.import_program_with_plan(project, program_path, import_options)
                 project.saveAs(program, "/", program_name, True)
             else:
                 self.logger.info(f'Opening {program_path}')
@@ -1496,8 +1690,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         old = Path(old)
         new = Path(new)
 
-        p1_name = self.gen_proj_bin_name_from_path(old)
-        p2_name = self.gen_proj_bin_name_from_path(new)
+        p1_name = self.get_project_program_name(old)
+        p2_name = self.get_project_program_name(new)
 
         # analysis options used
         pdiff['program_options'] = {}

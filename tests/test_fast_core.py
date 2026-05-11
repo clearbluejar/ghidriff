@@ -11,6 +11,12 @@ from ghidriff.utils import get_pe_extra_data
 pytestmark = pytest.mark.fast
 
 
+class _PlanEngine:
+    get_import_plan_options = GhidraDiffEngine.get_import_plan_options
+    get_project_program_name = GhidraDiffEngine.get_project_program_name
+    gen_proj_bin_name_from_path = GhidraDiffEngine.gen_proj_bin_name_from_path
+
+
 def test_summary_is_boolean_flag():
     parser = get_parser()
 
@@ -43,6 +49,97 @@ def test_ghidra_args_parse_typed_values_and_dash_prefixed_jvm_args():
     assert args.max_ram_percent == 75.5
     assert args.jvm_args == ["-Xmx8G", "-Dfoo=bar"]
     assert args.decompiler_timeout == 120
+
+
+def test_import_plan_arg_validates_json(tmp_path: Path):
+    import_plan = tmp_path / "import-plan.json"
+    import_plan.write_text('{"defaults": {"language": "x86:LE:64:default"}}')
+    parser = argparse.ArgumentParser()
+    GhidraDiffEngine.add_ghidra_args_to_parser(parser)
+
+    args = parser.parse_args(["--import-plan", str(import_plan)])
+
+    assert args.import_plan == str(import_plan)
+
+
+def test_import_plan_rejects_unknown_keys():
+    with pytest.raises(argparse.ArgumentTypeError, match="unexpected"):
+        GhidraDiffEngine.validate_import_plan({"defaults": {"bad": "value"}})
+
+
+def test_import_plan_merges_defaults_and_path_specific_options(tmp_path: Path):
+    binary_path = tmp_path / "old.bin"
+    binary_path.write_bytes(b"old")
+    engine = _PlanEngine()
+    engine.import_plan = GhidraDiffEngine.load_import_plan({
+        "defaults": {
+            "loader": "ghidra.app.util.opinion.BinaryLoader",
+            "language": "x86:LE:64:default",
+        },
+        "imports": {
+            "old.bin": {
+                "compiler": "gcc",
+                "program_name": "old-program",
+            },
+        },
+    })
+
+    options = GhidraDiffEngine.get_import_plan_options(engine, binary_path)
+
+    assert options == {
+        "loader": "ghidra.app.util.opinion.BinaryLoader",
+        "language": "x86:LE:64:default",
+        "compiler": "gcc",
+        "program_name": "old-program",
+    }
+    assert GhidraDiffEngine.get_project_program_name(engine, binary_path) == "old-program"
+
+
+def test_import_plan_compiler_requires_language(tmp_path: Path):
+    binary_path = tmp_path / "old.bin"
+    binary_path.write_bytes(b"old")
+    engine = SimpleNamespace()
+    engine.import_plan = GhidraDiffEngine.load_import_plan({})
+
+    with pytest.raises(ValueError, match="compiler requires a language"):
+        GhidraDiffEngine.import_program_with_plan(
+            engine,
+            project=None,
+            program_path=binary_path,
+            import_options={"compiler": "gcc"},
+        )
+
+
+def test_project_spec_accepts_gpr_path():
+    spec = GhidraDiffEngine.normalize_project_spec(
+        Path("/tmp/projects/sample.gpr"),
+        "ghidriff",
+    )
+
+    assert spec.project_location == Path("/tmp/projects")
+    assert spec.project_name == "sample"
+    assert spec.gpr_path == Path("/tmp/projects/sample.gpr")
+    assert spec.was_gpr_path is True
+
+
+def test_project_spec_rejects_custom_name_with_gpr_path():
+    with pytest.raises(ValueError, match="Cannot use --project-name"):
+        GhidraDiffEngine.normalize_project_spec(
+            Path("/tmp/projects/sample.gpr"),
+            "custom",
+        )
+
+
+def test_project_spec_preserves_directory_project_options():
+    spec = GhidraDiffEngine.normalize_project_spec(
+        Path("/tmp/projects"),
+        "custom",
+    )
+
+    assert spec.project_location == Path("/tmp/projects")
+    assert spec.project_name == "custom"
+    assert spec.gpr_path == Path("/tmp/projects/custom.gpr")
+    assert spec.was_gpr_path is False
 
 
 def test_remove_code_sig_always_returns_list_of_strings():

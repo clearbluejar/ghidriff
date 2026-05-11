@@ -139,7 +139,7 @@ Each implementation leverages the base class, and implements `find_changes`.
 
 ```bash
 usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary] [-p PROJECT_LOCATION]
-                [-n PROJECT_NAME] [-s SYMBOLS_PATH] [-g GZFS_PATH] [--ba BASE_ADDRESS] [--program-options PROGRAM_OPTIONS] [--threaded | --no-threaded]
+                [-n PROJECT_NAME] [-s SYMBOLS_PATH] [-g GZFS_PATH] [--ba BASE_ADDRESS] [--program-options PROGRAM_OPTIONS] [--import-plan IMPORT_PLAN] [--threaded | --no-threaded]
                 [--force-analysis] [--force-diff] [--no-symbols] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
                 [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--log-path LOG_PATH] [--va] [--min-func-len MIN_FUNC_LEN]
                 [--use-calling-counts | --no-use-calling-counts] [--gdt GDT] [--bsim | --no-bsim] [--bsim-full | --no-bsim-full]
@@ -173,9 +173,9 @@ There are quite a few options here, and some complexity. Generally you can succe
 
 Ghidra Project Options:
   -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
-                        Ghidra Project Path (default: ghidra_projects)
+                        Ghidra Project Path or existing .gpr file (default: ghidra_projects)
   -n PROJECT_NAME, --project-name PROJECT_NAME
-                        Ghidra Project Name (default: ghidriff)
+                        Ghidra Project Name. Do not use with .gpr project paths. (default: ghidriff)
   -s SYMBOLS_PATH, --symbols-path SYMBOLS_PATH
                         Ghidra local symbol store directory (default: symbols)
   -g GZFS_PATH, --gzfs-path GZFS_PATH
@@ -184,6 +184,8 @@ Ghidra Project Options:
                         Set base address from both programs. 0x2000 or 8192 (default: None)
   --program-options PROGRAM_OPTIONS
                         Path to json file with Program Options (custom analyzer settings) (default: None)
+  --import-plan IMPORT_PLAN
+                        Path to json file with loader/language/compiler/program-name import options (default: None)
 
 Engine Options:
   --threaded, --no-threaded
@@ -270,6 +272,46 @@ The `program_options.json` would need to look something like this:
 </details>
 
 The custom settings will then be used for your binary analysis.
+
+### Using An Existing Ghidra Project
+
+`--project-location` can point directly at an existing `.gpr` file. When a `.gpr` is provided, ghidriff derives the project directory and project name from that file.
+
+```bash
+ghidriff --project-location ./projects/sample.gpr old.bin new.bin
+```
+
+Do not combine a `.gpr` project path with `--project-name`; the `.gpr` file already identifies the project.
+
+### Using An Import Plan
+
+If Ghidra's automatic loader or language detection is wrong, use `--import-plan` to provide explicit per-binary import options. ghidriff only maps this config into Ghidra import calls; loader and language validation still come from pyghidra/Ghidra.
+
+```bash
+ghidriff --import-plan import-plan.json old.bin new.bin
+```
+
+An import plan can define defaults and override them by input path, absolute path, or file name:
+
+```json
+{
+    "defaults": {
+        "loader": "ghidra.app.util.opinion.BinaryLoader",
+        "language": "x86:LE:64:default",
+        "compiler": "gcc"
+    },
+    "imports": {
+        "old.bin": {
+            "program_name": "old"
+        },
+        "new.bin": {
+            "program_name": "new"
+        }
+    }
+}
+```
+
+Supported import-plan keys are `loader`, `language`, `compiler`, and `program_name`. If `compiler` is set, `language` must also be set.
 
 ### Setting a Custom Image Base Address (Bootloaders, etc.)
 

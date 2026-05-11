@@ -50,7 +50,10 @@ def main():
         missing_bins = [f'{path.name}' for path in binary_paths if not path.exists()]
         raise FileNotFoundError(f"Missing Bins: {' '.join(missing_bins)}")
 
-    project_name = f'{args.project_name}-{binary_paths[0].name}-{binary_paths[-1].name}'
+    if project_path.suffix.lower() == ".gpr":
+        project_name = args.project_name
+    else:
+        project_name = f'{args.project_name}-{binary_paths[0].name}-{binary_paths[-1].name}'
 
     engines = get_engine_classes()
     DiffEngine: GhidraDiffEngine = engines[args.engine]
@@ -75,6 +78,7 @@ def main():
                                      gdts=args.gdt,
                                      base_address=args.base_address,
                                      program_options=args.program_options,
+                                     import_plan=args.import_plan,
                                      decompiler_timeout=args.decompiler_timeout
                                      )
 
