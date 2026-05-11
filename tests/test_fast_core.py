@@ -110,6 +110,38 @@ def test_import_plan_compiler_requires_language(tmp_path: Path):
         )
 
 
+def test_project_spec_accepts_gpr_path():
+    spec = GhidraDiffEngine.normalize_project_spec(
+        Path("/tmp/projects/sample.gpr"),
+        "ghidriff",
+    )
+
+    assert spec.project_location == Path("/tmp/projects")
+    assert spec.project_name == "sample"
+    assert spec.gpr_path == Path("/tmp/projects/sample.gpr")
+    assert spec.was_gpr_path is True
+
+
+def test_project_spec_rejects_custom_name_with_gpr_path():
+    with pytest.raises(ValueError, match="Cannot use --project-name"):
+        GhidraDiffEngine.normalize_project_spec(
+            Path("/tmp/projects/sample.gpr"),
+            "custom",
+        )
+
+
+def test_project_spec_preserves_directory_project_options():
+    spec = GhidraDiffEngine.normalize_project_spec(
+        Path("/tmp/projects"),
+        "custom",
+    )
+
+    assert spec.project_location == Path("/tmp/projects")
+    assert spec.project_name == "custom"
+    assert spec.gpr_path == Path("/tmp/projects/custom.gpr")
+    assert spec.was_gpr_path is False
+
+
 def test_remove_code_sig_always_returns_list_of_strings():
     code = "int demo(void)\n{\n  return 1;\n}\n"
 

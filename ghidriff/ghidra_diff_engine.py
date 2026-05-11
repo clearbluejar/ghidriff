@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 import json
 import difflib
@@ -27,6 +28,18 @@ from ghidriff import __version__
 if TYPE_CHECKING:
     import ghidra
     from ghidra_builtins import *
+
+
+@dataclass(frozen=True)
+class GhidraProjectSpec:
+    """
+    Normalized Ghidra project location details.
+    """
+
+    project_location: Path
+    project_name: str
+    gpr_path: Path
+    was_gpr_path: bool
 
 
 class HeadlessLoggingPyGhidraLauncher(PyGhidraLauncher):
@@ -202,6 +215,40 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             applicationVersion=app_info.version,
             applicationBuildDate=app_info.build_date,
             applicationReleaseName=app_info.release_name,
+        )
+
+    @staticmethod
+    def normalize_project_spec(
+        project_location: Union[str, Path],
+        project_name: str,
+        default_project_name: str = "ghidriff",
+    ) -> GhidraProjectSpec:
+        """
+        Normalize directory and .gpr project inputs.
+
+        A .gpr file fully identifies the Ghidra project, so --project-name is
+        rejected unless it is still at the parser default.
+        """
+
+        project_location = Path(project_location)
+
+        if project_location.suffix.lower() == ".gpr":
+            if project_name != default_project_name:
+                raise ValueError("Cannot use --project-name when specifying a .gpr file.")
+
+            resolved_project_name = project_location.stem
+            return GhidraProjectSpec(
+                project_location=project_location.parent,
+                project_name=resolved_project_name,
+                gpr_path=project_location,
+                was_gpr_path=True,
+            )
+
+        return GhidraProjectSpec(
+            project_location=project_location,
+            project_name=project_name,
+            gpr_path=project_location / f"{project_name}.gpr",
+            was_gpr_path=False,
         )
 
     def check_runtime_compatibility(self, ghidra_version: str) -> None:
@@ -670,7 +717,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from ghidra.app.plugin.core.analysis import PdbAnalyzer
         from ghidra.app.plugin.core.analysis import PdbUniversalAnalyzer
 
-        project_location = Path(project_location) / project_name
+        project_spec = self.normalize_project_spec(project_location, project_name)
+        project_name = project_spec.project_name
+        if project_spec.was_gpr_path:
+            project_location = project_spec.project_location
+        else:
+            project_location = project_spec.project_location / project_name
         project_location.mkdir(exist_ok=True, parents=True)
 
         if gzfs_path is not None:

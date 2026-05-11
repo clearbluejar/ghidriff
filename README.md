@@ -173,9 +173,9 @@ There are quite a few options here, and some complexity. Generally you can succe
 
 Ghidra Project Options:
   -p PROJECT_LOCATION, --project-location PROJECT_LOCATION
-                        Ghidra Project Path (default: ghidra_projects)
+                        Ghidra Project Path or existing .gpr file (default: ghidra_projects)
   -n PROJECT_NAME, --project-name PROJECT_NAME
-                        Ghidra Project Name (default: ghidriff)
+                        Ghidra Project Name. Do not use with .gpr project paths. (default: ghidriff)
   -s SYMBOLS_PATH, --symbols-path SYMBOLS_PATH
                         Ghidra local symbol store directory (default: symbols)
   -g GZFS_PATH, --gzfs-path GZFS_PATH
@@ -272,6 +272,16 @@ The `program_options.json` would need to look something like this:
 </details>
 
 The custom settings will then be used for your binary analysis.
+
+### Using An Existing Ghidra Project
+
+`--project-location` can point directly at an existing `.gpr` file. When a `.gpr` is provided, ghidriff derives the project directory and project name from that file.
+
+```bash
+ghidriff --project-location ./projects/sample.gpr old.bin new.bin
+```
+
+Do not combine a `.gpr` project path with `--project-name`; the `.gpr` file already identifies the project.
 
 ### Using An Import Plan
 
