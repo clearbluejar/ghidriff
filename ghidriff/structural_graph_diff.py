@@ -80,9 +80,11 @@ class StructualGraphDiff(GhidraDiffEngine):
                     num_edges_of_blocks += block.getNumDestinations(monitor)
                     num_basic_blocks += 1
 
-                    code_units = func.getProgram().getListing().getCodeUnits(block, True)
-                    for code in code_units:
-                        if code.getMnemonicString() == 'CALL':
+                    refs_ = block.getDestinations(monitor)
+                    # Use hasNext because 'ghidra.program.model.block.SimpleDestReferenceIterator' object is not iterable
+                    while refs_.hasNext():
+                        ref_ = refs_.next()
+                        if ref_.getFlowType().isCall():
                             num_call_subfunctions += 1
 
             # ignore Ghidra generated function names
