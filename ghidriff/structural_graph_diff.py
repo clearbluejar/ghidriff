@@ -146,7 +146,7 @@ class StructualGraphDiff(GhidraDiffEngine):
         from collections import Counter
 
         p1_funcs_vals = Counter(p1_funcs.values())
-        p2_funcs_vals = Counter(p1_funcs.values())
+        p2_funcs_vals = Counter(p2_funcs.values())
 
         count_non_unique = 0
         for key, val in p1_funcs_vals.items():
