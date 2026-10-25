@@ -39,6 +39,20 @@ class GhidriffMarkdown:
 
         return text
 
+    @staticmethod
+    def _md_cell(value) -> str:
+        """Escape a value for safe use in a GitHub-flavored markdown table cell.
+
+        Binary-derived names (demangled C++ symbols) routinely contain '|',
+        which ends a table cell, and newlines, which end the row. Escape the
+        pipe and fold newlines to <br> so one hostile name cannot corrupt the
+        whole table. Non-str values pass through via str().
+        """
+        if value is None:
+            return ''
+        text = value if isinstance(value, str) else str(value)
+        return text.replace('\\', '\\\\').replace('|', '\\|').replace('\r\n', '<br>').replace('\n', '<br>')
+
     def _wrap_with_code(self, code: str, style='') -> str:
         text = ''
         text += f"```{style}" + "\n"
@@ -91,9 +105,9 @@ class GhidriffMarkdown:
             if isinstance(esym[key], list):
                 data = self._wrap_list_with_details(esym[key], max_items)
             else:
-                data = esym[key]
+                data = self._md_cell(esym[key])
 
-            table_list.extend([key, data])
+            table_list.extend([self._md_cell(key), data])
             count += 1
 
         diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
@@ -121,10 +135,10 @@ class GhidriffMarkdown:
                 data = self._wrap_list_with_details(modified['old'][key], max_items)
                 data2 = self._wrap_list_with_details(modified['new'][key], max_items)
             else:
-                data = modified['old'][key]
-                data2 = modified['new'][key]
+                data = self._md_cell(modified['old'][key])
+                data2 = self._md_cell(modified['new'][key])
 
-            table_list.extend([diff_key, data, data2])
+            table_list.extend([self._md_cell(diff_key), data, data2])
 
             # table_list.extend([diff_key, modified['old'][key], modified['new'][key]])
             count += 1
@@ -147,7 +161,7 @@ class GhidriffMarkdown:
             val = modified[key]
             if isinstance(val, list):
                 val = ','.join(val)
-            table_list.extend([key, val])
+            table_list.extend([key, self._md_cell(val)])
             count += 1
 
         diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
@@ -179,10 +193,6 @@ class GhidriffMarkdown:
         pdiff: Standard pdiff from ghidriff
         """
 
-        def _add_header(line: str):
-            # print(line)
-            pass
-
         sxs_diff_htmls = []
 
         for mod in pdiff['functions']['modified']:
@@ -210,10 +220,6 @@ class GhidriffMarkdown:
             legend=dedent(html_diff._legend),
             table="\n".join(table_htmls),
             charset=charset)).encode(charset, 'xmlcharrefreplace').decode(charset)
-
-        for line in html.splitlines(True):
-
-            _add_header(line)
 
         return html
 
@@ -505,10 +511,10 @@ pie showData
         return pie_template.format(title=title, rows='\n'.join(rows))
 
     def _clean_md_header_lower(self, text):
-        return re.sub(r'[^a-z0-9_\\-]', '', text.lower().replace(' ', '-'))
+        return re.sub(r'[^a-z0-9_-]', '', text.lower().replace(' ', '-'))
 
     def _clean_md_header(self, text):
-        return re.sub(r'[^A-Za-z0-9_\\-]', '', text.replace(' ', '-'))
+        return re.sub(r'[^A-Za-z0-9_-]', '', text.replace(' ', '-'))
 
     def gen_pe_download_cmd(self, pdiff: dict) -> str:
         """
@@ -543,17 +549,19 @@ pie showData
             pe_key = 'PE Property[OriginalFilename]'
             ver_key = 'PE Property[ProductVersion]'
 
-        old_filename = pdiff['old_meta'][pe_key].lower()
-        new_filename = pdiff['new_meta'][pe_key].lower()
+        # Metadata can be asymmetric or missing between the two binaries; fall
+        # back rather than raising KeyError / None.lower() deep in report gen.
+        old_filename = (pdiff['old_meta'].get(pe_key) or 'old').lower()
+        new_filename = (pdiff['new_meta'].get(pe_key) or 'new').lower()
 
         # PE Property[ProductVersion]: 10.0.22000.795
-        old_ver = pdiff['old_meta'][ver_key]
-        new_ver = pdiff['new_meta'][ver_key]
+        old_ver = pdiff['old_meta'].get(ver_key, 'unknown')
+        new_ver = pdiff['new_meta'].get(ver_key, 'unknown')
 
         # Processor: x86
         # Address Size: 64
-        old_arch = _decode_arch(pdiff['old_meta']['Processor'], pdiff['old_meta']['Address Size'])
-        new_arch = _decode_arch(pdiff['new_meta']['Processor'], pdiff['new_meta']['Address Size'])
+        old_arch = _decode_arch(pdiff['old_meta'].get('Processor'), pdiff['old_meta'].get('Address Size'))
+        new_arch = _decode_arch(pdiff['new_meta'].get('Processor'), pdiff['new_meta'].get('Address Size'))
 
         old_dl = f"wget {old_url} -O {old_filename}.{old_arch}.{old_ver}"
         new_dl = f"wget {new_url} -O {new_filename}.{new_arch}.{new_ver}"
@@ -681,7 +689,7 @@ pie showData
                 self.logger.warn(f"{len(funcs['deleted']) - max_section_funcs} Functions Ommited...")
                 break
 
-            md.new_header(2, esym['fullname'])
+            md.new_header(2, self._md_cell(esym['fullname']))
             md.new_header(3, "Function Meta", add_table_of_contents='n')
             md.new_paragraph(self.gen_esym_table(old_name, esym))
 
@@ -708,7 +716,7 @@ pie showData
                 self.logger.warn(f"{len(funcs['added']) - max_section_funcs} Functions Ommited...")
                 break
 
-            md.new_header(2, esym['fullname'])
+            md.new_header(2, self._md_cell(esym['fullname']))
             md.new_header(3, "Function Meta", add_table_of_contents='n')
             md.new_paragraph(self.gen_esym_table(new_name, esym))
 
@@ -744,7 +752,7 @@ pie showData
 
                 modified_with_code += 1
 
-                md.new_header(2, old_func_name)
+                md.new_header(2, self._md_cell(old_func_name))
 
                 md.new_header(3, "Match Info", add_table_of_contents='n')
                 md.new_paragraph(self.gen_esym_table_diff_meta(old_name, new_name, modified))
@@ -839,7 +847,7 @@ pie showData
                         elif 'called' in modified['diff_type'] and called_set:
                             continue
 
-                    md.new_header(2, old_func_name)
+                    md.new_header(2, self._md_cell(old_func_name))
 
                     md.new_header(3, "Match Info", add_table_of_contents='n')
                     md.new_paragraph(self.gen_esym_table_diff_meta(old_name, new_name, modified))
