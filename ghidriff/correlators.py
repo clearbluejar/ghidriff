@@ -246,7 +246,7 @@ class NameParamRefHasher:
     """
 
     MIN_FUNC_LEN = 10
-    MATCH_TYPE = 'NameParamHash'
+    MATCH_TYPE = 'NameParamRefHash'
     FIRST_RUN = True
 
     @JOverride
