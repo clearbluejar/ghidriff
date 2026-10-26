@@ -3,7 +3,7 @@
 {
 	"name": "ghidriff",
 	// image from https://github.com/clearbluejar/ghidra-python	
-	"image": "ghcr.io/clearbluejar/ghidra-python:12.0.4ghidra3.13python-bookworm",
+	"image": "ghcr.io/clearbluejar/ghidra-python:12.2ghidra3.13python-bookworm",
 	// Configure tool-specific properties.
 	"customizations": {
 		// Configure properties specific to VS Code.

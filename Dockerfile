@@ -1,5 +1,5 @@
 # From https://github.com/clearbluejar/ghidra-python
-FROM ghcr.io/clearbluejar/ghidra-python:11.3.1ghidra3.12python-bookworm
+FROM ghcr.io/clearbluejar/ghidra-python:12.2ghidra3.13python-bookworm
 
 ENV GHIDRA_INSTALL_DIR=/ghidra
 
