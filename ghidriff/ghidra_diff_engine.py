@@ -389,6 +389,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # key = f'{sym.iD}-{sym.program.name}-{get_decomp_info}-{use_calling_counts}'
         key = f'{sym.iD}-{sym.program.name}'
 
+        # NOTE: this check-then-insert on esym_memo is unsynchronized and runs
+        # concurrently across the diff thread pool. Dict ops are atomic under
+        # CPython's GIL so the cache cannot corrupt, but two threads can miss
+        # the same key and redundantly decompile. Harmless to correctness; the
+        # cost is a duplicate decompile on a concurrent miss. Add a per-key lock
+        # only if that redundancy shows up in profiling.
         if key not in self.esym_memo:
 
             from ghidra.util.task import ConsoleTaskMonitor
