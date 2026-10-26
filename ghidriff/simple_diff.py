@@ -177,11 +177,11 @@ class SimpleDiff(GhidraDiffEngine):
 
         self.logger.info("\nmodified_old_modified")
         for sym in p1_modified:
-            self.logger.info(sym)
+            self.logger.debug(sym)
 
         self.logger.info("\nmodified_new_modified")
         for sym in p2_modified:
-            self.logger.info(sym)
+            self.logger.debug(sym)
 
         matched = []
         unmatched = []
@@ -192,13 +192,13 @@ class SimpleDiff(GhidraDiffEngine):
         # match by name and paramcount
         for sym in p1_modified.values():
             func = p1.functionManager.getFunctionAt(sym.getAddress())
-            matcher = (sym.getName(True), func.parameterCount) 
+            matcher = (sym.getName(True), func.parameterCount)
             if matcher in p2_modified:
                 sym2 = p2_modified[matcher]
                 if sym2 in matched:
                     continue
 
-                self.logger.info("FullName + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
+                self.logger.debug("FullName + Paramcount {} {}".format(sym.getName(True), sym2.getName(True)))
                 match_type = 'FullName:Param'
                 matched.append(sym)
                 matched.append(sym2)
