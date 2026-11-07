@@ -75,7 +75,8 @@ def main():
                                      gdts=args.gdt,
                                      base_address=args.base_address,
                                      program_options=args.program_options,
-                                     decompiler_timeout=args.decompiler_timeout
+                                     decompiler_timeout=args.decompiler_timeout,
+                                     emit_asm_diff=args.emit_asm_diff
                                      )
 
     d.setup_project(binary_paths, project_path, project_name, symbols_path, gzfs_path)
