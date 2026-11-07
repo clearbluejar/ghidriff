@@ -102,7 +102,10 @@ def test_simple_diff_afd_cve_2023_21768(shared_datadir: Path):
                          max_section_funcs=args.max_section_funcs,
                          md_title=args.md_title)
 
-    assert len(pdiff['functions']['modified']) in (14, 15)
+    # modified-count drifts by a function or two across Ghidra releases
+    # (analysis/decompiler changes reclassify a borderline match); 13 observed
+    # on Ghidra 12.0.4/12.1.4, 14-15 on older. Additive to avoid losing coverage.
+    assert len(pdiff['functions']['modified']) in (13, 14, 15)
     assert len(pdiff['functions']['added']) == 28
     assert len(pdiff['functions']['deleted']) == 0
 
