@@ -762,6 +762,11 @@ pie showData
                 md.new_header(3, f"{old_func_name} Diff", add_table_of_contents='n')
                 md.new_paragraph(self._wrap_with_diff(modified['diff']))
 
+                # opt-in (--emit-asm-diff): collapsed so the report stays readable
+                if modified.get('asm_diff'):
+                    md.new_paragraph(self._wrap_with_details(
+                        self._wrap_with_diff(modified['asm_diff']), f"{old_func_name} Assembly Diff"))
+
                 if include_code:
                     md.new_header(3, f"{old_func_name} Code", add_table_of_contents='n')
                     md.new_paragraph(self._wrap_with_code(modified['old']['code'], 'c'))

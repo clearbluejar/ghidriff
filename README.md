@@ -202,6 +202,8 @@ Engine Options:
                         Minimum function length to consider for diff (default: 10)
   --use-calling-counts, --no-use-calling-counts
                         Add calling/called reference counts (default: False)
+  --emit-asm-diff       Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes (json + markdown).
+                        Increases output size (default: False)
   --gdt GDT             Path to GDT file for analysis (default: [])
 
 BSIM Options:

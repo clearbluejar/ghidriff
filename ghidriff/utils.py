@@ -1,3 +1,4 @@
+import re
 import hashlib
 from pathlib import Path
 from struct import unpack
@@ -83,3 +84,26 @@ def set_field(cls, fname, value, obj=None):
     field.setAccessible(True)
     field.set(obj, value)
     field.setAccessible(False)
+
+
+# asm diff normalization
+
+def mask_asm_target(kind: str) -> str:
+    """Placeholder for an address-dependent operand in a normalized instruction"""
+    return f'<{kind}>'
+
+
+# default-named symbols embed the build specific address, e.g. FUN_18a2b3c4d, LAB_..., DAT_...
+_ASM_DEFAULT_NAME_RE = re.compile(r'\b((?:thunk_)?(?:FUN|LAB|DAT|PTR|UNK|SUB|EXT|JMP|XREF|switchD|caseD|s|u)_(?:\w*_)?)[0-9a-fA-F]{5,}\b')
+# bare absolute address; immediates are written #0x.. on arm and are left alone
+_ASM_ABS_ADDR_RE = re.compile(r'(?<![#\w])0x[0-9a-fA-F]{5,}\b')
+
+
+def normalize_asm_text(text: str) -> str:
+    """
+    Remove build specific addresses from one rendered instruction line (regex pass).
+    Idempotent. Also used as the fallback when operand objects are unavailable.
+    """
+    text = _ASM_DEFAULT_NAME_RE.sub(lambda m: m.group(1) + 'ADDR', text)
+    text = _ASM_ABS_ADDR_RE.sub('<addr>', text)
+    return re.sub(r'\s+', ' ', text).strip()

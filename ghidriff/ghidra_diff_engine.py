@@ -17,7 +17,7 @@ from argparse import Namespace
 import logging
 
 from pyghidra.launcher import PyGhidraLauncher
-from .utils import sha1_file, get_microsoft_download_url, get_pe_extra_data
+from .utils import mask_asm_target, normalize_asm_text, sha1_file, get_microsoft_download_url, get_pe_extra_data
 from .markdown import GhidriffMarkdown
 
 import multiprocessing
@@ -81,7 +81,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             gdts: list = None,
             base_address: int = None,
             program_options: dict = None,
-            decompiler_timeout: int = 60) -> None:
+            decompiler_timeout: int = 60,
+            emit_asm_diff: bool = False) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -146,6 +147,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             self.max_workers = 1
         self.max_section_funcs = max_section_funcs
         self.min_func_len = min_func_len
+        self.emit_asm_diff = emit_asm_diff
 
         # store args used from init
         self.args = args
@@ -296,6 +298,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            type=int, default=10),
         group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False,
                            action=argparse.BooleanOptionalAction)
+        group.add_argument('--emit-asm-diff', dest='emit_asm_diff', action='store_true',
+                           help='Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes (json + markdown). Increases output size')
         group.add_argument('--gdt', action='append', help='Path to GDT file for analysis', default=[])
 
         group = parser.add_argument_group('BSIM Options')
@@ -376,6 +380,15 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return text
 
+    @staticmethod
+    def _program_key(prog: 'ghidra.program.model.listing.Program') -> str:
+        """
+        Key for per-program state (decompiler pool, esym_memo).
+        Must be program identity, not name: old and new binaries commonly share a basename.
+        """
+
+        return f'{prog.name}-{prog.getUniqueProgramID()}'
+
     def enhance_sym(self, sym: 'ghidra.program.model.symbol.Symbol', thread_id: int = 0, timeout: int = 15, get_decomp_info: bool = False, use_calling_counts: bool = False) -> dict:
         """
         Standardize enhanced symbol. Use esym_memo to speed things up.
@@ -387,7 +400,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from ghidra.program.model.symbol import SymbolType
 
         # key = f'{sym.iD}-{sym.program.name}-{get_decomp_info}-{use_calling_counts}'
-        key = f'{sym.iD}-{sym.program.name}'
+        key = f'{sym.iD}-{self._program_key(sym.program)}'
 
         if key not in self.esym_memo:
 
@@ -425,6 +438,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 instructions = []
                 mnemonics = []
+                asm = []
                 blocks = []
                 called_funcs = []
                 calling_funcs = []
@@ -434,10 +448,15 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                     code_units = func.getProgram().getListing().getCodeUnits(func.getBody(), True)
 
+                    adrp_regs = set()
+
                     # instruction and mnemonic bulker
                     for code in code_units:
                         instructions.append(str(code))
-                        mnemonics.append(str(code.getMnemonicString))
+                        mnemonics.append(str(code.getMnemonicString()))
+
+                        if self.emit_asm_diff:
+                            asm.append(self.normalize_asm_instruction(func, code, adrp_regs))
 
                     from ghidra.program.model.block import BasicBlockModel
 
@@ -502,9 +521,96 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
                 self.esym_memo[key] = {'name': sym.getName(), 'fullname': sym.getName(True),  'parent':  parent_namespace, 'refcount': sym.getReferenceCount(), 'length': func.body.numAddresses, 'called': called_funcs,
                                        'calling': calling_funcs, 'paramcount': func.parameterCount, 'address': str(sym.getAddress()), 'sig': str(func.getSignature(False)), 'code': code,
-                                       'instructions': instructions, 'mnemonics': mnemonics, 'blocks': blocks, 'sym_type': str(sym.getSymbolType()), 'sym_source': str(sym.source), 'external': sym.external}
+                                       'instructions': instructions, 'mnemonics': mnemonics, 'asm': asm, 'blocks': blocks, 'sym_type': str(sym.getSymbolType()), 'sym_source': str(sym.source), 'external': sym.external}
 
         return self.esym_memo[key]
+
+    def normalize_asm_instruction(self, func: 'ghidra.program.model.listing.Function', code: 'ghidra.program.model.listing.CodeUnit', adrp_regs: set = None) -> str:
+        """
+        Render one instruction as address-independent text for asm diffing.
+
+        Operands are rendered from Ghidra's operand objects so only the address-like
+        parts are masked (`[x8, #0x10]` keeps its offset, `adrp x8, 0x1c3000` does not).
+        `adrp_regs` carries the registers holding an adrp page base across the instructions
+        of one function: the low 12 bit offset applied to them (`add x0,x0,#0xb56`,
+        `ldr x1,[x1,#0xbd0]`) is an address fragment and is masked too.
+        Fallback is regex normalization of the plain instruction text.
+        """
+
+        if adrp_regs is None:
+            adrp_regs = set()
+
+        try:
+            from ghidra.program.model.address import Address
+            from ghidra.program.model.scalar import Scalar
+            from ghidra.program.model.lang import Register
+
+            program = func.getProgram()
+            body = func.getBody()
+            symtab = program.getSymbolTable()
+            fm = program.getFunctionManager()
+
+            def _mask_addr(addr, is_call: bool) -> str:
+                if body.contains(addr):
+                    return mask_asm_target('loc')
+                sym = symtab.getPrimarySymbol(addr)
+                # keep meaningful names (imports, stubs, named symbols), mask FUN_/DAT_/etc
+                if sym is not None and not sym.isDynamic() and str(sym.getSource()) != 'DEFAULT':
+                    return sym.getName()
+                # call targets in other images are often unresolved (no function there), still a call
+                return mask_asm_target('func' if is_call or fm.getFunctionAt(addr) is not None else 'data')
+
+            mnemonic = str(code.getMnemonicString())
+            all_elems = [code.getDefaultOperandRepresentationList(i) for i in range(code.getNumOperands())]
+
+            # registers read as a base by this instruction (everything after the destination operand)
+            read_regs = {str(e) for elems in all_elems[1:] for e in elems if isinstance(e, Register)}
+            uses_adrp_base = len(read_regs & adrp_regs) > 0
+
+            operands = []
+
+            for i, elems in enumerate(all_elems):
+                sep = code.getSeparator(i)
+                if sep:
+                    operands.append(sep)
+
+                refs = code.getOperandReferences(i)
+                has_reg = any(isinstance(e, Register) for e in elems)
+                has_mem_ref = any(r.isMemoryReference() for r in refs)
+                is_call = any(r.getReferenceType().isCall() for r in refs)
+                parts = []
+                for e in elems:
+                    if isinstance(e, Address):
+                        parts.append(_mask_addr(e, is_call))
+                    elif isinstance(e, Scalar) and ((has_mem_ref and not has_reg and len(elems) == 1) or (uses_adrp_base and i > 0)):
+                        # bare immediate that resolves to a reference, or page offset of an adrp pair
+                        parts.append(mask_asm_target('imm'))
+                    else:
+                        parts.append(str(e))
+                operands.append(''.join(parts))
+
+            # track adrp page bases; a register written by anything else no longer holds one
+            if len(all_elems) > 0:
+                dest = [str(e) for e in all_elems[0] if isinstance(e, Register)]
+                if mnemonic == 'adrp':
+                    adrp_regs.update(dest)
+                elif not mnemonic.startswith('st'):
+                    adrp_regs.difference_update(dest)
+
+            text = mnemonic + ' ' + ''.join(operands).strip() if operands else mnemonic
+            return normalize_asm_text(text)
+
+        except Exception as err:  # never fail a diff because of asm rendering
+            self.logger.debug(f'asm operand normalize failed for {code}: {err}')
+            return normalize_asm_text(str(code))
+
+    def gen_asm_diff(self, old_asm: list, new_asm: list, from_name: str, to_name: str, n: int = 3) -> str:
+        """
+        Unified diff of normalized instruction listings
+        """
+
+        return ''.join(difflib.unified_diff([line + '\n' for line in old_asm], [line + '\n' for line in new_asm],
+                                            fromfile=from_name, tofile=to_name, n=n))
 
     def setup_project(
             self,
@@ -689,29 +795,29 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         if self.threaded:
             decompiler_count = 2 * self.max_workers
-            self.decompilers.setdefault(p1.name, {}).setdefault('available', Queue())
-            self.decompilers.setdefault(p2.name, {}).setdefault('available', Queue())
+            self.decompilers.setdefault(self._program_key(p1), {}).setdefault('available', Queue())
+            self.decompilers.setdefault(self._program_key(p2), {}).setdefault('available', Queue())
             for i in range(self.max_workers):
-                self.decompilers.setdefault(p1.name, {}).setdefault(i, DecompInterface())
-                self.decompilers.setdefault(p2.name, {}).setdefault(i, DecompInterface())
-                self.decompilers[p1.name][i].setOptions(p1_options)
-                self.decompilers[p2.name][i].setOptions(p2_options)
-                self.decompilers[p1.name][i].openProgram(p1)
-                self.decompilers[p2.name][i].openProgram(p2)
-                self.decompilers[p1.name]['available'].put(i)
-                self.decompilers[p2.name]['available'].put(i)
+                self.decompilers.setdefault(self._program_key(p1), {}).setdefault(i, DecompInterface())
+                self.decompilers.setdefault(self._program_key(p2), {}).setdefault(i, DecompInterface())
+                self.decompilers[self._program_key(p1)][i].setOptions(p1_options)
+                self.decompilers[self._program_key(p2)][i].setOptions(p2_options)
+                self.decompilers[self._program_key(p1)][i].openProgram(p1)
+                self.decompilers[self._program_key(p2)][i].openProgram(p2)
+                self.decompilers[self._program_key(p1)]['available'].put(i)
+                self.decompilers[self._program_key(p2)]['available'].put(i)
         else:
             decompiler_count = 2
-            self.decompilers.setdefault(p1.name, {}).setdefault('available', Queue())
-            self.decompilers.setdefault(p2.name, {}).setdefault('available', Queue())
-            self.decompilers.setdefault(p1.name, {}).setdefault(0, DecompInterface())
-            self.decompilers.setdefault(p2.name, {}).setdefault(0, DecompInterface())
-            self.decompilers[p1.name][0].setOptions(p1_options)
-            self.decompilers[p2.name][0].setOptions(p2_options)
-            self.decompilers[p1.name][0].openProgram(p1)
-            self.decompilers[p2.name][0].openProgram(p2)
-            self.decompilers[p1.name]['available'].put(0)
-            self.decompilers[p2.name]['available'].put(0)
+            self.decompilers.setdefault(self._program_key(p1), {}).setdefault('available', Queue())
+            self.decompilers.setdefault(self._program_key(p2), {}).setdefault('available', Queue())
+            self.decompilers.setdefault(self._program_key(p1), {}).setdefault(0, DecompInterface())
+            self.decompilers.setdefault(self._program_key(p2), {}).setdefault(0, DecompInterface())
+            self.decompilers[self._program_key(p1)][0].setOptions(p1_options)
+            self.decompilers[self._program_key(p2)][0].setOptions(p2_options)
+            self.decompilers[self._program_key(p1)][0].openProgram(p1)
+            self.decompilers[self._program_key(p2)][0].openProgram(p2)
+            self.decompilers[self._program_key(p1)]['available'].put(0)
+            self.decompilers[self._program_key(p2)]['available'].put(0)
 
         self.logger.info(f'Setup {decompiler_count} decompliers')
 
@@ -728,11 +834,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         if self.threaded:
             for i in range(self.max_workers):
-                self.decompilers[p1.name][i].closeProgram()
-                self.decompilers[p2.name][i].closeProgram()
+                self.decompilers[self._program_key(p1)][i].closeProgram()
+                self.decompilers[self._program_key(p2)][i].closeProgram()
         else:
-            self.decompilers[p1.name][0].closeProgram()
-            self.decompilers[p2.name][0].closeProgram()
+            self.decompilers[self._program_key(p1)][0].closeProgram()
+            self.decompilers[self._program_key(p2)][0].closeProgram()
 
         self.decompilers = {}
 
@@ -748,9 +854,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         code = ''
         error = ''
         monitor = ConsoleTaskMonitor()
-        decomp_id = self.decompilers[prog.name]['available'].get()
+        decomp_id = self.decompilers[self._program_key(prog)]['available'].get()
         try:
-            results: 'ghidra.app.decompiler.DecompileResults' = self.decompilers[prog.name][decomp_id].decompileFunction(
+            results: 'ghidra.app.decompiler.DecompileResults' = self.decompilers[self._program_key(prog)][decomp_id].decompileFunction(
                 func, timeout, monitor)
 
             error = results.getErrorMessage()
@@ -759,7 +865,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             else:
                 error = f'Error: Decompile error: {error}'
         finally:
-            self.decompilers[prog.name]['available'].put(decomp_id)
+            self.decompilers[self._program_key(prog)]['available'].put(decomp_id)
 
         return error, code
 
@@ -1765,8 +1871,15 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             all_diff_types.extend(diff_type)
 
-            modified_funcs.append({'old': ematch_1, 'new': ematch_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
-                                  'i_ratio': instructions_ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_types': match_types})
+            modified_func = {'old': ematch_1, 'new': ematch_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
+                             'i_ratio': instructions_ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_types': match_types}
+
+            # opt-in; only for functions reported as code modified
+            if self.emit_asm_diff and 'code' in diff_type:
+                modified_func['asm_diff'] = self.gen_asm_diff(
+                    ematch_1.get('asm', []), ematch_2.get('asm', []), from_file_name, to_file_name)
+
+            modified_funcs.append(modified_func)
 
         # Set funcs
         funcs['added'] = added_funcs
@@ -1938,6 +2051,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         for func_type in ['added', 'deleted', 'modified']:
 
             for func in pdiff['functions'][func_type]:
+
+                # normalized asm is only kept as the rendered asm_diff
+                if func_type == 'modified':
+                    for func_mod_type in ['old', 'new']:
+                        func[func_mod_type].pop('asm', None)
+                else:
+                    func.pop('asm', None)
 
                 for field in ['instructions', 'mnemonics', 'blocks']:
 
