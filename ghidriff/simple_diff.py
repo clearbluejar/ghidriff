@@ -12,6 +12,9 @@ if TYPE_CHECKING:
 class SimpleDiff(GhidraDiffEngine):
     """
     An Ghidra Diff implementation using simple comparison mechanisms
+
+    Deprecated: kept as a minimal example of a GhidraDiffEngine. It keys on symbol
+    names, so it is unreliable for stripped binaries. Use VersionTrackingDiff.
     """
 
     def find_matches(
@@ -23,6 +26,8 @@ class SimpleDiff(GhidraDiffEngine):
         """
         Find matching and unmatched functions between p1 and p2
         """
+
+        self.logger.warning('SimpleDiff is deprecated and kept as an example engine; use VersionTrackingDiff (the default).')
 
         from ghidra.program.util import DiffUtility
 

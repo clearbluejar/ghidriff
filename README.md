@@ -129,7 +129,7 @@ class NewDiffTool(GhidraDiffEngine):
 
 There are currently 3 diffing implementations, which also display the evolution of diffing for the project.
 
-1. [SimpleDiff](ghidriff/simple_diff.py) - A simple diff implementation. "Simple" as in it relies mostly on known symbol names for matching. 
+1. [SimpleDiff](ghidriff/simple_diff.py) - *Deprecated, kept as an example engine.* A simple diff implementation. "Simple" as in it relies mostly on known symbol names for matching. 
 2. [StructualGraphDiff](ghidriff/structural_graph_diff.py) - A slightly more advanced differ, beginning to perform some more advanced hashing (such as Halvar's Structural Graph Comparison)
 3. [VersionTrackingDiff](ghidriff/version_tracking_diff.py) - The latest differ, with several [correlators](ghidriff/correlators.py) (an algorithm used to score specific associations based on code, program flow, or any observable aspect of comparison) for function matching. **This one is fast.**
 
