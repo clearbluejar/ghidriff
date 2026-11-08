@@ -847,6 +847,20 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         self.decompilers = {}
 
+    def _close_programs(self, p1, p2) -> None:
+        """Close p1 and p2, closing a shared handle only once.
+
+        When the two inputs are the same binary, diff_bins sets ``p2 = p1``;
+        closing both references double-closes one program object. Close distinct
+        handles by identity.
+        """
+        seen = set()
+        for prog in (p1, p2):
+            if prog is None or id(prog) in seen:
+                continue
+            seen.add(id(prog))
+            self.project.close(prog)
+
     def decompile_func(
         self,
         prog: "ghidra.program.model.listing.Program",
@@ -1219,7 +1233,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         if name not in possible_props:
             err = f'Program property name not found: {name} in {possible_props}'
             self.logger.error(err)
-            raise err
+            raise ValueError(err)
 
         prog_options = prog.getOptions(name)
         options = {}
@@ -1625,8 +1639,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         pdiff['program_options'][p1.name] = self.get_all_program_options(p1)
         pdiff['program_options'][p2.name] = self.get_all_program_options(p2)
 
-        self.project.close(p1)
-        self.project.close(p2)
+        self._close_programs(p1, p2)
 
         # now open both programs read-only
         p1 = self.project.openProgram("/", p1_name, True)
@@ -1952,8 +1965,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         # reset global esym OTHERWISE this gets big
         self.esym_memo = {}
 
-        self.project.close(p1)
-        self.project.close(p2)
+        self._close_programs(p1, p2)
 
         self.logger.info("Finished diffing old program: {}".format(p1.getName()))
         self.logger.info("Finished diffing program: {}".format(p2.getName()))
