@@ -3,6 +3,7 @@ import re
 from textwrap import dedent
 from typing import List, Tuple, Union, TYPE_CHECKING
 import logging
+import html
 import json
 
 from mdutils.tools.Table import Table
@@ -765,7 +766,7 @@ pie showData
                 # opt-in (--emit-asm-diff): collapsed so the report stays readable
                 if modified.get('asm_diff'):
                     md.new_paragraph(self._wrap_with_details(
-                        self._wrap_with_diff(modified['asm_diff']), f"{old_func_name} Assembly Diff"))
+                        self._wrap_with_diff(modified['asm_diff']), f"{html.escape(old_func_name)} Assembly Diff"))
 
                 if include_code:
                     md.new_header(3, f"{old_func_name} Code", add_table_of_contents='n')
