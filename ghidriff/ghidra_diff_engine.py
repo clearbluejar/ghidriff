@@ -206,14 +206,21 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
     def check_runtime_compatibility(self, ghidra_version: str) -> None:
         """
-        Warn when the active Ghidra/pyghidra runtime differs from the supported target.
+        Warn when the active Ghidra/pyghidra runtime is older than the supported minimum.
         """
 
-        target_ghidra = "12.0.4"
-        if str(ghidra_version) != target_ghidra:
+        min_ghidra = (12, 0)
+        try:
+            running = tuple(int(part) for part in re.findall(r'\d+', str(ghidra_version))[:2])
+        except ValueError:
+            running = ()
+
+        if len(running) < 2:
+            self.logger.warning(f"Could not parse Ghidra version {ghidra_version!r}.")
+        elif running < min_ghidra:
             self.logger.warning(
-                f"Expected Ghidra {target_ghidra}; running {ghidra_version}. "
-                "Rebuild the devcontainer or use --force-diff only after validating runtime behavior."
+                f"Ghidra {ghidra_version} is older than the supported minimum "
+                f"{'.'.join(map(str, min_ghidra))}. Results may differ or fail."
             )
 
         try:
@@ -223,9 +230,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             return
 
         if not pyghidra_version.startswith("3."):
-            self.logger.warning(
-                f"Expected pyghidra 3.x for Ghidra {target_ghidra}; running pyghidra {pyghidra_version}."
-            )
+            self.logger.warning(f"Expected pyghidra 3.x; running pyghidra {pyghidra_version}.")
 
     @staticmethod
     def add_ghidra_args_to_parser(parser: argparse.ArgumentParser) -> None:
@@ -993,7 +998,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         from java.io import File
         from java.util import List
         from ghidra.program.model.data import FileDataTypeManager
-        from ghidra.util.task import ConsoleTaskMonitor
+        from ghidra.util.task import ConsoleTaskMonitor, TaskMonitor
 
         gdt_path = Path(gdt_path)
 
@@ -1001,7 +1006,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             print('Enabling verbose gdt..')
             monitor = ConsoleTaskMonitor()
         else:
-            monitor = ConsoleTaskMonitor().DUMMY_MONITOR
+            monitor = TaskMonitor.DUMMY
 
         archiveGDT = File(gdt_path)
         archiveDTM = FileDataTypeManager.openFileArchive(archiveGDT, False)
