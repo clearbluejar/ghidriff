@@ -3,7 +3,7 @@ sidebar_position: 4
 ---
 
 ```bash
-usage: ghidriff [-h] [--engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--threaded | --no-threaded] [--force-analysis] [--force-diff] [--no-symbols] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
+usage: ghidriff [-h] [--engine {SimpleDiff,StructuralGraphDiff,VersionTrackingDiff}] [-o OUTPUT_PATH] [--summary SUMMARY] [-p PROJECT_LOCATION] [-n PROJECT_NAME] [-s SYMBOLS_PATH] [--threaded | --no-threaded] [--force-analysis] [--force-diff] [--no-symbols] [--log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}]
                 [--file-log-level {CRITICAL,FATAL,ERROR,WARN,WARNING,INFO,DEBUG,NOTSET}] [--log-path LOG_PATH] [--va] [--min-func-len MIN_FUNC_LEN] [--use-calling-counts USE_CALLING_COUNTS] [--max-ram-percent MAX_RAM_PERCENT] [--print-flags] [--jvm-args [JVM_ARGS]] [--sxs] [--max-section-funcs MAX_SECTION_FUNCS]
                 [--md-title MD_TITLE]
                 old new [new ...]
@@ -16,7 +16,7 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --engine {SimpleDiff,StructualGraphDiff,VersionTrackingDiff}
+  --engine {SimpleDiff,StructuralGraphDiff,VersionTrackingDiff}
                         The diff implementation to use. (default: VersionTrackingDiff)
   -o OUTPUT_PATH, --output-path OUTPUT_PATH
                         Output path for resulting diffs (default: ghidriffs)
