@@ -11,8 +11,10 @@ def test_pyghidra_start():
 
 def test_ghidra_install_dir():
     import os
+    from pathlib import Path
     install_dir = os.getenv("GHIDRA_INSTALL_DIR")
-    assert install_dir == "/ghidra"
+    assert install_dir, "GHIDRA_INSTALL_DIR is not set"
+    assert (Path(install_dir) / 'Ghidra' / 'application.properties').is_file()
 
 
 # @pytest.fixture
