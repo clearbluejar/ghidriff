@@ -32,7 +32,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
 
         from ghidra.program.model.symbol import SymbolType
         from ghidra.program.model.address import AddressSet
-        from ghidra.util.task import ConsoleTaskMonitor
+        from ghidra.util.task import ConsoleTaskMonitor, TaskMonitor
 
         # Match functions
         from ghidra.app.plugin.match import MatchFunctions, MatchSymbol
@@ -163,7 +163,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             
 
             # kill noisy monitor after first run
-            monitor = ConsoleTaskMonitor().DUMMY_MONITOR
+            monitor = TaskMonitor.DUMMY
 
         # Log current counts
         self.logger.info(Counter([tuple(x) for x in matches.values()]))
@@ -275,7 +275,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
         """
         Debug unmatched functions throuh each function hasher
         """
-        from ghidra.util.task import ConsoleTaskMonitor
+        from ghidra.util.task import TaskMonitor
 
         for cor in func_correlators:
 
@@ -286,7 +286,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
             if hasattr(hasher, 'DEBUG'):
                 hasher.DEBUG = True
 
-            dummy = ConsoleTaskMonitor().DUMMY_MONITOR
+            dummy = TaskMonitor.DUMMY
             dummy.cancel()
 
             p1_hashes_seen = {}

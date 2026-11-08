@@ -283,7 +283,7 @@ $ ghidriff --base-address 0x80000 STM32F103C-firmware.bin STM32F103Ca-firmware.b
 
 ## Quick Start Environment Setup
 
-1. [Download](https://github.com/NationalSecurityAgency/ghidra/releases) and [install Ghidra](https://htmlpreview.github.io/?https://github.com/NationalSecurityAgency/ghidra/blob/stable/GhidraDocs/InstallationGuide.html#Install). The current development target is Ghidra 12.0.4 with pyghidra 3.x.
+1. [Download](https://github.com/NationalSecurityAgency/ghidra/releases) and [install Ghidra](https://htmlpreview.github.io/?https://github.com/NationalSecurityAgency/ghidra/blob/stable/GhidraDocs/InstallationGuide.html#Install). The current development target is Ghidra 12.2 with pyghidra 3.x; CI also tests 12.0.4 and 12.1.4.
 2. Set Ghidra Environment Variable `GHIDRA_INSTALL_DIR` to Ghidra install location.
 3. Pip install `ghidriff`
 
@@ -303,8 +303,8 @@ pip install ghidriff
 On macOS, install a JDK supported by your Ghidra release first, then set `GHIDRA_INSTALL_DIR` to the unpacked Ghidra application directory. If macOS Gatekeeper quarantines the downloaded Ghidra archive, remove the quarantine attribute before first launch:
 
 ```bash
-xattr -dr com.apple.quarantine /path/to/ghidra_12.0.4_PUBLIC
-export GHIDRA_INSTALL_DIR="/path/to/ghidra_12.0.4_PUBLIC"
+xattr -dr com.apple.quarantine /path/to/ghidra_12.2_PUBLIC
+export GHIDRA_INSTALL_DIR="/path/to/ghidra_12.2_PUBLIC"
 pip install ghidriff
 ```
 
@@ -372,7 +372,7 @@ ghidriffs
 
 Use the [.devcontainer](.devcontainer) in this repo. If you don't know how, follow the detailed instructions here: [ghidra-python-vscode-devcontainer-skeleton quick setup](https://github.com/clearbluejar/ghidra-python-vscode-devcontainer-skeleton#quick-start-setup---dev-container--best-option).
 
-The devcontainer targets `ghcr.io/clearbluejar/ghidra-python:12.0.4ghidra3.13python-bookworm`. After rebuilding it, the post-create step installs ghidriff with test and dev extras.
+The devcontainer targets `ghcr.io/clearbluejar/ghidra-python:12.2ghidra3.13python-bookworm`. After rebuilding it, the post-create step installs ghidriff with test and dev extras.
 
 Useful development commands:
 
