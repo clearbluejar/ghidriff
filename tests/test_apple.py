@@ -177,10 +177,16 @@ def test_diff_macos_macho_x64(shared_datadir: Path):
                          max_section_funcs=args.max_section_funcs,
                          md_title=args.md_title)
 
-    # no changes
-    assert len(pdiff['functions']['modified']) == 0
+    # identical __text: nothing added, deleted, or code changed
     assert len(pdiff['functions']['added']) == 0
     assert len(pdiff['functions']['deleted']) == 0
+    assert pdiff['stats']['matched_funcs_with_code_changes_len'] == 0
+
+    # Ghidra >= 12.1 Objective-C analysis is nondeterministic for some call references:
+    # a different handful of getters gains or loses one caller reference on each run.
+    # Tolerate only that reference noise.
+    reference_only = {'refcount', 'calling', 'called'}
+    assert all(set(func['diff_type']) <= reference_only for func in pdiff['functions']['modified'])
 
     # 100 % match
     assert pdiff['stats']['func_match_overall_percent'] == '100.0000%'
