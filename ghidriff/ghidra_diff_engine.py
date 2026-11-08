@@ -1814,12 +1814,15 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             old_mnemonics = ematch_1['mnemonics']
             new_mnemonics = ematch_2['mnemonics']
 
-            mnemonics_ratio = round(difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio(), 2)
+            # gate on the unrounded ratios; rounding to 2 places hides a few changed instructions in large functions
+            mnemonics_ratio_raw = difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio()
+            mnemonics_ratio = round(mnemonics_ratio_raw, 2)
 
             old_blocks = ematch_1['blocks']
             new_blocks = ematch_2['blocks']
 
-            blocks_ratio = round(difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio(), 2)
+            blocks_ratio_raw = difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio()
+            blocks_ratio = round(blocks_ratio_raw, 2)
 
             self.normalize_ghidra_decomp(old_code)
             self.normalize_ghidra_decomp(new_code)
@@ -1840,7 +1843,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             only_code_diff = ''.join(list(difflib.unified_diff(old_code_no_sig, new_code_no_sig, lineterm='\n',
                                      fromfile=from_file_name, tofile=to_file_name)))  # ignores name changes
 
-            if len(only_code_diff) > 0 and (mnemonics_ratio < 1.0 or blocks_ratio < 1.0):
+            if len(only_code_diff) > 0 and (mnemonics_ratio_raw < 1.0 or blocks_ratio_raw < 1.0):
 
                 # handle bad match external match (sometimes occurs with implied matches)
                 if ratio == 0.0 and (blocks_ratio == 0.0):
