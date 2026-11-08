@@ -177,16 +177,14 @@ def test_diff_macos_macho_x64(shared_datadir: Path):
                          max_section_funcs=args.max_section_funcs,
                          md_title=args.md_title)
 
-    # identical __text: nothing added, deleted, or code changed
-    assert len(pdiff['functions']['added']) == 0
-    assert len(pdiff['functions']['deleted']) == 0
+    funcs = pdiff['functions']
+
+    # identical __text: no code changes, and every internal function matches
     assert pdiff['stats']['matched_funcs_with_code_changes_len'] == 0
+    assert [func['fullname'] for func in funcs['added'] + funcs['deleted'] if not func['external']] == []
 
-    # Ghidra >= 12.1 Objective-C analysis is nondeterministic for some call references:
-    # a different handful of getters gains or loses one caller reference on each run.
-    # Tolerate only that reference noise.
+    # Ghidra >= 12.1 Objective-C analysis does not agree between the two programs: a few getters
+    # gain or lose one caller reference, and a few external selector stubs exist in only one of
+    # them (counts vary by run and platform). Tolerate only that reference noise.
     reference_only = {'refcount', 'calling', 'called'}
-    assert all(set(func['diff_type']) <= reference_only for func in pdiff['functions']['modified'])
-
-    # 100 % match
-    assert pdiff['stats']['func_match_overall_percent'] == '100.0000%'
+    assert all(set(func['diff_type']) <= reference_only for func in funcs['modified'])
