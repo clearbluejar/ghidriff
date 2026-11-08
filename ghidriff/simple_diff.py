@@ -56,7 +56,7 @@ class SimpleDiff(GhidraDiffEngine):
                 self.logger.info("Name + length {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Name:Length'
-            elif esym2['address'] == esym2['address'] and esym2['length'] == esym['length'] and min([esym['length'], esym2['length']]) > min_func_length:
+            elif esym['address'] == esym2['address'] and esym2['length'] == esym['length'] and min([esym['length'], esym2['length']]) > min_func_length:
                 self.logger.info("Address + Length {} {}".format(sym.getName(True), sym2.getName(True)))
                 found = True
                 match_type = 'Address:Length'
