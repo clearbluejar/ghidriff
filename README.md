@@ -204,6 +204,8 @@ Engine Options:
                         Add calling/called reference counts (default: False)
   --emit-asm-diff       Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes (json + markdown).
                         Increases output size (default: False)
+  --pcode-gate          Also diff same-size matched functions whose normalized p-code hash changed (adds pcode info and a "pcode"
+                        diff_type). Slower; experimental (default: False)
   --gdt GDT             Path to GDT file for analysis (default: [])
 
 BSIM Options:
