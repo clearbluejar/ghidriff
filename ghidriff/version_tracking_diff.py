@@ -137,10 +137,12 @@ class VersionTrackingDiff(GhidraDiffEngine):
             if name == 'BSIM':             
                 if self.bsim_full:
                     # slower, but uses full adddress space for matching
-                    correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger,enabled=self.bsim)
+                    correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger,enabled=self.bsim,
+                                   max_external_pairs=self.bsim_max_external_pairs)
                 else:
                     # only matches on functions that have no match
-                    correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger, p1_addr_set=p1_unmatched, p2_addr_set=p2_unmatched, enabled=self.bsim)
+                    correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger, p1_addr_set=p1_unmatched, p2_addr_set=p2_unmatched, enabled=self.bsim,
+                                   max_external_pairs=self.bsim_max_external_pairs)
             else:
                 func_matches = MatchFunctions.matchFunctions(
                     p1, p1_unmatched, p2, p2_unmatched, self.min_func_len, one_to_one, one_to_many, hasher, monitor)

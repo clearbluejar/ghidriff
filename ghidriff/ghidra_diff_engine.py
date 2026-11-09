@@ -78,6 +78,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             use_calling_counts: bool = False,
             bsim: bool = True,
             bsim_full: bool = False,
+            bsim_max_external_pairs: int = 25_000_000,
             gdts: list = None,
             base_address: int = None,
             program_options: dict = None,
@@ -173,6 +174,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         self.bsim = bsim
         self.bsim_full = bsim_full
+        self.bsim_max_external_pairs = bsim_max_external_pairs
         self.decompiler_timeout = decompiler_timeout
         self.analysis_lock = Lock()
 
@@ -312,6 +314,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            action=argparse.BooleanOptionalAction)
         group.add_argument('--bsim-full', help='Slower but better matching. Use only when needed', default=False,
                            action=argparse.BooleanOptionalAction)
+        group.add_argument('--bsim-max-external-pairs', type=int, default=25_000_000,
+                           help='Skip BSIM when external functions (old) x external functions (new) exceeds this. BSIM pairs every external with every other (~140 bytes of heap each). 0 = no limit')
 
         # TODO add following option
         # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')

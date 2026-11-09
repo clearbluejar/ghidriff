@@ -210,6 +210,9 @@ BSIM Options:
   --bsim, --no-bsim     Toggle using BSIM correlation (default: True)
   --bsim-full, --no-bsim-full
                         Slower but better matching. Use only when needed (default: False)
+  --bsim-max-external-pairs BSIM_MAX_EXTERNAL_PAIRS
+                        Skip BSIM when external functions (old) x external functions (new) exceeds this. BSIM pairs every
+                        external with every other (~140 bytes of heap each). 0 = no limit (default: 25000000)
 
 JVM Options:
   --max-ram-percent MAX_RAM_PERCENT
