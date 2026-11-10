@@ -83,7 +83,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             base_address: int = None,
             program_options: dict = None,
             decompiler_timeout: int = 60,
-            emit_asm_diff: bool = False) -> None:
+            emit_asm_diff: bool = False,
+            pcode_gate: bool = False) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -149,6 +150,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.max_section_funcs = max_section_funcs
         self.min_func_len = min_func_len
         self.emit_asm_diff = emit_asm_diff
+        self.pcode_gate = pcode_gate
+        # (old addr, new addr) -> pcode hash info, filled per diff when pcode_gate is set
+        self.pcode_pairs = {}
+        self.pcode_surfaced = set()
+        self.pcode_dropped = Counter()
 
         # store args used from init
         self.args = args
@@ -307,6 +313,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            action=argparse.BooleanOptionalAction)
         group.add_argument('--emit-asm-diff', dest='emit_asm_diff', action='store_true',
                            help='Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes (json + markdown). Increases output size')
+        group.add_argument('--pcode-gate', dest='pcode_gate', action='store_true',
+                           help='Also diff same-size matched functions whose normalized p-code hash changed (adds pcode info and a "pcode" diff_type). Slower; experimental')
         group.add_argument('--gdt', action='append', help='Path to GDT file for analysis', default=[])
 
         group = parser.add_argument_group('BSIM Options')
@@ -1530,7 +1538,87 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             ):
                 need_diff = True
 
+        # same size and refcount, but the normalized p-code changed (see find_pcode_changes)
+        if not need_diff and (str(sym.address), str(sym2.address)) in getattr(self, 'pcode_surfaced', ()):
+            need_diff = True
+
         return need_diff
+
+    def find_pcode_changes(
+        self,
+        p1: "ghidra.program.model.listing.Program",
+        p2: "ghidra.program.model.listing.Program",
+        matched: list,
+        skip_types: list = []
+    ) -> None:
+        """
+        Hash the normalized low p-code of each matched pair and classify how the pair differs.
+        Pairs that syms_need_diff would skip are surfaced for diffing when their hashes differ
+        and the change is not build noise (layout shift, immediate ids, build paths).
+        Fills self.pcode_pairs, self.pcode_surfaced and self.pcode_dropped.
+        """
+
+        from .pcode_hash import PcodeHasher, hash_tokens, classify_pair, shift_deltas, NOISE_CLASSES, U64
+
+        start = time()
+        self.pcode_pairs = {}
+        self.pcode_surfaced = set()
+        self.pcode_dropped = Counter()
+
+        hasher1 = PcodeHasher(p1)
+        hasher2 = PcodeHasher(p2)
+        candidates = []
+
+        # an address in several matches (one stub matched to many) is an ambiguous match, not a change
+        old_counts = Counter(str(sym.address) for sym, _, _ in matched)
+        new_counts = Counter(str(sym2.address) for _, sym2, _ in matched)
+
+        for sym, sym2, match_types in matched:
+            key = (str(sym.address), str(sym2.address))
+            if key in self.pcode_pairs:
+                continue
+
+            func = p1.functionManager.getFunctionAt(sym.address)
+            func2 = p2.functionManager.getFunctionAt(sym2.address)
+            if func is None or func2 is None:
+                continue
+
+            try:
+                old_toks = hasher1.tokens(func)
+                new_toks = hasher2.tokens(func2)
+            except Exception as ex:
+                self.logger.debug(f'pcode hash failed for {sym} {sym2}: {ex}')
+                continue
+
+            change_class, deltas = classify_pair(old_toks, new_toks)
+            self.pcode_pairs[key] = {'hash': [hash_tokens(old_toks), hash_tokens(new_toks)],
+                                     'change_class': change_class, 'const_deltas': deltas}
+
+            if old_counts[key[0]] > 1 or new_counts[key[1]] > 1:
+                continue
+
+            if not self.syms_need_diff(sym, sym2, match_types, skip_types):
+                candidates.append(key)
+
+        # a constant delta shared by several functions is a layout shift, not a logic change
+        shifts = shift_deltas([(info['change_class'], info['const_deltas']) for info in self.pcode_pairs.values()])
+        for info in self.pcode_pairs.values():
+            if info['change_class'] == 'const' and info['const_deltas']:
+                deltas = {(b - a) & U64 for a, b in info['const_deltas']}
+                if len(deltas) == 1 and deltas <= shifts:
+                    info['change_class'] = 'shift'
+
+        for key in candidates:
+            change_class = self.pcode_pairs[key]['change_class']
+            if change_class == 'same':
+                continue
+            if change_class in NOISE_CLASSES:
+                self.pcode_dropped[change_class] += 1
+                continue
+            self.pcode_surfaced.add(key)
+
+        self.logger.info(f'pcode gate: hashed {len(self.pcode_pairs)} pairs in {time() - start:.1f}s, '
+                         f'surfaced {len(self.pcode_surfaced)} same-size pairs, dropped as noise: {dict(self.pcode_dropped)}')
 
     def gen_proj_bin_name_from_path(self, path: Path):
         """
@@ -1666,6 +1754,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         # Find functions matches
         unmatched, matched, skip_types = self.find_matches(p1, p2)
+
+        if self.pcode_gate:
+            self.find_pcode_changes(p1, p2, matched, skip_types)
 
         self.logger.info('Generating matches json...')
         address_matches = {}
@@ -1889,6 +1980,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             if ematch_1['parent'] != ematch_2['parent']:
                 diff_type.append('parent')
 
+            pcode_key = (str(sym.address), str(sym2.address))
+            if pcode_key in self.pcode_surfaced:
+                diff_type.append('pcode')
+
             # if no differences were found, there should not be a match (see modified func ident)
             if len(diff_type) == 0:
                 self.logger.warn(f'no diff: {sym} {sym2} {match_types}')
@@ -1903,6 +1998,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             if self.emit_asm_diff and 'code' in diff_type:
                 modified_func['asm_diff'] = self.gen_asm_diff(
                     ematch_1.get('asm', []), ematch_2.get('asm', []), from_file_name, to_file_name)
+
+            pcode_info = self.pcode_pairs.get(pcode_key)
+            if pcode_info is not None:
+                modified_func['pcode'] = {'hash': pcode_info['hash'], 'change_class': pcode_info['change_class'],
+                                          'const_deltas': [[hex(a), hex(b)] for a, b in pcode_info['const_deltas'][:32]]}
 
             modified_funcs.append(modified_func)
 
@@ -1941,6 +2041,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             'total_funcs_len': total_funcs_len, 'matched_funcs_len': matched_funcs_len, 'matched_funcs_with_code_changes_len': matched_funcs_with_code_changes_len,
             'matched_funcs_with_non_code_changes_len': matched_funcs_with_non_code_changes_len, 'matched_funcs_no_changes_len': matched_funcs_no_changes_len,
             'match_func_similarity_percent': match_func_similarity_percent, 'func_match_overall_percent': func_match_overall_percent, 'first_matches': Counter(all_first_matches)}
+
+        if self.pcode_gate:
+            pdiff['stats']['pcode_surfaced_len'] = len(self.pcode_surfaced)
+            pdiff['stats']['pcode_dropped'] = dict(self.pcode_dropped)
 
         pdiff['symbols'] = symbols
         pdiff['strings'] = strings
