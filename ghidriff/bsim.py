@@ -8,15 +8,36 @@
 from .utils import get_private_class, set_field
 
 
-def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None, seed_match_types=None, p1_addr_set=None, p2_addr_set=None, enabled=True):
+def count_external_functions(program) -> int:
+    count = 0
+    iterator = program.getFunctionManager().getExternalFunctions()
+    while iterator.hasNext():
+        iterator.next()
+        count += 1
+    return count
+
+
+def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None, seed_match_types=None, p1_addr_set=None, p2_addr_set=None, enabled=True, max_external_pairs=0):
     """
     matches: previously matched functions used for seeds
     seed_match_types: the types of matches to consider for seeds
+    max_external_pairs: skip BSIM when externals(p1) * externals(p2) exceeds this (0 = no limit)
     """
 
     if not enabled:
         logger.info(f"Skipping BSIM correlator. BSIM disabled with arg --no-bsim")
         return
+
+    # BSimProgramCorrelator adds every external function as a node (ignoring the address sets) with one shared
+    # feature vector, so each source external pairs with each destination external. Binaries with tens of
+    # thousands of imports (dylibs extracted from a dyld shared cache) exhaust any heap (ghidriff #155).
+    if max_external_pairs:
+        p1_externals = count_external_functions(p1)
+        p2_externals = count_external_functions(p2)
+        if p1_externals * p2_externals > max_external_pairs:
+            logger.warning(f"Skipping BSIM correlator. {p1_externals} x {p2_externals} external functions would create "
+                           f"{p1_externals * p2_externals} candidate pairs (limit {max_external_pairs}, see --bsim-max-external-pairs)")
+            return
 
     from ghidra.feature.vt import api as vtapi
 

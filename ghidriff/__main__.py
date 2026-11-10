@@ -72,6 +72,7 @@ def main():
                                      use_calling_counts=args.use_calling_counts,
                                      bsim=args.bsim,
                                      bsim_full=args.bsim_full,
+                                     bsim_max_external_pairs=args.bsim_max_external_pairs,
                                      gdts=args.gdt,
                                      base_address=args.base_address,
                                      program_options=args.program_options,
