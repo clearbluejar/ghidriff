@@ -1,5 +1,7 @@
+import sys
 from pathlib import Path
 
+import pytest
 import pytest_forked
 
 
@@ -36,3 +38,18 @@ def pytest_collection_modifyitems(config, items):
         relpath = Path(item.path).relative_to(config.rootpath)
         if relpath.parts[:1] == ("tests",) and item.get_closest_marker("fast") is None:
             item.add_marker("integration")
+
+
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_protocol(item, nextitem):
+    """
+    A forked test whose parent already runs a JVM deadlocks in the child (the JVM's threads
+    are not copied by fork), and the suite then hangs until the CI job times out. Stop with
+    an explanation instead.
+    """
+    jpype = sys.modules.get('jpype')
+    if (item.get_closest_marker('forked') or item.config.getvalue('forked')) and \
+            jpype is not None and jpype.isJVMStarted():
+        pytest.exit(f'{item.nodeid}: a JVM is already running in the pytest process, so this forked test '
+                    'would deadlock. Mark the test that started the JVM with @pytest.mark.forked.', returncode=3)
+    yield
