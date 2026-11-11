@@ -154,19 +154,47 @@ def _recover_table(program, br) -> Optional[List['ghidra.program.model.address.A
     return targets
 
 
+def _jump_table(addr, dests):
+    from ghidra.program.model.pcode import JumpTable
+    try:
+        return JumpTable(addr, dests, True, 0)  # Ghidra >= 12.1, as in its SwitchOverride script
+    except TypeError:
+        return JumpTable(addr, dests, True)  # Ghidra <= 12.0
+
+
+def _repair_one(program, ins, listing, fm, logger) -> bool:
+    from ghidra.app.cmd.disassemble import DisassembleCommand
+    from ghidra.app.cmd.function import CreateFunctionCmd
+    from ghidra.program.model.symbol import RefType, SourceType
+    from ghidra.util.task import TaskMonitor
+    from java.util import ArrayList
+
+    targets = _recover_table(program, ins)
+    if not targets:
+        return False
+    func = fm.getFunctionContaining(ins.getAddress())
+    for tgt in targets:
+        if listing.getInstructionAt(tgt) is None:
+            DisassembleCommand(tgt, None, True).applyTo(program, TaskMonitor.DUMMY)
+    for tgt in sorted(set(str(t) for t in targets)):
+        ins.addOperandReference(0, program.getAddressFactory().getAddress(tgt), RefType.COMPUTED_JUMP, SourceType.ANALYSIS)
+    if func is not None:
+        dests = ArrayList()
+        for tgt in targets:
+            dests.add(tgt)
+        _jump_table(ins.getAddress(), dests).writeOverride(func)
+        CreateFunctionCmd.fixupFunctionBody(program, func, TaskMonitor.DUMMY)
+    if logger is not None:
+        logger.debug(f'switch repair: {func} br at {ins.getAddress()}: {len(targets)} cases')
+    return True
+
+
 def repair_switches(program, logger=None, max_rounds: int = 5) -> int:
     """
     Recover hardened AArch64 switch tables in `program`. Returns the number of switches
     repaired. Must be called with the program writable; records REPAIR_OPTION so a
     program is repaired once.
     """
-    from ghidra.app.cmd.disassemble import DisassembleCommand
-    from ghidra.app.cmd.function import CreateFunctionCmd
-    from ghidra.program.model.pcode import JumpTable
-    from ghidra.program.model.symbol import RefType, SourceType
-    from ghidra.util.task import TaskMonitor
-    from java.util import ArrayList
-
     if 'AARCH64' not in str(program.getLanguageID()).upper():
         return 0
     info = program.getOptions('Program Information')
@@ -187,25 +215,12 @@ def repair_switches(program, logger=None, max_rounds: int = 5) -> int:
                           and str(ins.getAddress()) not in done]
             for ins in candidates:
                 done.add(str(ins.getAddress()))
-                targets = _recover_table(program, ins)
-                if not targets:
-                    continue
-                func = fm.getFunctionContaining(ins.getAddress())
-                for tgt in targets:
-                    if listing.getInstructionAt(tgt) is None:
-                        DisassembleCommand(tgt, None, True).applyTo(program, TaskMonitor.DUMMY)
-                for tgt in sorted(set(str(t) for t in targets)):
-                    ins.addOperandReference(0, program.getAddressFactory().getAddress(tgt), RefType.COMPUTED_JUMP,
-                                            SourceType.ANALYSIS)
-                if func is not None:
-                    dests = ArrayList()
-                    for tgt in targets:
-                        dests.add(tgt)
-                    JumpTable(ins.getAddress(), dests, True, 0).writeOverride(func)  # as Ghidra's SwitchOverride script
-                    CreateFunctionCmd.fixupFunctionBody(program, func, TaskMonitor.DUMMY)
-                found += 1
-                if logger is not None:
-                    logger.debug(f'switch repair: {func} br at {ins.getAddress()}: {len(targets)} cases')
+                try:
+                    if _repair_one(program, ins, listing, fm, logger):
+                        found += 1
+                except Exception as err:  # one bad table must not abort analysis
+                    if logger is not None:
+                        logger.warning(f'switch repair: skipped br at {ins.getAddress()}: {err}')
             repaired += found
             if found == 0:
                 break
