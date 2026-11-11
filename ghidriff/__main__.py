@@ -79,7 +79,9 @@ def main():
                                      decompiler_timeout=args.decompiler_timeout,
                                      emit_asm_diff=args.emit_asm_diff,
                                      pcode_gate=args.pcode_gate,
-                                     switch_repair=args.switch_repair
+                                     switch_repair=args.switch_repair,
+                                     align_names=args.align_names,
+                                     align_unresolved=args.align_unresolved
                                      )
 
     d.setup_project(binary_paths, project_path, project_name, symbols_path, gzfs_path)
