@@ -17,6 +17,7 @@ from argparse import Namespace
 import logging
 
 from pyghidra.launcher import PyGhidraLauncher
+from .switch_repair import repair_switches
 from .utils import mask_asm_target, normalize_asm_text, sha1_file, get_microsoft_download_url, get_pe_extra_data
 from .markdown import GhidriffMarkdown
 
@@ -84,7 +85,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             program_options: dict = None,
             decompiler_timeout: int = 60,
             emit_asm_diff: bool = False,
-            pcode_gate: bool = False) -> None:
+            pcode_gate: bool = False,
+            switch_repair: bool = True) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -151,6 +153,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.min_func_len = min_func_len
         self.emit_asm_diff = emit_asm_diff
         self.pcode_gate = pcode_gate
+        self.switch_repair = switch_repair
         # (old addr, new addr) -> pcode hash info, filled per diff when pcode_gate is set
         self.pcode_pairs = {}
         self.pcode_surfaced = set()
@@ -313,6 +316,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            action=argparse.BooleanOptionalAction)
         group.add_argument('--emit-asm-diff', dest='emit_asm_diff', action='store_true',
                            help='Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes (json + markdown). Increases output size')
+        group.add_argument('--switch-repair', dest='switch_repair', default=True, action=argparse.BooleanOptionalAction,
+                           help='Recover AArch64 switch tables Ghidra leaves unresolved (Spectre-hardened index), '
+                                'which otherwise truncate function bodies at the switch')
         group.add_argument('--pcode-gate', dest='pcode_gate', action='store_true',
                            help='Also diff same-size matched functions whose normalized p-code hash changed (adds pcode info and a "pcode" diff_type). Slower; experimental')
         group.add_argument('--gdt', action='append', help='Path to GDT file for analysis', default=[])
@@ -1127,6 +1133,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                     self.project.save(program)
             else:
                 self.logger.info(f"Analysis already complete.. skipping {program}!")
+
+            # runs once per program (recorded in its options), so analyzed projects and gzfs are repaired too
+            if self.switch_repair:
+                repair_switches(program, self.logger)
+                self.project.save(program)
         finally:
             # optionally save GZF
             if self.gzfs_path is not None:
