@@ -4,7 +4,11 @@ from pytest import MonkeyPatch
 import pytest
 
 
+@pytest.mark.forked
 def test_pyghidra_start():
+    """
+    runs forked: a JVM started in the pytest process would deadlock every later forked test
+    """
     import pyghidra
     pyghidra.start(verbose=True)
 
