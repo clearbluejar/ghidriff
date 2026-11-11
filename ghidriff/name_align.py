@@ -33,6 +33,8 @@ LOCAL = re.compile(
     r"|(?:extraout|in|unaff)_[A-Za-z0-9]+"
     r"|this_\d+"
     r"|LAB_[0-9a-f]+|switchD_[0-9a-f]+|caseD_[0-9a-f]+"
+    # switch-override case labels (switch repair) are named after the branch address
+    r"|override_jmp_[0-9a-f]+_case_[0-9a-f]+"
     r"|joined_r0x[0-9a-f]+|code_r0x[0-9a-f]+)\b")
 
 # References by address to things the program has no name for.

@@ -23,7 +23,8 @@ def check(old, new, **kw):
 
 @pytest.mark.parametrize('name', ['uVar1', 'pcVar2', 'ppuVar3', 'auVar4', 'pFVar4', 'p_Var4', 'AVar3', '_Var8',
                                   'Var32', 'local_28', 'uStack_c', 'auStack_28', 'extraout_x8', 'in_NZCV',
-                                  'unaff_x19', 'LAB_1000040', 'switchD_10004a2c', 'caseD_3'])
+                                  'unaff_x19', 'LAB_1000040', 'switchD_10004a2c', 'caseD_3',
+                                  'override_jmp_0000a154_case_29'])
 def test_every_default_local_form(name):
     # seen in iOS/macOS 27 output: AnyView, FILE *, __CFString *, _StringGuts, unkbyte10
     assert LOCAL.findall(f'x = {name} + 1;') == [name]
@@ -176,3 +177,11 @@ def test_name_matches_to_functions_is_one_to_one():
     name_matches = {'FUN_1': [['FUN_2', ['SymbolsHash']]],
                     'FUN_3': [['FUN_4', ['StructuralGraphHash']], ['FUN_5', ['StructuralGraphHash']]]}
     assert name_matches_to_functions(name_matches) == {'FUN_2': 'FUN_1'}
+
+
+def test_switch_override_labels():
+    # zlib inflate() after switch repair: case labels carry the branch address
+    old = ['goto override_jmp_0000a154_case_29;', 'override_jmp_0000a154_case_29:', 'return;']
+    new = ['goto override_jmp_0000a21c_case_29;', 'override_jmp_0000a21c_case_29:', 'return;']
+    renamed, _ = check(old, new)
+    assert renamed == old

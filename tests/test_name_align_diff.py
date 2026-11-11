@@ -3,6 +3,7 @@
 upgrade does not break the test. Measured on Ghidra 12.2 (changed C lines, off -> on):
   afd.sys 10.0.22621.1028 -> .1415:   917 -> 557 (-39%), 0 of 12 larger; --align-unresolved 313 (-66%)
   libcorecrypto 14.2.1 -> 14.3:       4215 -> 3985 (-5.5%), 0 of 41 larger
+  zlib 1.2.12 -> 1.2.13 (arm64e):     1990 -> 1450 (-27%); inflate() 63 -> 13
 """
 import json
 import re
@@ -127,3 +128,32 @@ def test_align_names_libcorecrypto(shared_datadir: Path):
     r = diff_modes(shared_datadir, 'align-corecrypto', 'libcorecrypto.dylib-14.2.1', 'libcorecrypto.dylib-14.3',
                    unresolved=False)
     check_alignment(r['off'], r['on'], unresolved=False, min_drop=0.02)
+
+
+@pytest.mark.forked
+def test_align_names_zlib_cve_2022_37434(shared_datadir: Path):
+    """
+    Open-source known fix: zlib 1.2.13's inflate() adds a bounds check on the gzip header extra
+    field (len < state->head->extra_max, offset 0x24 of gz_header). The check must stay on '+'
+    lines with and without alignment, and the aligned inflate() diff must be smaller.
+    runs forked because each jpype jvm can only be initialized 1x
+    """
+    old_name, new_name = 'libz.1.2.12.arm64e.dylib', 'libz.1.2.13.arm64e.dylib'
+    if not (shared_datadir / BINS_DIR / old_name).exists():
+        pytest.skip('zlib fixture not in ghidriff-test-data yet')
+
+    r = diff_modes(shared_datadir, 'align-zlib', old_name, new_name, unresolved=False)
+    check_alignment(r['off'], r['on'], unresolved=False, min_drop=0.10)
+
+    def inflate(pdiff):
+        found = [f for f in pdiff['functions']['modified'] if f['old']['name'] == '_inflate']
+        assert len(found) == 1, 'inflate() must be reported (needs switch repair on arm64e)'
+        assert 'code' in found[0]['diff_type']
+        return found[0]
+
+    plain, aligned = inflate(r['off']), inflate(r['on'])
+    assert changed_lines(aligned['diff']) < changed_lines(plain['diff'])
+    for f in (plain, aligned):
+        added = [line for line in f['diff'].splitlines() if line.startswith('+') and not line.startswith('+++')]
+        assert any('+ 0x24)' in line for line in added), 'extra_max load'
+        assert any(re.search(r'if \(\w+ <= \w+ && \w+ - \w+ != 0\)', line) for line in added), 'bounds check'
