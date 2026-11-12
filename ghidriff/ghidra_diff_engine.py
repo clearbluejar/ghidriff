@@ -589,6 +589,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             # registers read as a base by this instruction (everything after the destination operand)
             read_regs = {str(e) for elems in all_elems[1:] for e in elems if isinstance(e, Register)}
             uses_adrp_base = len(read_regs & adrp_regs) > 0
+            # adrp/adr operands are pc-relative addresses whatever their size (a binary based at 0 has
+            # 4-digit pages that the regex fallback does not catch)
+            pc_relative = mnemonic in ('adrp', 'adr')
 
             operands = []
 
@@ -605,6 +608,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 for e in elems:
                     if isinstance(e, Address):
                         parts.append(_mask_addr(e, is_call))
+                    elif isinstance(e, Scalar) and pc_relative and i > 0:
+                        parts.append(mask_asm_target('page' if mnemonic == 'adrp' else 'addr'))
                     elif isinstance(e, Scalar) and ((has_mem_ref and not has_reg and len(elems) == 1) or (uses_adrp_base and i > 0)):
                         # bare immediate that resolves to a reference, or page offset of an adrp pair
                         parts.append(mask_asm_target('imm'))
