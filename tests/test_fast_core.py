@@ -171,3 +171,15 @@ def test_preflight_rejects_large_symbol_count_mismatch_with_actionable_error():
             _FakePreflightProgram("old", "x86:LE:64:default", 100),
             _FakePreflightProgram("new", "x86:LE:64:default", 5000),
         )
+
+
+def test_code_gate_uses_unrounded_ratios():
+    # R4.9: one changed instruction in a 400-instruction function rounds back to a ratio of 1.0.
+    # Distinct items: SequenceMatcher's autojunk ignores items that make up >1% of a 200+ long list.
+    old = [f'op{i}' for i in range(400)]
+    new = list(old)
+    new[200] = 'cmp'
+    changed, m_ratio, b_ratio = GhidraDiffEngine.compare_instruction_lists(old, new, sorted(old), sorted(new))
+    assert m_ratio == 1.0  # the rounded value the report shows
+    assert changed is True
+    assert GhidraDiffEngine.compare_instruction_lists(old, list(old), sorted(old), sorted(old))[0] is False

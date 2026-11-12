@@ -1666,6 +1666,19 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                     code[i] = line.replace(match.group(0), matches[match.group(0)])
                     # TODO fix this line to work when a line has multiple default label
 
+    @staticmethod
+    def compare_instruction_lists(old_mnemonics: list, new_mnemonics: list, old_blocks: list,
+                                  new_blocks: list) -> Tuple[bool, float, float]:
+        """
+        Return (changed, m_ratio, b_ratio). `changed` is decided on the unrounded ratios: rounding to
+        2 places hides a few changed instructions in a large function (R4.9). The returned ratios are
+        rounded for the report.
+        """
+        mnemonics_ratio = difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio()
+        blocks_ratio = difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio()
+        changed = mnemonics_ratio < 1.0 or blocks_ratio < 1.0
+        return changed, round(mnemonics_ratio, 2), round(blocks_ratio, 2)
+
     def remove_code_sig(self, code, split_char='{'):
         """
         Find the first '{' and remove everything before it
@@ -1922,18 +1935,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
             instructions_ratio = round(difflib.SequenceMatcher(None, old_instructions, new_instructions).ratio(), 2)
 
-            old_mnemonics = ematch_1['mnemonics']
-            new_mnemonics = ematch_2['mnemonics']
-
-            # gate on the unrounded ratios; rounding to 2 places hides a few changed instructions in large functions
-            mnemonics_ratio_raw = difflib.SequenceMatcher(None, old_mnemonics, new_mnemonics).ratio()
-            mnemonics_ratio = round(mnemonics_ratio_raw, 2)
-
-            old_blocks = ematch_1['blocks']
-            new_blocks = ematch_2['blocks']
-
-            blocks_ratio_raw = difflib.SequenceMatcher(None, old_blocks, new_blocks).ratio()
-            blocks_ratio = round(blocks_ratio_raw, 2)
+            instructions_changed, mnemonics_ratio, blocks_ratio = self.compare_instruction_lists(
+                ematch_1['mnemonics'], ematch_2['mnemonics'], ematch_1['blocks'], ematch_2['blocks'])
 
             self.normalize_ghidra_decomp(old_code)
             self.normalize_ghidra_decomp(new_code)
@@ -1954,7 +1957,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             only_code_diff = ''.join(list(difflib.unified_diff(old_code_no_sig, new_code_no_sig, lineterm='\n',
                                      fromfile=from_file_name, tofile=to_file_name)))  # ignores name changes
 
-            if len(only_code_diff) > 0 and (mnemonics_ratio_raw < 1.0 or blocks_ratio_raw < 1.0):
+            if len(only_code_diff) > 0 and instructions_changed:
 
                 # handle bad match external match (sometimes occurs with implied matches)
                 if ratio == 0.0 and (blocks_ratio == 0.0):
