@@ -17,6 +17,7 @@ from argparse import Namespace
 import logging
 
 from pyghidra.launcher import PyGhidraLauncher
+from .name_align import align_lines, name_matches_to_functions
 from .switch_repair import repair_switches
 from .utils import mask_asm_target, normalize_asm_text, sha1_file, get_microsoft_download_url, get_pe_extra_data
 from .markdown import GhidriffMarkdown
@@ -86,7 +87,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             decompiler_timeout: int = 60,
             emit_asm_diff: bool = False,
             pcode_gate: bool = False,
-            switch_repair: bool = True) -> None:
+            switch_repair: bool = True,
+            align_names: bool = False,
+            align_unresolved: bool = False) -> None:
 
         # setup engine logging
         self.logger = self.setup_logger(engine_log_level)
@@ -154,6 +157,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.emit_asm_diff = emit_asm_diff
         self.pcode_gate = pcode_gate
         self.switch_repair = switch_repair
+        # --align-unresolved is a further tier of --align-names
+        self.align_names = align_names or align_unresolved
+        self.align_unresolved = align_unresolved
         # (old addr, new addr) -> pcode hash info, filled per diff when pcode_gate is set
         self.pcode_pairs = {}
         self.pcode_surfaced = set()
@@ -316,6 +322,13 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            action=argparse.BooleanOptionalAction)
         group.add_argument('--emit-asm-diff', dest='emit_asm_diff', action='store_true',
                            help='Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes (json + markdown). Increases output size')
+        group.add_argument('--align-names', dest='align_names', action='store_true',
+                           help='Emit the C diff with the new side\'s per-build names (locals, labels, matched functions) '
+                                'renamed to the old side\'s; renames are recorded in name_map. Ratios and diff_type '
+                                'are unchanged')
+        group.add_argument('--align-unresolved', dest='align_unresolved', action='store_true',
+                           help='With --align-names, also align unresolved references (func_0x, DAT_, PTR_). '
+                                'Inferred: a one-use changed target is indistinguishable from a relocation')
         group.add_argument('--switch-repair', dest='switch_repair', default=True, action=argparse.BooleanOptionalAction,
                            help='Recover AArch64 switch tables Ghidra leaves unresolved (Spectre-hardened index), '
                                 'which otherwise truncate function bodies at the switch')
@@ -1779,6 +1792,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         pdiff['matches'] = {}
         pdiff['matches']['address_matches'] = address_matches
         pdiff['matches']['name_matches'] = name_matches
+        align_functions = name_matches_to_functions(name_matches) if self.align_names else {}
 
         self.logger.info('Deduping symbols and functions...')
 
@@ -2009,6 +2023,21 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             if self.emit_asm_diff and 'code' in diff_type:
                 modified_func['asm_diff'] = self.gen_asm_diff(
                     ematch_1.get('asm', []), ematch_2.get('asm', []), from_file_name, to_file_name)
+
+            # emitted text only: ratios and diff_type above are unchanged. Without the unresolved tier,
+            # align on the text emitted today (normalize_ghidra_decomp masks some relocated DAT_/LAB_
+            # references); with it, on the raw decompiler output, since that tier aligns them itself.
+            if self.align_names:
+                if self.align_unresolved:
+                    old_base, new_base = ematch_1['code'].splitlines(True), ematch_2['code'].splitlines(True)
+                else:
+                    old_base, new_base = old_code, new_code
+                new_aligned, name_map = align_lines(old_base, new_base, functions=align_functions,
+                                                    infer_unresolved=self.align_unresolved)
+                modified_func['diff'] = ''.join(difflib.unified_diff(old_base, new_aligned, lineterm='\n',
+                                                                     fromfile=from_file_name, tofile=to_file_name,
+                                                                     n=1000))
+                modified_func['name_map'] = name_map
 
             pcode_info = self.pcode_pairs.get(pcode_key)
             if pcode_info is not None:
