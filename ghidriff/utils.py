@@ -86,6 +86,48 @@ def set_field(cls, fname, value, obj=None):
     field.setAccessible(False)
 
 
+# symbol names that are renumbered between builds
+
+# compiler-generated block names carry a per-build sequence number:
+# ___foo_block_invoke.339, ___foo_block_invoke_2.12, ___block_literal_global.89, ___Block_byref_object_copy_.79
+_SEQUENCE_SUFFIX_RE = re.compile(r'(block_invoke(?:_\d+)?|block_literal_global|Block_byref_object_(?:copy|dispose)_)(?:\.\d+)+')
+# compiler-outlined helpers are renumbered between builds (_OUTLINED_FUNCTION_1 -> _OUTLINED_FUNCTION_2)
+_OUTLINED_RE = re.compile(r'(_OUTLINED_FUNCTION_)\d+')
+
+
+def stable_symbol_name(name: str) -> str:
+    """A symbol name without the parts the compiler renumbers from build to build."""
+    return _SEQUENCE_SUFFIX_RE.sub(r'\1', _OUTLINED_RE.sub(r'\1#', name))
+
+
+def get_build_commit():
+    """
+    The git commit this ghidriff was built from, or None: a source checkout's HEAD, else the
+    commit pip recorded for an install from git (PEP 610 direct_url.json).
+    """
+    import json
+    import subprocess
+
+    try:
+        root = Path(__file__).resolve().parent.parent
+        if (root / '.git').exists():
+            out = subprocess.run(['git', '-C', str(root), 'rev-parse', 'HEAD'], capture_output=True, text=True, timeout=5)
+            if out.returncode == 0 and out.stdout.strip():
+                return out.stdout.strip()
+    except Exception:
+        pass
+
+    try:
+        from importlib.metadata import distribution
+        text = distribution('ghidriff').read_text('direct_url.json')
+        if text:
+            return (json.loads(text).get('vcs_info') or {}).get('commit_id')
+    except Exception:
+        pass
+
+    return None
+
+
 # asm diff normalization
 
 def mask_asm_target(kind: str) -> str:

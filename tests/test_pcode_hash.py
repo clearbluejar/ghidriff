@@ -86,3 +86,15 @@ def test_outlined_function_renumbering_is_masked():
     assert _clean_name('_OUTLINED_FUNCTION_5') == '_OUTLINED_FUNCTION_#'
     # other short numeric suffixes keep their meaning
     assert _clean_name('_foo_2') != _clean_name('_foo_3')
+
+
+def test_block_sequence_suffixes_are_masked_whatever_their_length():
+    # .89 -> .339 crossed the hex-run mask's three-character minimum and read as a different callee
+    assert _clean_name('___foo_block_invoke.89') == _clean_name('___foo_block_invoke.339')
+    assert _clean_name('___foo_block_invoke_2.12') == _clean_name('___foo_block_invoke_2.7')
+    assert _clean_name('___foo_block_invoke_2.12') != _clean_name('___foo_block_invoke_3.12')
+    assert _clean_name('___Block_byref_object_copy_.79') == _clean_name('___Block_byref_object_copy_.101')
+    assert _clean_name('___block_literal_global.89') == _clean_name('___block_literal_global.86')
+    # the cold part a call goes to is kept
+    assert _clean_name('___foo_block_invoke.339.cold.2') == _clean_name('___foo_block_invoke.12.cold.2')
+    assert _clean_name('_foo.cold.1') != _clean_name('_foo.cold.2')

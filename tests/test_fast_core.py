@@ -1,4 +1,5 @@
 import argparse
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -183,3 +184,45 @@ def test_code_gate_uses_unrounded_ratios():
     assert m_ratio == 1.0  # the rounded value the report shows
     assert changed is True
     assert GhidraDiffEngine.compare_instruction_lists(old, list(old), sorted(old), sorted(old))[0] is False
+
+
+def test_preflight_warns_when_symbol_gap_is_a_small_fraction(caplog):
+    # HomeKit: a 24,868 gap from analysis-created labels on a binary that grew, not a missing symbol file
+    engine = object.__new__(_FastEngine)
+    engine.logger = logging.getLogger('test_preflight')
+
+    with caplog.at_level(logging.WARNING):
+        GhidraDiffEngine.check_diff_preconditions(
+            engine,
+            _FakePreflightProgram("old", "AARCH64:LE:64:AppleSilicon", 200000),
+            _FakePreflightProgram("new", "AARCH64:LE:64:AppleSilicon", 224868),
+        )
+    assert 'old: 200000, new: 224868, difference 24868' in caplog.text
+
+    # symbols on one side only: most of the larger program's symbols are missing
+    with pytest.raises(ValueError, match="old: 20000, new: 90000"):
+        GhidraDiffEngine.check_diff_preconditions(
+            engine,
+            _FakePreflightProgram("old", "AARCH64:LE:64:AppleSilicon", 20000),
+            _FakePreflightProgram("new", "AARCH64:LE:64:AppleSilicon", 90000),
+        )
+
+
+def test_ambiguous_matches_are_flagged():
+    def mod(old, new):
+        return {'old': {'address': old}, 'new': {'address': new}}
+
+    # one new function paired with two old ones (afd.sys gzf: StructuralGraphExactHash + Implied Match)
+    funcs = [mod('1c00024ac', '1c006951b'), mod('1c006909b', '1c006951b'), mod('1c0001000', '1c0002000')]
+    assert GhidraDiffEngine.mark_ambiguous_matches(funcs) == 2
+    assert [func.get('ambiguous_match', False) for func in funcs] == [True, True, False]
+    assert GhidraDiffEngine.mark_ambiguous_matches([mod('a', 'b'), mod('c', 'd')]) == 0
+
+
+def test_build_commit_is_reported_for_a_checkout():
+    from ghidriff.utils import get_build_commit
+
+    commit = get_build_commit()
+    # this test runs from a git checkout (CI and development); an sdist has no commit
+    if (Path(__file__).parent.parent / '.git').exists():
+        assert commit is not None and len(commit) == 40 and set(commit) <= set('0123456789abcdef')

@@ -1,6 +1,6 @@
 import pytest
 
-from ghidriff.utils import mask_zero_page_offset, normalize_asm_text
+from ghidriff.utils import mask_zero_page_offset, normalize_asm_text, stable_symbol_name
 
 
 pytestmark = pytest.mark.fast
@@ -29,3 +29,11 @@ def test_zero_page_offset_matches_nonzero_offset():
     assert mask_zero_page_offset('[x8]', {'x9'}) == '[x8]'
     assert mask_zero_page_offset('[x8, #0x10]', {'x8'}) == '[x8, #0x10]'
     assert mask_zero_page_offset('x8', {'x8'}) == 'x8'
+
+
+def test_renumbered_symbol_names_are_stable():
+    # names the asm diff keeps (calls to named functions) must not carry per-build numbering
+    assert stable_symbol_name('___foo_block_invoke.339') == '___foo_block_invoke'
+    assert stable_symbol_name('_OUTLINED_FUNCTION_22') == stable_symbol_name('_OUTLINED_FUNCTION_26')
+    assert stable_symbol_name('_memmove') == '_memmove'
+    assert stable_symbol_name('_foo.cold.2') == '_foo.cold.2'

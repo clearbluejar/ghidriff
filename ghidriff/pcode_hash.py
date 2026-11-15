@@ -19,6 +19,8 @@ import re
 from collections import Counter
 from typing import List, Tuple, TYPE_CHECKING
 
+from .utils import stable_symbol_name
+
 if TYPE_CHECKING:
     import ghidra
 
@@ -26,9 +28,6 @@ U64 = (1 << 64) - 1
 
 # hex runs inside names are build specific (FUN_..., __stub_fffffff00aa31c88, ...)
 _HEXRUN = re.compile(r'(?<=[_.:$])[0-9a-fA-F]{3,}|0x[0-9a-fA-F]+|[0-9a-fA-F]{8,}')
-_BLOCK_SUFFIX = re.compile(r'(block_invoke|block_literal_global)(\.\d+)+')
-# compiler-outlined helpers are renumbered between builds (_OUTLINED_FUNCTION_1 -> _OUTLINED_FUNCTION_2)
-_OUTLINED = re.compile(r'(_OUTLINED_FUNCTION_)\d+')
 _BUILD_PATHS = [
     # older builds use a UUID, iOS/macOS 27 an opaque token (BuildRoots/4~CWFdugDfP269.../)
     (re.compile(r'/AppleInternal/Library/BuildRoots/[^/]+/'), '/AppleInternal/Library/BuildRoots/<UUID>/'),
@@ -49,8 +48,8 @@ _COMPARE_MNEMONICS = {'cmp', 'cmn', 'ccmp', 'ccmn', 'tst', 'teq', 'test', 'tbz',
 
 
 def _clean_name(name: str) -> str:
-    name = _OUTLINED.sub(r'\1#', name)
-    return _BLOCK_SUFFIX.sub(r'\1', _HEXRUN.sub('#', name)).replace(_PH, ' ')
+    # sequence suffixes first: the hex-run mask would turn `.339` into `.#` but leave `.89`
+    return _HEXRUN.sub('#', stable_symbol_name(name)).replace(_PH, ' ')
 
 
 def _clean_string(value: str) -> str:

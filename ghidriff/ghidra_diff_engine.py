@@ -19,7 +19,7 @@ import logging
 from pyghidra.launcher import PyGhidraLauncher
 from .name_align import align_lines, name_matches_to_functions
 from .switch_repair import repair_switches
-from .utils import mask_asm_target, mask_zero_page_offset, normalize_asm_text, sha1_file, get_microsoft_download_url, get_pe_extra_data
+from .utils import get_build_commit, mask_asm_target, mask_zero_page_offset, normalize_asm_text, stable_symbol_name, sha1_file, get_microsoft_download_url, get_pe_extra_data
 from .markdown import GhidriffMarkdown
 
 import multiprocessing
@@ -114,7 +114,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         # want JVM to crash if we run out of memory (otherwise no error it propagated)
         launcher.add_vmargs('-XX:+CrashOnOutOfMemoryError')
-        launcher.add_vmargs('-XX:+HeapDumpOnOutOfMemoryError')
+        # No heap dump by default: it is the size of the heap and lands in the working directory
+        # (113 GB for one large framework). To get one: --jvm-args=-XX:+HeapDumpOnOutOfMemoryError
 
         # Set Ghidra Heap Max
         # Ghidra/RuntimeScripts/Linux/support/analyzeHeadless#L7
@@ -143,6 +144,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.logger.info(
             f'GHIDRA {app_prop.applicationVersion}  Build Date: {app_prop.applicationBuildDate} Release: {app_prop.applicationReleaseName}')
         self.check_runtime_compatibility(app_prop.applicationVersion)
+        self.build_commit = get_build_commit()
+        self.logger.info(f'ghidriff {__version__} commit: {self.build_commit}')
         self.logger.info(f"Engine Args:")
         for arg in vars(args):
             self.logger.info('\t%-20s%s', f'{arg}:', vars(args)[arg])
@@ -593,7 +596,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 sym = symtab.getPrimarySymbol(addr)
                 # keep meaningful names (imports, stubs, named symbols), mask FUN_/DAT_/etc
                 if sym is not None and not sym.isDynamic() and str(sym.getSource()) != 'DEFAULT':
-                    return sym.getName()
+                    return stable_symbol_name(sym.getName())
                 # call targets in other images are often unresolved (no function there), still a call
                 return mask_asm_target('func' if is_call or fm.getFunctionAt(addr) is not None else 'data')
 
@@ -1710,6 +1713,27 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
 
         return code.splitlines(True)
 
+    # preflight: symbol counts must differ by at least this many, and this fraction of the larger program, to stop
+    SYMBOL_COUNT_DIFF_MIN = 4000
+    SYMBOL_COUNT_DIFF_RATIO = 0.25
+
+    @staticmethod
+    def mark_ambiguous_matches(modified_funcs: list) -> int:
+        """
+        Flag modified entries whose old or new function is also in another entry. One-to-many
+        correlators pair every function of a look-alike group with every other, so a function can
+        be reported against several partners (and `modified` can outnumber the functions).
+        Returns the number of entries flagged.
+        """
+        old_seen = Counter(func['old']['address'] for func in modified_funcs)
+        new_seen = Counter(func['new']['address'] for func in modified_funcs)
+        flagged = 0
+        for func in modified_funcs:
+            if old_seen[func['old']['address']] > 1 or new_seen[func['new']['address']] > 1:
+                func['ambiguous_match'] = True
+                flagged += 1
+        return flagged
+
     def check_diff_preconditions(
         self,
         p1: "ghidra.program.model.listing.Program",
@@ -1725,13 +1749,21 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 "Use --force-diff only if this mismatch is expected."
             )
 
-        sym_count_diff = abs(p1.getSymbolTable().numSymbols - p2.getSymbolTable().numSymbols)
-        if sym_count_diff >= 4000:
-            raise ValueError(
-                f"Symbol counts between programs ({p1.name} and {p2.name}) differ by {sym_count_diff}. "
-                "This usually means one binary has symbols and the other does not, or analysis failed. "
-                "Check Ghidra analysis/PDB loading, or use --force-diff to bypass this preflight."
-            )
+        # One binary with symbols and one without differ by most of their symbols. A large binary that
+        # grew differs by thousands of analysis-created labels but only a small fraction, so the test is
+        # relative as well as absolute.
+        old_count, new_count = p1.getSymbolTable().numSymbols, p2.getSymbolTable().numSymbols
+        sym_count_diff = abs(old_count - new_count)
+        if sym_count_diff >= self.SYMBOL_COUNT_DIFF_MIN:
+            counts = f"{p1.name}: {old_count}, {p2.name}: {new_count}, difference {sym_count_diff}"
+            if sym_count_diff / max(old_count, new_count, 1) >= self.SYMBOL_COUNT_DIFF_RATIO:
+                raise ValueError(
+                    f"Symbol counts between programs differ by {sym_count_diff} ({counts}). "
+                    "This usually means one binary has symbols and the other does not, or analysis failed. "
+                    "Check Ghidra analysis/PDB loading, or use --force-diff to bypass this preflight."
+                )
+            self.logger.warning(f"Symbol counts differ ({counts}), under "
+                                f"{int(self.SYMBOL_COUNT_DIFF_RATIO * 100)}% of the larger program. Continuing.")
 
     def diff_bins(
             self,
@@ -2061,6 +2093,12 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         funcs['deleted'] = deleted_funcs
         funcs['modified'] = modified_funcs
 
+        ambiguous_modified_len = self.mark_ambiguous_matches(modified_funcs)
+        if ambiguous_modified_len > 0:
+            self.logger.warning(f'{ambiguous_modified_len} modified entries share an old or new function with another '
+                                'entry (one-to-many match). At most one pairing per function is right; they are '
+                                "flagged 'ambiguous_match'.")
+
         # TODO Build Call Graphs
 
         # Set pdiff
@@ -2085,7 +2123,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         if total_funcs_len > 0:
             func_match_overall_percent = f'{((matched_funcs_len / total_funcs_len)*100):.4f}%'
 
-        pdiff['stats'] = {'added_funcs_len': len(added_funcs), 'deleted_funcs_len': len(deleted_funcs), 'modified_funcs_len': len(modified_funcs), 'added_symbols_len': len(
+        pdiff['stats'] = {'ambiguous_modified_len': ambiguous_modified_len, 'added_funcs_len': len(added_funcs), 'deleted_funcs_len': len(deleted_funcs), 'modified_funcs_len': len(modified_funcs), 'added_symbols_len': len(
             symbols['added']), 'deleted_symbols_len': len(symbols['deleted']), 'diff_time': elapsed, 'deleted_strings_len': len(deleted_strings), 'added_strings_len': len(added_strings),
             'match_types': Counter(all_match_types), 'items_to_process': items_to_process, 'diff_types': Counter(all_diff_types), 'unmatched_funcs_len': unmatched_funcs_len,
             'total_funcs_len': total_funcs_len, 'matched_funcs_len': matched_funcs_len, 'matched_funcs_with_code_changes_len': matched_funcs_with_code_changes_len,
@@ -2117,6 +2155,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                 pdiff['new_pe_url'] = self.get_pe_download_url(new, pdiff['new_meta'][pe_key])
             else:
                 self.logger.warn('Missing pe information. Not able to generate MSDL download link')
+
+        # which build produced this diff
+        pdiff['ghidriff'] = {'version': self.version, 'commit': getattr(self, 'build_commit', None)}
 
         pdiff['md_credits'] = self.gen_credits()
         pdiff['html_credits'] = self.gen_credits(html=True)
