@@ -93,7 +93,7 @@ def test_diff_swift_dylib_arm64e_pcode_gate(tmp_path: Path):
     assert len(scan_name) == 1
     assert 'pcode' in scan_name[0]['diff_type']
     assert 'length' not in scan_name[0]['diff_type']
-    assert scan_name[0]['pcode']['change_class'] == 'const'
+    assert scan_name[0]['pcode']['change_class'] == 'compare'
     assert ['0x48', '0x24'] in scan_name[0]['pcode']['const_deltas']
 
     # everything else only moved; layout shifts must not be surfaced

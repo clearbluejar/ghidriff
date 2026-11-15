@@ -44,6 +44,8 @@ _PH = '\x1f'
 NOISE_CLASSES = {'shift', 'imm-id', 'build-path'}
 
 _WIDE_IMM_MNEMONICS = {'mov', 'movk', 'movz', 'movn'}
+# instructions whose immediate is compared or tested (flag-setting): a changed bound, limit or bit
+_COMPARE_MNEMONICS = {'cmp', 'cmn', 'ccmp', 'ccmn', 'tst', 'teq', 'test', 'tbz', 'tbnz', 'subs', 'adds', 'ands'}
 
 
 def _clean_name(name: str) -> str:
@@ -345,9 +347,12 @@ def classify_pair(old: List[Token], new: List[Token]) -> Tuple[str, list]:
     Returns (change_class, const_deltas) where change_class is one of
       'same'     identical
       'const'    same structure, only constants differ
+      'compare'  same structure, and a constant that is compared or tested differs (cmp, tst, tbz, ...):
+                 the shape of a changed bound. Never treated as a layout shift, even when several
+                 functions share the delta (a fix inlined into its callers changes them all alike).
       'imm-id'   only wide immediates materialised by mov/movk differ (typed-malloc ids, PAC discriminators)
       'code'     structure differs
-    'shift' is assigned later across the whole binary (see shift_deltas).
+    'shift' is assigned later across the whole binary (see shift_deltas), to 'const' pairs only.
     const_deltas lists (old, new) for each differing constant.
     """
     if [t.text() for t in old] == [t.text() for t in new]:
@@ -356,12 +361,17 @@ def classify_pair(old: List[Token], new: List[Token]) -> Tuple[str, list]:
         return 'code', []
     deltas = []
     wide_only = True
+    compared = False
     for a, b in zip(old, new):
         for (va, sa, ma), (vb, _, _) in zip(a.consts, b.consts):
             if va != vb:
                 deltas.append((va, vb))
+                if ma in _COMPARE_MNEMONICS:
+                    compared = True
                 if not (ma in _WIDE_IMM_MNEMONICS and (ma == 'movk' or max(va, vb) >= 0x10000)):
                     wide_only = False
+    if compared:
+        return 'compare', deltas
     return ('imm-id' if wide_only else 'const'), deltas
 
 

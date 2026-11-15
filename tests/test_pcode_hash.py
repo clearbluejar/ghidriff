@@ -17,12 +17,32 @@ def test_identical_pair_is_same():
     assert hash_tokens(a) == hash_tokens(b)
 
 
-def test_compare_bound_change_is_const():
+def test_compare_bound_change_is_compare():
     # scanName in the Swift fixture: cmp #0x48 -> cmp #0x24, same size
     a = [tok(f'INT_LESS u0:1 = r0:8 {_PH}', (0x48, 8, 'cmp'))]
     b = [tok(f'INT_LESS u0:1 = r0:8 {_PH}', (0x24, 8, 'cmp'))]
-    assert classify_pair(a, b) == ('const', [(0x48, 0x24)])
+    assert classify_pair(a, b) == ('compare', [(0x48, 0x24)])
     assert hash_tokens(a) != hash_tokens(b)
+
+
+def test_non_compare_constant_change_is_const():
+    # a stack frame size: sub sp,sp,#0x140 -> #0xc0
+    a = [tok(f'INT_SUB r0:8 = r0:8 {_PH}', (0x140, 8, 'sub'))]
+    b = [tok(f'INT_SUB r0:8 = r0:8 {_PH}', (0xc0, 8, 'sub'))]
+    assert classify_pair(a, b) == ('const', [(0x140, 0xc0)])
+
+
+def test_compare_change_shared_by_two_functions_is_not_a_shift():
+    # a bound changed in a function and in its inlined copy: same delta in both, still a real change
+    old = [tok(f'INT_LESS u0:1 = r0:8 {_PH}', (0x40, 8, 'cmp'))]
+    new = [tok(f'INT_LESS u0:1 = r0:8 {_PH}', (0x20, 8, 'cmp'))]
+    classified = [classify_pair(old, new), classify_pair(old, new)]
+    assert [c for c, _ in classified] == ['compare', 'compare']
+    assert shift_deltas(classified) == set()
+    # a mixed pair (one compared constant, one not) is also a compare
+    mixed_old = old + [tok(f'COPY r1:4 = {_PH}', (0x10, 4, 'mov'))]
+    mixed_new = new + [tok(f'COPY r1:4 = {_PH}', (0x18, 4, 'mov'))]
+    assert classify_pair(mixed_old, mixed_new)[0] == 'compare'
 
 
 def test_wide_immediate_change_is_imm_id():
