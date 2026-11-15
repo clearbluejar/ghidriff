@@ -50,3 +50,19 @@ def test_names_and_strings_are_build_invariant():
     assert _clean_string('/AppleInternal/Library/BuildRoots/0A1B2C3D-1111/x.c') == \
         _clean_string('/AppleInternal/Library/BuildRoots/FFEE0011-2222/x.c')
     assert _clean_string('Nov  7 2026') == '<DATE>'
+
+
+def test_current_buildroots_token_is_masked():
+    old = ('/AppleInternal/Library/BuildRoots/4~CWFdugDfP269IgLhhk5QxA5zD4K6Rngkv8vRhSc/Library/Caches/'
+           'com.apple.xbs/TemporaryDirectory.E5D0jw/Sources/TimeMachine/TMDeviceRulesEngine.m')
+    new = ('/AppleInternal/Library/BuildRoots/4~Cax5ugBBSea4NSZRTVdt94DTapNKqWnrMBpTU9M/Library/Caches/'
+           'com.apple.xbs/TemporaryDirectory.Qx81aa/Sources/TimeMachine/TMDeviceRulesEngine.m')
+    assert _clean_string(old) == _clean_string(new)
+    assert 'TMDeviceRulesEngine.m' in _clean_string(new)
+
+
+def test_outlined_function_renumbering_is_masked():
+    assert _clean_name('_OUTLINED_FUNCTION_1') == _clean_name('_OUTLINED_FUNCTION_22')
+    assert _clean_name('_OUTLINED_FUNCTION_5') == '_OUTLINED_FUNCTION_#'
+    # other short numeric suffixes keep their meaning
+    assert _clean_name('_foo_2') != _clean_name('_foo_3')

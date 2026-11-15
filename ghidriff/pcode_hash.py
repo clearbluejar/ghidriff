@@ -27,8 +27,11 @@ U64 = (1 << 64) - 1
 # hex runs inside names are build specific (FUN_..., __stub_fffffff00aa31c88, ...)
 _HEXRUN = re.compile(r'(?<=[_.:$])[0-9a-fA-F]{3,}|0x[0-9a-fA-F]+|[0-9a-fA-F]{8,}')
 _BLOCK_SUFFIX = re.compile(r'(block_invoke|block_literal_global)(\.\d+)+')
+# compiler-outlined helpers are renumbered between builds (_OUTLINED_FUNCTION_1 -> _OUTLINED_FUNCTION_2)
+_OUTLINED = re.compile(r'(_OUTLINED_FUNCTION_)\d+')
 _BUILD_PATHS = [
-    (re.compile(r'/AppleInternal/Library/BuildRoots/[0-9A-Fa-f-]{8,}/'), '/AppleInternal/Library/BuildRoots/<UUID>/'),
+    # older builds use a UUID, iOS/macOS 27 an opaque token (BuildRoots/4~CWFdugDfP269.../)
+    (re.compile(r'/AppleInternal/Library/BuildRoots/[^/]+/'), '/AppleInternal/Library/BuildRoots/<UUID>/'),
     (re.compile(r'/Library/Caches/com\.apple\.xbs/[^/]+/'), '/Library/Caches/com.apple.xbs/<UUID>/'),
 ]
 _DATE = re.compile(r'^[A-Z][a-z]{2} [ \d]\d \d{4}$')  # __DATE__  "Nov  7 2026"
@@ -44,6 +47,7 @@ _WIDE_IMM_MNEMONICS = {'mov', 'movk', 'movz', 'movn'}
 
 
 def _clean_name(name: str) -> str:
+    name = _OUTLINED.sub(r'\1#', name)
     return _BLOCK_SUFFIX.sub(r'\1', _HEXRUN.sub('#', name)).replace(_PH, ' ')
 
 
