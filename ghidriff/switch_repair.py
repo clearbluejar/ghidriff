@@ -15,8 +15,9 @@ Apple's compilers bound a switch index and then clamp it again before the table 
     add   x16, x17, x16
     br    x16
 
-Ghidra 12.x recovers at most one case of such a switch, so the remaining case code is
-never disassembled, the function body is truncated at the `br`, and two builds whose
+Ghidra 12.0 and 12.2 recover only one or a few cases of such a switch when its index is
+normalized (cases not starting at 0), so the remaining case code is never disassembled,
+the function body is truncated at the `br`, and two builds whose
 real difference sits inside the cases look identical (an "exact" match that is never
 diffed). This module recognises the pattern, reads the table, and applies the same
 fix as Ghidra's SwitchOverride script: computed-jump references, a JumpTable override
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     import ghidra
 
 REPAIR_OPTION = 'ghidriff switch repair'
-REPAIR_VERSION = '1'
+REPAIR_VERSION = '2'  # 2: also completes partially recovered tables
 
 MAX_CASES = 1024
 WALK_BACK = 16
@@ -43,18 +44,21 @@ _ADD_RE = re.compile(rf'^add x(\d+),x(\d+),{_REG}(?:, (?:LSL|SXTW|UXTW) #0x([0-9
 _ADR_RE = re.compile(r'^adr x(\d+),0x([0-9a-f]+)$')
 _LOAD_RE = re.compile(rf'^(ldrsw|ldr|ldrh|ldrsh|ldrb|ldrsb) {_REG},\[x(\d+), {_REG}(?:, (?:LSL|UXTW|SXTW) #0x[0-9a-f]+)?\]$')
 _CMP_RE = re.compile(rf'^cmp {_REG},#0x([0-9a-f]+)$')
+_ADRP_RE = re.compile(r'^adrp x(\d+),0x([0-9a-f]+)$')
+_ADD_IMM_RE = re.compile(r'^add x(\d+),x(\d+),#0x([0-9a-f]+)$')
 
 
 def _text(ins) -> str:
     return str(ins).strip()
 
 
-def _unresolved_computed_jump(ins) -> bool:
+def _computed_jump(ins) -> bool:
     flow = ins.getFlowType()
-    if not (flow.isJump() and flow.isComputed()):
-        return False
-    targets = [ref for ref in ins.getReferencesFrom() if ref.getReferenceType().isComputed()]
-    return len(targets) <= 1
+    return flow.isJump() and flow.isComputed()
+
+
+def _known_targets(ins) -> set:
+    return {str(ref.getToAddress()) for ref in ins.getReferencesFrom() if ref.getReferenceType().isComputed()}
 
 
 def _recover_table(program, br) -> Optional[List['ghidra.program.model.address.Address']]:
@@ -75,7 +79,7 @@ def _recover_table(program, br) -> Optional[List['ghidra.program.model.address.A
 
     add = base = load = None
     shift = 0
-    off_reg = base_reg = idx_reg = None
+    off_reg = base_reg = idx_reg = table_reg = None
     for ins in prev:
         t = _text(ins)
         if add is None:
@@ -96,16 +100,35 @@ def _recover_table(program, br) -> Optional[List['ghidra.program.model.address.A
                 load = ins
                 elem, signed = _TABLE_LOADS[lm.group(1)]
                 idx_reg = lm.group(4)
+                table_reg = lm.group(3)
                 continue
         if load is not None and base is not None:
             break
     if add is None or base is None or load is None:
         return None
 
+    # table address: the `adrp xT, page; add xT, xT, #off` that forms the load's base register.
+    # Ghidra's READ reference on the load is only a fallback: it does not always point at the
+    # table start (zlib inflate()).
     table = None
-    for ref in load.getReferencesFrom():
-        if ref.getReferenceType().isRead() and ref.getToAddress().isMemoryAddress():
-            table = ref.getToAddress()
+    page = off = None
+    for ins in prev[prev.index(load) + 1:]:
+        t = _text(ins)
+        if off is None:
+            im = _ADD_IMM_RE.match(t)
+            if im and im.group(1) == table_reg and im.group(2) == table_reg:
+                off = int(im.group(3), 16)
+            continue
+        pm = _ADRP_RE.match(t)
+        if pm and pm.group(1) == table_reg:
+            page = int(pm.group(2), 16)
+            break
+    if page is not None and off is not None:
+        table = program.getAddressFactory().getDefaultAddressSpace().getAddress(page + off)
+    else:
+        for ref in load.getReferencesFrom():
+            if ref.getReferenceType().isRead() and ref.getToAddress().isMemoryAddress():
+                table = ref.getToAddress()
     if table is None:
         return None
 
@@ -170,7 +193,8 @@ def _repair_one(program, ins, listing, fm, logger) -> bool:
     from java.util import ArrayList
 
     targets = _recover_table(program, ins)
-    if not targets:
+    # Ghidra may recover a few cases of such a switch (zlib inflate(): 2 of 30); the body is still truncated
+    if not targets or {str(t) for t in targets} <= _known_targets(ins):
         return False
     func = fm.getFunctionContaining(ins.getAddress())
     for tgt in targets:
@@ -211,7 +235,7 @@ def repair_switches(program, logger=None, max_rounds: int = 5) -> int:
             found = 0
             # collect first: repairing disassembles new code into the listing being walked
             candidates = [ins for ins in listing.getInstructions(True)
-                          if str(ins.getMnemonicString()) == 'br' and _unresolved_computed_jump(ins)
+                          if str(ins.getMnemonicString()) == 'br' and _computed_jump(ins)
                           and str(ins.getAddress()) not in done]
             for ins in candidates:
                 done.add(str(ins.getAddress()))
