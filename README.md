@@ -202,8 +202,12 @@ Engine Options:
                         Minimum function length to consider for diff (default: 10)
   --use-calling-counts, --no-use-calling-counts
                         Add calling/called reference counts (default: False)
-  --emit-asm-diff       Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes (json + markdown).
-                        Increases output size (default: False)
+  --emit-asm-diff       Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes, including pairs
+                        surfaced by --pcode-gate (json + markdown). Increases output size (default: False)
+  --align-names         Emit the C diff with the new side's per-build names (locals, labels, matched functions) renamed to the old side's;
+                        renames are recorded in name_map. Ratios and diff_type are unchanged (default: False)
+  --align-unresolved    With --align-names, also align unresolved references (func_0x, DAT_, PTR_). Inferred: a one-use changed target is
+                        indistinguishable from a relocation (default: False)
   --switch-repair, --no-switch-repair
                         Recover AArch64 switch tables Ghidra leaves unresolved (Spectre-hardened index), which otherwise
                         truncate function bodies at the switch (default: True)
