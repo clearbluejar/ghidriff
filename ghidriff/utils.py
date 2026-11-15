@@ -99,6 +99,21 @@ _ASM_DEFAULT_NAME_RE = re.compile(r'\b((?:thunk_)?(?:FUN|LAB|DAT|PTR|UNK|SUB|EXT
 _ASM_ABS_ADDR_RE = re.compile(r'(?<![#\w])0x[0-9a-fA-F]{5,}\b')
 
 
+_ASM_BARE_BASE_RE = re.compile(r'^\[([a-z]\w*)\]$')
+
+
+def mask_zero_page_offset(operand: str, adrp_regs: set) -> str:
+    """
+    A load or store straight off an adrp page register (`ldr x0,[x8]`) addresses page offset 0.
+    Render it like any other page offset (`[x8, #<imm>]`), so a global that moves to or from
+    offset 0 between builds does not show as a changed instruction.
+    """
+    m = _ASM_BARE_BASE_RE.match(operand.strip())
+    if m and m.group(1) in adrp_regs:
+        return operand.replace(f'[{m.group(1)}]', f'[{m.group(1)}, #{mask_asm_target("imm")}]')
+    return operand
+
+
 def normalize_asm_text(text: str) -> str:
     """
     Remove build specific addresses from one rendered instruction line (regex pass).

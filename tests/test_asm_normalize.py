@@ -1,6 +1,6 @@
 import pytest
 
-from ghidriff.utils import normalize_asm_text
+from ghidriff.utils import mask_zero_page_offset, normalize_asm_text
 
 
 pytestmark = pytest.mark.fast
@@ -20,3 +20,12 @@ def test_bare_absolute_address_masked_immediates_kept():
 def test_idempotent():
     t = normalize_asm_text('bl FUN_18a2b3c4d')
     assert normalize_asm_text(t) == t
+
+
+def test_zero_page_offset_matches_nonzero_offset():
+    # old: adrp x8,P ; ldr x0,[x8, #0x1a8]   new: adrp x8,P' ; ldr x0,[x8]   (the global moved to offset 0)
+    assert mask_zero_page_offset('[x8]', {'x8'}) == '[x8, #<imm>]'
+    # only for a register that holds an adrp page, and only the bare form
+    assert mask_zero_page_offset('[x8]', {'x9'}) == '[x8]'
+    assert mask_zero_page_offset('[x8, #0x10]', {'x8'}) == '[x8, #0x10]'
+    assert mask_zero_page_offset('x8', {'x8'}) == 'x8'

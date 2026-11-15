@@ -149,6 +149,14 @@ class GhidriffMarkdown:
 
         return diff_table
 
+    @staticmethod
+    def has_code_change(modified: dict) -> bool:
+        """
+        A modified function whose code changed: tagged 'code', or a same-size pair surfaced by
+        --pcode-gate ('pcode'), whose change is in operands only.
+        """
+        return 'code' in modified['diff_type'] or 'pcode' in modified['diff_type']
+
     def gen_esym_table_diff_meta(self, old_name, new_name, modified) -> str:
         diff_table = ''
 
@@ -163,6 +171,17 @@ class GhidriffMarkdown:
             if isinstance(val, list):
                 val = ','.join(val)
             table_list.extend([key, self._md_cell(val)])
+            count += 1
+
+        # --pcode-gate: how the normalized p-code differs, and which constants changed
+        pcode = modified.get('pcode')
+        if pcode and pcode.get('change_class') not in (None, 'same'):
+            val = pcode['change_class']
+            deltas = pcode.get('const_deltas') or []
+            if deltas:
+                shown = ', '.join(f'{old} → {new}' for old, new in deltas[:8])
+                val += f": {shown}{', …' if len(deltas) > 8 else ''}"
+            table_list.extend(['pcode', self._md_cell(val)])
             count += 1
 
         diff_table = Table().create_table(columns=column_len, rows=count, text=table_list, text_align='center')
@@ -198,7 +217,7 @@ class GhidriffMarkdown:
 
         for mod in pdiff['functions']['modified']:
 
-            if 'code' not in mod['diff_type']:
+            if not GhidriffMarkdown.has_code_change(mod):
                 continue
 
             old_code = mod['old']['code']
@@ -234,7 +253,7 @@ class GhidriffMarkdown:
 
         for mod in pdiff['functions']['modified']:
 
-            if 'code' not in mod['diff_type']:
+            if not GhidriffMarkdown.has_code_change(mod):
                 continue
 
             old_code = mod['old']['code']
@@ -451,7 +470,7 @@ end
                 deleted.append(self._clean_md_header(msg))
                 break
 
-        modified_code_funcs = [func for func in pdiff['functions']['modified'] if 'code' in func['diff_type']]
+        modified_code_funcs = [func for func in pdiff['functions']['modified'] if self.has_code_change(func)]
 
         for i, modified in enumerate(modified_code_funcs):
 
@@ -749,7 +768,7 @@ pie showData
             old_func_name = modified['old']['fullname']
 
             # selectively include matches
-            if 'code' in modified['diff_type']:
+            if self.has_code_change(modified):
 
                 modified_with_code += 1
 

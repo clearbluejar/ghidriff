@@ -19,7 +19,7 @@ import logging
 from pyghidra.launcher import PyGhidraLauncher
 from .name_align import align_lines, name_matches_to_functions
 from .switch_repair import repair_switches
-from .utils import mask_asm_target, normalize_asm_text, sha1_file, get_microsoft_download_url, get_pe_extra_data
+from .utils import mask_asm_target, mask_zero_page_offset, normalize_asm_text, sha1_file, get_microsoft_download_url, get_pe_extra_data
 from .markdown import GhidriffMarkdown
 
 import multiprocessing
@@ -321,7 +321,8 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False,
                            action=argparse.BooleanOptionalAction)
         group.add_argument('--emit-asm-diff', dest='emit_asm_diff', action='store_true',
-                           help='Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes (json + markdown). Increases output size')
+                           help='Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes, '
+                                'including pairs surfaced by --pcode-gate (json + markdown). Increases output size')
         group.add_argument('--align-names', dest='align_names', action='store_true',
                            help='Emit the C diff with the new side\'s per-build names (locals, labels, matched functions) '
                                 'renamed to the old side\'s; renames are recorded in name_map. Ratios and diff_type '
@@ -628,7 +629,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                         parts.append(mask_asm_target('imm'))
                     else:
                         parts.append(str(e))
-                operands.append(''.join(parts))
+                operands.append(mask_zero_page_offset(''.join(parts), adrp_regs) if i > 0 else ''.join(parts))
 
             # track adrp page bases; a register written by anything else no longer holds one
             if len(all_elems) > 0:
@@ -2027,8 +2028,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             modified_func = {'old': ematch_1, 'new': ematch_2, 'diff': diff, 'diff_type': diff_type, 'ratio': ratio,
                              'i_ratio': instructions_ratio, 'm_ratio': mnemonics_ratio, 'b_ratio': blocks_ratio, 'match_types': match_types}
 
-            # opt-in; only for functions reported as code modified
-            if self.emit_asm_diff and 'code' in diff_type:
+            # opt-in; for functions reported as code modified, and same-size pairs the p-code gate surfaced
+            # (an operand-only change is often clearest at the instruction level)
+            if self.emit_asm_diff and ('code' in diff_type or 'pcode' in diff_type):
                 modified_func['asm_diff'] = self.gen_asm_diff(
                     ematch_1.get('asm', []), ematch_2.get('asm', []), from_file_name, to_file_name)
 
