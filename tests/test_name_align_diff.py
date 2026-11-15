@@ -2,6 +2,8 @@
 --align-names on real pairs from ghidriff-test-data. Thresholds, not golden text, so a Ghidra
 upgrade does not break the test. Measured on Ghidra 12.2 (changed C lines, off -> on):
   afd.sys 10.0.22621.1028 -> .1415:   917 -> 557 (-39%), 0 of 12 larger; --align-unresolved 313 (-66%)
+      with the fixture's afd.pdb loaded (as in CI): --align-unresolved 642 -> 324 (-49.5%) on 12.2,
+      513 -> 337 (-34%) on 12.0.4 and 12.1.4
   libcorecrypto 14.2.1 -> 14.3:       4215 -> 3985 (-5.5%), 0 of 41 larger
   zlib 1.2.12 -> 1.2.13 (arm64e):     1990 -> 1450 (-27%); inflate() 63 -> 13
 """
@@ -118,9 +120,9 @@ def test_align_names_afd(shared_datadir: Path):
     """
     r = diff_modes(shared_datadir, 'align-afd', 'afd.sys.x64.10.0.22621.1028', 'afd.sys.x64.10.0.22621.1415',
                    unresolved=True)
-    check_alignment(r['off'], r['on'], unresolved=False, min_drop=0.25)
-    # with afd.pdb loaded: 642 -> 324 changed lines (-49.5%)
-    check_alignment(r['off'], r['unresolved'], unresolved=True, min_drop=0.45)
+    check_alignment(r['off'], r['on'], unresolved=False, min_drop=0.20)
+    # the reduction depends on the Ghidra version and on whether afd.pdb is loaded (-34% to -66%)
+    check_alignment(r['off'], r['unresolved'], unresolved=True, min_drop=0.25)
 
 
 @pytest.mark.forked
