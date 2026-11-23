@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from ghidriff.bsim import correlate_bsim
+from ghidriff.bsim import _correlate_stock
 
 pytestmark = pytest.mark.fast
 
@@ -33,14 +33,17 @@ class _Program:
 
 
 def run(p1_externals, p2_externals, limit, caplog):
+    # the guard applies to Ghidra's correlator run whole, the fallback when --bsim-max-pairs cannot be applied
+    report = {'status': 'ran'}
     with caplog.at_level(logging.WARNING):
-        correlate_bsim({}, _Program(p1_externals), _Program(p2_externals), None, None, None,
-                       logging.getLogger('test'), max_external_pairs=limit)
+        _correlate_stock(_Program(p1_externals), None, _Program(p2_externals), None, None, logging.getLogger('test'),
+                         limit, report)
+    return report
 
 
 def test_bsim_skipped_when_external_pairs_exceed_limit(caplog):
     # RealityKit: 22,097 externals per side would be ~488M candidate pairs
-    run(22097, 22097, 25_000_000, caplog)
+    assert run(22097, 22097, 25_000_000, caplog) == {'status': 'skipped', 'reason': 'externals'}
     assert 'Skipping BSIM correlator' in caplog.text
     assert '22097 x 22097' in caplog.text
 

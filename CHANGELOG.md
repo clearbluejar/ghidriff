@@ -29,8 +29,19 @@ from 1.0.0 on the same inputs.
   and warns with both counts otherwise.
 - **No heap dump by default.** `-XX:+HeapDumpOnOutOfMemoryError` wrote a dump the size of the heap
   into the working directory. Pass `--jvm-args=-XX:+HeapDumpOnOutOfMemoryError` to get one.
-- **BSim is skipped when it would exhaust the heap.** BSim pairs every external function with every
-  other; above `--bsim-max-external-pairs` (default 25,000,000) it is skipped with a warning.
+- **BSim is bounded.** BSim pairs every two functions with similar feature vectors. Thousands of
+  identical small functions, or thousands of externals (which share one vector), made hundreds of
+  millions of candidate pairs: hours, then out of memory, on Mail.framework, Music.app and Maps.app.
+  ghidriff now counts the pairs first (from one function per distinct vector). Under
+  `--bsim-max-pairs` (default 25,000,000) BSim runs exactly as before; over it, the functions whose
+  vectors make the most pairs are left out of BSim. `--bsim-timeout` (default 1800 s) stops it and
+  keeps the matches accepted so far. `--bsim-max-external-pairs` now applies only when the bound
+  cannot be (BSim internals changed in a later Ghidra).
+- **Large one-to-many buckets are no longer paired.** StructuralGraphHash and
+  BulkBasicBlockMnemonicHash paired every function in a bucket with every other: 33 million pairs
+  on Mail.framework. A bucket with more than `--max-one-to-many-bucket` (default 100) functions on
+  a side is now matched as a group: its functions are not paired, and not reported added or deleted.
+  Implied matches drawn from those pairs are gone too.
 - **SimpleDiff is deprecated** and kept as an example engine. Its `Address:Length` match compared a
   function to itself.
 
@@ -50,6 +61,8 @@ from 1.0.0 on the same inputs.
 - `stats.ambiguous_modified_len` and `ambiguous_match: true` on modified entries that share an old
   or new function with another entry (a one-to-many match).
 - Ghidra 12.2 support. CI runs on Ghidra 12.0.4, 12.1.4 and 12.2.
+- `stats.bsim`: what BSim did (`status` ran, cut, timeout or skipped; candidate pairs; functions left
+  out; time per phase) and `stats.one_to_many_capped`: the buckets matched as a group, per correlator.
 
 ### Fixed
 
@@ -57,3 +70,5 @@ from 1.0.0 on the same inputs.
 - Matcher fixes in `correlators.py` and `structural_graph_diff.py`; a program opened twice is
   closed once.
 - The test suite no longer hangs or fails under pytest 9.2.
+- Implied matches and decomp correlation no longer take quadratic time in the number of matches and
+  unmatched functions. Implied matching rebuilt the list of all matches for each candidate caller.

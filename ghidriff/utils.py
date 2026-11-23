@@ -86,6 +86,20 @@ def set_field(cls, fname, value, obj=None):
     field.setAccessible(False)
 
 
+def get_field(obj, fname):
+    """Read a private field of a Java object"""
+    field = obj.getClass().getDeclaredField(fname)
+    field.setAccessible(True)
+    return field.get(obj)
+
+
+def get_method(obj, name: str):
+    """A private method of a Java object, by name"""
+    method = next(m for m in obj.getClass().getDeclaredMethods() if m.getName() == name)
+    method.setAccessible(True)
+    return method
+
+
 # symbol names that are renumbered between builds
 
 # compiler-generated block names carry a per-build sequence number:

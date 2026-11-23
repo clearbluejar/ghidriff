@@ -202,6 +202,10 @@ Engine Options:
                         Minimum function length to consider for diff (default: 10)
   --use-calling-counts, --no-use-calling-counts
                         Add calling/called reference counts (default: False)
+  --max-one-to-many-bucket MAX_ONE_TO_MANY_BUCKET
+                        One-to-many correlators (StructuralGraphHash, BulkBasicBlockMnemonicHash) pair every function in a
+                        hash bucket with every other. A bucket with more functions than this on a side is not paired; its
+                        functions count as matched instead. 0 = no limit (default: 100)
   --emit-asm-diff       Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes, including pairs
                         surfaced by --pcode-gate (json + markdown). Increases output size (default: False)
   --align-names         Emit the C diff with the new side's per-build names (locals, labels, matched functions) renamed to the old side's;
@@ -219,9 +223,18 @@ BSIM Options:
   --bsim, --no-bsim     Toggle using BSIM correlation (default: True)
   --bsim-full, --no-bsim-full
                         Slower but better matching. Use only when needed (default: False)
+  --bsim-max-pairs BSIM_MAX_PAIRS
+                        Bound on BSIM candidate pairs (~140 bytes of heap each). BSIM pairs every two functions with
+                        similar feature vectors, so thousands of identical small functions (or externals, which share one
+                        vector) make hundreds of millions of pairs. Above the bound, the functions whose vectors make the
+                        most pairs are left out of BSIM. 0 = no limit (default: 25000000)
+  --bsim-timeout BSIM_TIMEOUT
+                        Seconds before BSIM is stopped; the matches it accepted by then are kept. 0 = no limit (default:
+                        1800)
   --bsim-max-external-pairs BSIM_MAX_EXTERNAL_PAIRS
-                        Skip BSIM when external functions (old) x external functions (new) exceeds this. BSIM pairs every
-                        external with every other (~140 bytes of heap each). 0 = no limit (default: 25000000)
+                        Only when --bsim-max-pairs cannot be applied (BSim internals changed in this Ghidra): skip BSIM
+                        when external functions (old) x external functions (new) exceeds this. 0 = no limit (default:
+                        25000000)
 
 JVM Options:
   --max-ram-percent MAX_RAM_PERCENT
