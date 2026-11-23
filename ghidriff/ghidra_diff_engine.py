@@ -81,6 +81,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             bsim: bool = True,
             bsim_full: bool = False,
             bsim_max_external_pairs: int = 25_000_000,
+            bsim_max_pairs: int = 25_000_000,
+            bsim_timeout: int = 1800,
+            max_one_to_many_bucket: int = 100,
             gdts: list = None,
             base_address: int = None,
             program_options: dict = None,
@@ -193,6 +196,11 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.bsim = bsim
         self.bsim_full = bsim_full
         self.bsim_max_external_pairs = bsim_max_external_pairs
+        self.bsim_max_pairs = bsim_max_pairs
+        self.bsim_timeout = bsim_timeout
+        self.max_one_to_many_bucket = max_one_to_many_bucket
+        # what the correlators left out or cut short (find_matches), reported in the diff's stats
+        self.match_stats = {}
         self.decompiler_timeout = decompiler_timeout
         self.analysis_lock = Lock()
 
@@ -323,6 +331,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            type=int, default=10),
         group.add_argument('--use-calling-counts', help='Add calling/called reference counts', default=False,
                            action=argparse.BooleanOptionalAction)
+        group.add_argument('--max-one-to-many-bucket', type=int, default=100,
+                           help='One-to-many correlators (StructuralGraphHash, BulkBasicBlockMnemonicHash) pair every function '
+                                'in a hash bucket with every other. A bucket with more functions than this on a side is not paired; '
+                                'its functions count as matched instead. 0 = no limit')
         group.add_argument('--emit-asm-diff', dest='emit_asm_diff', action='store_true',
                            help='Add an address-normalized unified diff of disassembly (asm_diff) to each function with code changes, '
                                 'including pairs surfaced by --pcode-gate (json + markdown). Increases output size')
@@ -345,8 +357,16 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                            action=argparse.BooleanOptionalAction)
         group.add_argument('--bsim-full', help='Slower but better matching. Use only when needed', default=False,
                            action=argparse.BooleanOptionalAction)
+        group.add_argument('--bsim-max-pairs', type=int, default=25_000_000,
+                           help='Bound on BSIM candidate pairs (~140 bytes of heap each). BSIM pairs every two functions with similar '
+                                'feature vectors, so thousands of identical small functions (or externals, which share one vector) '
+                                'make hundreds of millions of pairs. Above the bound, the functions whose vectors make the most pairs '
+                                'are left out of BSIM. 0 = no limit')
+        group.add_argument('--bsim-timeout', type=int, default=1800,
+                           help='Seconds before BSIM is stopped; the matches it accepted by then are kept. 0 = no limit')
         group.add_argument('--bsim-max-external-pairs', type=int, default=25_000_000,
-                           help='Skip BSIM when external functions (old) x external functions (new) exceeds this. BSIM pairs every external with every other (~140 bytes of heap each). 0 = no limit')
+                           help='Only when --bsim-max-pairs cannot be applied (BSim internals changed in this Ghidra): skip BSIM '
+                                'when external functions (old) x external functions (new) exceeds this. 0 = no limit')
 
         # TODO add following option
         # group.add_argument('--exact-matches', help='Only consider exact matches', action='store_true')
@@ -1781,6 +1801,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.logger.info(f'Diffing bins: {old} - {new}')
 
         start = time()
+        self.match_stats = {}
 
         # reset pdiff
         pdiff = {}
@@ -2133,6 +2154,10 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         if self.pcode_gate:
             pdiff['stats']['pcode_surfaced_len'] = len(self.pcode_surfaced)
             pdiff['stats']['pcode_dropped'] = dict(self.pcode_dropped)
+
+        # bsim: what BSIM did (status ran/cut/timeout/skipped, candidate pairs, functions left out, phase timings);
+        # one_to_many_capped: hash buckets too large to pair, whose functions count as matched
+        pdiff['stats'].update(self.match_stats)
 
         pdiff['symbols'] = symbols
         pdiff['strings'] = strings

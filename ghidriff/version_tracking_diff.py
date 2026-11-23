@@ -14,6 +14,45 @@ if TYPE_CHECKING:
     from ghidra_builtins import *
 
 
+def match_functions(p1: 'ghidra.program.model.listing.Program', p1_addr_set, p2: 'ghidra.program.model.listing.Program',
+                    p2_addr_set, min_func_len: int, one_to_one: bool, one_to_many: bool, hasher, max_bucket: int = 0,
+                    monitor=None):
+    """
+    MatchFunctions.matchFunctions (Features/Base/src/main/java/ghidra/app/plugin/match/MatchFunctions.java) with
+    a bound on one-to-many buckets: functions that share a hash are all paired with each other, so a bucket of
+    4,000 identical stubs per side makes 16 million pairs. A bucket with more than max_bucket functions on a side
+    is not paired; its functions are returned as absorbed, to be counted as matched without a counterpart.
+    Returns (pairs [(p1 address, p2 address)], absorbed [(p1 addresses, p2 addresses)]). max_bucket 0 = no limit
+    """
+
+    if monitor is None:
+        from ghidra.util.task import TaskMonitor
+        monitor = TaskMonitor.DUMMY
+
+    buckets = {}
+    for side, (program, addr_set) in enumerate(((p1, p1_addr_set), (p2, p2_addr_set))):
+        for func in program.getFunctionManager().getFunctions(addr_set, True):
+            if func.isThunk() or func.getBody().getNumAddresses() < min_func_len:
+                continue
+            buckets.setdefault(int(hasher.hash(func, monitor)), ([], []))[side].append(func.getEntryPoint())
+
+    pairs = []
+    absorbed = []
+    for p1_addrs, p2_addrs in buckets.values():
+        if not p1_addrs or not p2_addrs:
+            continue
+        if len(p1_addrs) == 1 and len(p2_addrs) == 1:
+            if one_to_one:
+                pairs.append((p1_addrs[0], p2_addrs[0]))
+        elif one_to_many:
+            if max_bucket and (len(p1_addrs) > max_bucket or len(p2_addrs) > max_bucket):
+                absorbed.append((p1_addrs, p2_addrs))
+            else:
+                pairs.extend((a, b) for a in p1_addrs for b in p2_addrs)
+
+    return pairs, absorbed
+
+
 class VersionTrackingDiff(GhidraDiffEngine):
     """
     An Ghidra Diff implementation using several exact and some fuzzy correlators
@@ -134,15 +173,44 @@ class VersionTrackingDiff(GhidraDiffEngine):
             self.logger.debug(f'hasher: {hasher}')
             self.logger.info(f'name: {name} one_to_one: {one_to_one} one_to_many: {one_to_many}')
 
-            if name == 'BSIM':             
-                if self.bsim_full:
-                    # slower, but uses full adddress space for matching
-                    correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger,enabled=self.bsim,
-                                   max_external_pairs=self.bsim_max_external_pairs)
-                else:
-                    # only matches on functions that have no match
-                    correlate_bsim(matches, p1,p2, p1_matches, p2_matches, monitor, self.logger, p1_addr_set=p1_unmatched, p2_addr_set=p2_unmatched, enabled=self.bsim,
-                                   max_external_pairs=self.bsim_max_external_pairs)
+            if name == 'BSIM':
+                # --bsim-full is slower, but uses the full address space for matching; by default BSIM only
+                # matches functions that have no match yet
+                self.match_stats['bsim'] = correlate_bsim(
+                    matches, p1, p2, p1_matches, p2_matches, monitor, self.logger,
+                    p1_addr_set=None if self.bsim_full else p1_unmatched,
+                    p2_addr_set=None if self.bsim_full else p2_unmatched,
+                    enabled=self.bsim, max_external_pairs=self.bsim_max_external_pairs,
+                    max_pairs=self.bsim_max_pairs, timeout=self.bsim_timeout)
+            elif one_to_many:
+                pairs, absorbed = match_functions(p1, p1_unmatched, p2, p2_unmatched, self.min_func_len, one_to_one,
+                                                  one_to_many, hasher, self.max_one_to_many_bucket)
+
+                for a_addr, b_addr in pairs:
+                    p1_matches.add(a_addr)
+                    p2_matches.add(b_addr)
+                    matches.setdefault((a_addr, b_addr), {}).setdefault(name, 0)
+                    matches[(a_addr, b_addr)][name] += 1
+
+                if absorbed:
+                    # the functions are matched as a group: no pairs, and not reported as added or deleted
+                    for a_addrs, b_addrs in absorbed:
+                        for addr in a_addrs:
+                            p1_matches.add(addr)
+                        for addr in b_addrs:
+                            p2_matches.add(addr)
+                    sizes = sorted(([len(a), len(b)] for a, b in absorbed), key=sum, reverse=True)
+                    functions = [sum(size[0] for size in sizes), sum(size[1] for size in sizes)]
+                    capped = self.match_stats.setdefault('one_to_many_capped', {}).setdefault(
+                        name, {'buckets': 0, 'functions': [0, 0], 'largest': []})
+                    capped['buckets'] += len(sizes)
+                    capped['functions'] = [capped['functions'][0] + functions[0], capped['functions'][1] + functions[1]]
+                    capped['largest'] = sorted(capped['largest'] + sizes, key=sum, reverse=True)[:5]
+                    self.logger.warning(f'{name}: {len(sizes)} buckets have more than {self.max_one_to_many_bucket} functions '
+                                        f'on a side (largest {sizes[0][0]} x {sizes[0][1]}). Their {functions[0]} + {functions[1]} '
+                                        'functions count as matched without being paired (see --max-one-to-many-bucket)')
+
+                self.logger.info(f'Match count: {len(pairs)}')
             else:
                 func_matches = MatchFunctions.matchFunctions(
                     p1, p1_unmatched, p2, p2_unmatched, self.min_func_len, one_to_one, one_to_many, hasher, monitor)
@@ -152,7 +220,7 @@ class VersionTrackingDiff(GhidraDiffEngine):
                     p2_matches.add(match.bFunctionAddress)
                     matches.setdefault((match.aFunctionAddress, match.bFunctionAddress), {}).setdefault(name, 0)
                     matches[(match.aFunctionAddress, match.bFunctionAddress)][name] += 1
-                
+
                 self.logger.info(f'Match count: {func_matches.size()}')
 
             end = time()
