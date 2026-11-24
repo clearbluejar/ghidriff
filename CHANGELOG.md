@@ -33,7 +33,7 @@ from 1.0.0 on the same inputs.
   identical small functions, or thousands of externals (which share one vector), made hundreds of
   millions of candidate pairs: hours, then out of memory, on Mail.framework, Music.app and Maps.app.
   ghidriff now counts the pairs first (from one function per distinct vector). Under
-  `--bsim-max-pairs` (default 25,000,000) BSim runs exactly as before; over it, the functions whose
+  `--bsim-max-pairs` (default 25,000,000) no function is left out; over it, the functions whose
   vectors make the most pairs are left out of BSim. `--bsim-timeout` (default 1800 s) stops it and
   keeps the matches accepted so far. `--bsim-max-external-pairs` now applies only when the bound
   cannot be (BSim internals changed in a later Ghidra).
