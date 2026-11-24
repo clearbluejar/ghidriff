@@ -75,6 +75,7 @@ def main():
                                      bsim_max_external_pairs=args.bsim_max_external_pairs,
                                      bsim_max_pairs=args.bsim_max_pairs,
                                      bsim_timeout=args.bsim_timeout,
+                                     bsim_accept_seeds=args.bsim_accept_seeds,
                                      max_one_to_many_bucket=args.max_one_to_many_bucket,
                                      gdts=args.gdt,
                                      base_address=args.base_address,

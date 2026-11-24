@@ -58,8 +58,9 @@ def names(pdiff, side):
 @pytest.mark.forked
 def test_bsim_bounds(shared_datadir: Path, monkeypatch):
     """
-    Under the budget BSIM runs as Ghidra's correlator; over it, functions are left out and reported; a timeout
-    stops it; without Ghidra's internals it runs unbounded. Every diff completes.
+    Under the budget BSIM runs as Ghidra's correlator, seeded with the matches found before it; over the budget,
+    functions are left out and reported; a timeout stops it; without Ghidra's internals it runs unbounded.
+    Every diff completes.
     runs forked because each jpype jvm can only be initialized 1x
     """
     import jpype
@@ -75,7 +76,11 @@ def test_bsim_bounds(shared_datadir: Path, monkeypatch):
     assert report['matches'] > 0
     assert set(report['phase_seconds']) == {'vectors', 'count', 'discover', 'seeds', 'matching'}
 
-    # Ghidra's correlator, run whole, finds the same matches
+    # the externals matched by name seed BSIM, and are not reported again as BSIM matches
+    assert report['accepted_seeds'] > 0 and report['seeds'] >= report['accepted_seeds']
+    assert not pairs(plain, 'BSIM') & pairs(plain, 'SymbolsHash')
+
+    # Ghidra's correlator, run whole and seeded through its Version Tracking session, finds the same matches
     def no_field(obj, name):
         raise jpype.JClass('java.lang.NoSuchFieldException')(name)
     with monkeypatch.context() as m:
@@ -83,6 +88,12 @@ def test_bsim_bounds(shared_datadir: Path, monkeypatch):
         stock = diff(d)
     assert stock['stats']['bsim']['unbounded'] is True and stock['stats']['bsim']['status'] == 'ran'
     assert pairs(stock, 'BSIM') == pairs(plain, 'BSIM')
+
+    # --no-bsim-accept-seeds: BSIM chooses all its seeds, as ghidriff 0.6 to 1.0 did
+    d.bsim_accept_seeds = False
+    unseeded = diff(d)
+    assert 'accepted_seeds' not in unseeded['stats']['bsim'] and unseeded['stats']['bsim']['status'] == 'ran'
+    d.bsim_accept_seeds = True
 
     # over budget: the vectors making the most pairs are left out, the rest is matched as usual
     d.bsim_max_pairs = report['candidate_pairs'] // 2

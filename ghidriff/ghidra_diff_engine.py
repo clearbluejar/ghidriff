@@ -83,6 +83,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
             bsim_max_external_pairs: int = 25_000_000,
             bsim_max_pairs: int = 25_000_000,
             bsim_timeout: int = 1800,
+            bsim_accept_seeds: bool = True,
             max_one_to_many_bucket: int = 100,
             gdts: list = None,
             base_address: int = None,
@@ -198,6 +199,7 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
         self.bsim_max_external_pairs = bsim_max_external_pairs
         self.bsim_max_pairs = bsim_max_pairs
         self.bsim_timeout = bsim_timeout
+        self.bsim_accept_seeds = bsim_accept_seeds
         self.max_one_to_many_bucket = max_one_to_many_bucket
         # what the correlators left out or cut short (find_matches), reported in the diff's stats
         self.match_stats = {}
@@ -362,6 +364,9 @@ class GhidraDiffEngine(GhidriffMarkdown, metaclass=ABCMeta):
                                 'feature vectors, so thousands of identical small functions (or externals, which share one vector) '
                                 'make hundreds of millions of pairs. Above the bound, the functions whose vectors make the most pairs '
                                 'are left out of BSIM. 0 = no limit')
+        group.add_argument('--bsim-accept-seeds', default=True, action=argparse.BooleanOptionalAction,
+                           help='Seed BSIM with the symbol and exact matches found before it (externals only, unless '
+                                '--bsim-full). --no-bsim-accept-seeds lets BSIM choose all its seeds, as ghidriff 1.0 did')
         group.add_argument('--bsim-timeout', type=int, default=1800,
                            help='Seconds before BSIM is stopped; the matches it accepted by then are kept. 0 = no limit')
         group.add_argument('--bsim-max-external-pairs', type=int, default=25_000_000,
