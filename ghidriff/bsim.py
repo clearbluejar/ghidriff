@@ -85,11 +85,13 @@ def _vector_id(node):
     return None if vector is None else int(vector.calcUniqueHash())
 
 
-def _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_pairs, report):
+def _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_pairs, report, seeds=None):
     """
     BSimProgramCorrelator.doCorrelate, stage by stage, with the candidate pairs counted and bounded before
     BSIM builds them. Returns [(source address, destination address)], or None when this Ghidra's correlator
     does not have the internals used here.
+    seeds: [(source address, destination address)] of accepted matches, used as BSIM seeds where both functions
+    are BSIM nodes (Ghidra's findAcceptedSeeds); BSIM then chooses more. None: BSIM chooses them all.
     """
 
     import jpype
@@ -106,6 +108,9 @@ def _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_pa
     try:
         vector_factory = get_field(correlator, 'vectorFactory')
         generate_nodes = get_method(correlator, 'generateNodes')
+        matching_class = BSimProgramCorrelatorMatching.class_
+        matching_class.getDeclaredField('seeds')
+        next(m for m in matching_class.getDeclaredMethods() if m.getName() == 'chooseSeeds')
     except (jpype.JException, StopIteration) as err:
         logger.warning(f'BSIM bounds unavailable in this Ghidra ({err}); running BSIM unbounded')
         return None
@@ -131,11 +136,9 @@ def _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_pa
     imp = options.getDouble(BSimProgramCorrelatorFactory.IMPLICATION_THRESHOLD,
                             BSimProgramCorrelatorFactory.IMPLICATION_THRESHOLD_DEFAULT)
 
-    def matching(src_nodes, dst_nodes):
-        return BSimProgramCorrelatorMatching(FunctionNodeContainer(p1, ArrayList(src_nodes)),
-                                             FunctionNodeContainer(p2, ArrayList(dst_nodes)),
-                                             vector_factory, conf, imp, BSimProgramCorrelator.SIMILARITY_THRESHOLD,
-                                             cpool, model)
+    def matching(src_container, dst_container):
+        return BSimProgramCorrelatorMatching(src_container, dst_container, vector_factory, conf, imp,
+                                             BSimProgramCorrelator.SIMILARITY_THRESHOLD, cpool, model)
 
     phase = time()
     nodes = [list(generate_nodes.invoke(correlator, program, addr_set, jpype.JBoolean(cpool), monitor))
@@ -161,7 +164,7 @@ def _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_pa
 
     reps = ([copy(p1, group[0]) for group in groups[0].values()],
             [copy(p2, group[0]) for group in groups[1].values()])
-    probe = matching(reps[0], reps[1])
+    probe = matching(FunctionNodeContainer(p1, ArrayList(reps[0])), FunctionNodeContainer(p2, ArrayList(reps[1])))
     probe.discoverPotentialMatches(monitor)
     pair_counts = Counter()
     for rep in reps[0]:
@@ -191,16 +194,34 @@ def _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_pa
     else:
         logger.info(f'BSIM: {total:,} candidate pairs')
 
-    omni = matching(nodes[0], nodes[1])
+    src_container = FunctionNodeContainer(p1, ArrayList(nodes[0]))
+    dst_container = FunctionNodeContainer(p2, ArrayList(nodes[1]))
+    omni = matching(src_container, dst_container)
     phase = time()
     omni.discoverPotentialMatches(monitor)
     report['phase_seconds']['discover'] = round(time() - phase, 1)
 
-    # ghidriff's seed matches were never accepted (the accept loop ran over the last, empty, match set), so
-    # BSIM has always chosen its own seeds. Accepting them changes BSIM's results everywhere; kept as is.
     phase = time()
-    if not omni.generateSeeds(None, False, monitor):
-        logger.info('BSIM: no seeds')
+    if seeds is None:
+        if not omni.generateSeeds(None, False, monitor):
+            logger.info('BSIM: no seeds')
+    else:
+        # generateSeeds(matchSet, true) without a Version Tracking session: the accepted matches whose functions
+        # are both BSIM nodes and BSIM candidates, then BSIM's own choice
+        accepted = jpype.JClass('java.util.HashSet')()
+        for src, dst in seeds:
+            src_node, dst_node = src_container.get(src), dst_container.get(dst)
+            if src_node is not None and dst_node is not None:
+                edge = src_node.findEdge(dst_node)
+                if edge is not None:
+                    accepted.add(edge)
+        field = omni.getClass().getDeclaredField('seeds')
+        field.setAccessible(True)
+        field.set(omni, accepted)
+        report['accepted_seeds'] = int(accepted.size())
+        get_method(omni, 'chooseSeeds').invoke(omni, monitor)
+        report['seeds'] = int(get_field(omni, 'seeds').size())
+        logger.info(f"BSIM: {report['accepted_seeds']} accepted seeds, {report['seeds']} seeds in all")
     report['phase_seconds']['seeds'] = round(time() - phase, 1)
 
     phase = time()
@@ -218,9 +239,10 @@ def _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_pa
     return [(pair.getSourceNode().getAddress(), pair.getDestNode().getAddress()) for pair in result]
 
 
-def _correlate_stock(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_external_pairs, report):
+def _correlate_stock(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_external_pairs, report, seeds=None):
     """
-    Ghidra's BSimProgramCorrelator as is. Returns [(source address, destination address)]
+    Ghidra's BSimProgramCorrelator as is, seeded with seeds [(source address, destination address)] accepted in
+    its Version Tracking session. Returns [(source address, destination address)]
     """
 
     # BSimProgramCorrelator adds every external function as a node (ignoring the address sets) with one shared
@@ -236,6 +258,7 @@ def _correlate_stock(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_exte
             report['reason'] = 'externals'
             return []
 
+    import jpype
     from ghidra.feature.vt.api import BSimProgramCorrelatorFactory
     from ghidra.feature.vt.api.db import VTSessionDB
     from ghidra.util import SystemUtilities
@@ -261,6 +284,35 @@ def _correlate_stock(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_exte
     # end fix for #95
 
     try:
+        if seeds:
+            from ghidra.feature.vt.api.main import VTAssociationType, VTMatchInfo, VTScore
+
+            # see Ghidra/Features/VersionTracking/src/main/java/ghidra/feature/vt/gui/task/CreateManualMatchTask.java
+            transaction = session.startTransaction('seed')
+            match_set = session.getManualMatchSet()
+            for src, dst in seeds:
+                func1 = p1.getFunctionManager().getFunctionAt(src)
+                func2 = p2.getFunctionManager().getFunctionAt(dst)
+                info = VTMatchInfo(match_set)
+                info.setSourceAddress(func1.getEntryPoint())
+                info.setDestinationAddress(func2.getEntryPoint())
+                info.setSourceLength(int(func1.getBody().getNumAddresses()))
+                info.setDestinationLength(int(func2.getBody().getNumAddresses()))
+                info.setSimilarityScore(VTScore(1.0))
+                info.setConfidenceScore(VTScore(1.0))
+                info.setAssociationType(VTAssociationType.FUNCTION)
+                match_set.addMatch(info)
+            # BSIM seeds itself with the accepted function matches (BSimProgramCorrelatorMatching.findAcceptedSeeds)
+            accepted = 0
+            for match in match_set.getMatches():
+                try:
+                    match.getAssociation().setAccepted()
+                    accepted += 1
+                except jpype.JException:
+                    pass  # conflicts with an association already accepted
+            session.endTransaction(int(transaction), True)
+            report['accepted_seeds'] = accepted
+
         transaction = session.startTransaction(bsim_factory.name)
         bsim_correlator = bsim_factory.createCorrelator(p1, p1_addr_set, p2, p2_addr_set, options)
         bsim_correlator.correlate(session, monitor)
@@ -277,8 +329,13 @@ def _correlate_stock(p1, p1_addr_set, p2, p2_addr_set, monitor, logger, max_exte
         session.release(session_ref)
 
 
+# matches BSIM accepts as seeds
+SEED_MATCH_TYPES = ('SymbolsHash', 'ExactBytesFunctionHasher', 'ExactInstructionsFunctionHasher',
+                    'StructuralGraphExactHash', 'ExactMnemonicsFunctionHasher')
+
+
 def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None, p1_addr_set=None, p2_addr_set=None,
-                   enabled=True, max_external_pairs=0, max_pairs=0, timeout=0) -> dict:
+                   enabled=True, max_external_pairs=0, max_pairs=0, timeout=0, accept_seeds=True) -> dict:
     """
     Match functions with BSim and add them to matches as 'BSIM'.
     max_external_pairs: only when max_pairs is unavailable (Ghidra internals changed), skip BSIM when
@@ -287,6 +344,8 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
         whose feature vectors make the most pairs (externals share one) are left out of BSIM until the rest fit.
         0 = no limit
     timeout: seconds before BSIM is cancelled; the matches it has accepted by then are kept. 0 = no limit
+    accept_seeds: seed BSIM with the SEED_MATCH_TYPES matches (only the externals among them are BSIM nodes,
+        unless --bsim-full). ghidriff 0.6 to 1.0 never accepted them: the accept loop ran over the wrong match set.
     Returns a report of what BSIM did, kept in the diff's stats.
     """
 
@@ -325,11 +384,14 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
 
     start = time()
     found = []
+    seeds = [match for match, types in matches.items() if any(t in SEED_MATCH_TYPES for t in types)] \
+        if accept_seeds else None
     try:
-        found = _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, bsim_monitor, logger, max_pairs, report)
+        found = _correlate_bounded(p1, p1_addr_set, p2, p2_addr_set, bsim_monitor, logger, max_pairs, report, seeds)
         if found is None:
             report['unbounded'] = True
-            found = _correlate_stock(p1, p1_addr_set, p2, p2_addr_set, bsim_monitor, logger, max_external_pairs, report)
+            found = _correlate_stock(p1, p1_addr_set, p2, p2_addr_set, bsim_monitor, logger, max_external_pairs, report,
+                                     seeds)
     except jpype.JException as err:
         if not _is_cancelled(err):
             raise
@@ -338,6 +400,11 @@ def correlate_bsim(matches, p1, p2, p1_matches, p2_matches, monitor, logger=None
     finally:
         if timer is not None:
             timer.cancel()
+
+    # BSIM returns its accepted seeds among its matches; they are matched already
+    if seeds:
+        seed_pairs = set(seeds)
+        found = [pair for pair in found if pair not in seed_pairs]
 
     if report['status'] == 'timeout':
         logger.warning(f'BSIM correlator stopped at --bsim-timeout {timeout}s with {len(found)} matches')

@@ -228,6 +228,9 @@ BSIM Options:
                         similar feature vectors, so thousands of identical small functions (or externals, which share one
                         vector) make hundreds of millions of pairs. Above the bound, the functions whose vectors make the
                         most pairs are left out of BSIM. 0 = no limit (default: 25000000)
+  --bsim-accept-seeds, --no-bsim-accept-seeds
+                        Seed BSIM with the symbol and exact matches found before it (externals only, unless --bsim-full).
+                        --no-bsim-accept-seeds lets BSIM choose all its seeds, as ghidriff 1.0 did (default: True)
   --bsim-timeout BSIM_TIMEOUT
                         Seconds before BSIM is stopped; the matches it accepted by then are kept. 0 = no limit (default:
                         1800)

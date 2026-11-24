@@ -181,7 +181,8 @@ class VersionTrackingDiff(GhidraDiffEngine):
                     p1_addr_set=None if self.bsim_full else p1_unmatched,
                     p2_addr_set=None if self.bsim_full else p2_unmatched,
                     enabled=self.bsim, max_external_pairs=self.bsim_max_external_pairs,
-                    max_pairs=self.bsim_max_pairs, timeout=self.bsim_timeout)
+                    max_pairs=self.bsim_max_pairs, timeout=self.bsim_timeout,
+                    accept_seeds=self.bsim_accept_seeds)
             elif one_to_many:
                 pairs, absorbed = match_functions(p1, p1_unmatched, p2, p2_unmatched, self.min_func_len, one_to_one,
                                                   one_to_many, hasher, self.max_one_to_many_bucket)

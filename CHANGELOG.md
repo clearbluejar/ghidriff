@@ -33,10 +33,18 @@ from 1.0.0 on the same inputs.
   identical small functions, or thousands of externals (which share one vector), made hundreds of
   millions of candidate pairs: hours, then out of memory, on Mail.framework, Music.app and Maps.app.
   ghidriff now counts the pairs first (from one function per distinct vector). Under
-  `--bsim-max-pairs` (default 25,000,000) BSim runs exactly as before; over it, the functions whose
+  `--bsim-max-pairs` (default 25,000,000) no function is left out; over it, the functions whose
   vectors make the most pairs are left out of BSim. `--bsim-timeout` (default 1800 s) stops it and
   keeps the matches accepted so far. `--bsim-max-external-pairs` now applies only when the bound
   cannot be (BSim internals changed in a later Ghidra).
+- **BSim is seeded with the matches found before it.** ghidriff builds seed matches for BSim from
+  the symbol and exact matches, but since 0.6.0 the loop that accepts them ran over the wrong
+  match set, so BSim always chose its own seeds. They are now accepted (only the externals are BSim
+  functions, unless `--bsim-full`). On functions whose names were hidden from the matchers (10% of
+  the symbol matches of linkd, Reminders and Mail.framework), BSim's wrong matches fell from 42 to
+  30 and its right ones rose from 401 to 420, in the same or less time. It changes which functions
+  BSim pairs, so modified functions differ on most binaries. `--no-bsim-accept-seeds` restores the
+  1.0 behaviour. BSim matches do not include the accepted seeds.
 - **Large one-to-many buckets are no longer paired.** StructuralGraphHash and
   BulkBasicBlockMnemonicHash paired every function in a bucket with every other: 33 million pairs
   on Mail.framework. A bucket with more than `--max-one-to-many-bucket` (default 100) functions on
