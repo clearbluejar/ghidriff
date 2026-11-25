@@ -1,9 +1,10 @@
 """
 Gold cases: known fixes a diff must (or must not) show, checked on real binary pairs before a release or a pin.
 
-Cases are read from tests/gold/cases.example.json (the synthetic operand fixture, runs anywhere) and from
-GHIDRIFF_GOLD_CASES (default tests/gold/cases.local.json). The local file is gitignored: real binaries and what is
-derived from them never go into this repo. A case whose binaries or project are not on this machine is skipped.
+Cases are read from tests/gold/cases.example.json (the synthetic operand fixture), tests/gold/cases.test-data.json
+(real binaries from ghidriff-test-data, cloned to tests/data as in CI) and GHIDRIFF_GOLD_CASES (default
+tests/gold/cases.local.json, gitignored: cases on binaries that stay on one machine). A case whose binaries or
+project are not on this machine is skipped.
 
 Each case is diffed without and then with --pcode-gate, and the fix function is looked up among the modified
 functions. A report per case (in modified or not, diff_type, the gate's change class and constant deltas, pairs the
@@ -33,7 +34,8 @@ import pytest
 from ghidriff import get_parser, VersionTrackingDiff, GhidraDiffEngine
 
 GOLD = Path(__file__).parent / 'gold'
-CASE_FILES = [GOLD / 'cases.example.json', Path(os.environ.get('GHIDRIFF_GOLD_CASES', GOLD / 'cases.local.json'))]
+CASE_FILES = [GOLD / 'cases.example.json', GOLD / 'cases.test-data.json',
+              Path(os.environ.get('GHIDRIFF_GOLD_CASES', GOLD / 'cases.local.json'))]
 
 
 def load_cases():
