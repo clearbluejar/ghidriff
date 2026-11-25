@@ -4,6 +4,7 @@
   "old": "../data/bins/com.apple.iokit.IOStorageFamily.iPhone13_3.24A446",
   "new": "../data/bins/com.apple.iokit.IOStorageFamily.iPhone13_3.24B119",
   "binary": "com.apple.iokit.IOStorageFamily",
+  "min_ghidra": "12.1",
   "fix": "FUN_fffffff009b770e0",
   "default": {"modified": false},
   "pcode_gate": {"modified": true, "diff_type": ["pcode"], "new": "FUN_fffffff009bb2d60"}
@@ -13,6 +14,7 @@
   "old": "../data/bins/com.apple.iokit.IOSurface.iPhone13_3.24A446",
   "new": "../data/bins/com.apple.iokit.IOSurface.iPhone13_3.24B119",
   "binary": "com.apple.iokit.IOSurface",
+  "min_ghidra": "12.1",
   "fix": "FUN_fffffff009bae76c",
   "default": {"modified": false},
   "pcode_gate": {"modified": true, "diff_type": ["pcode"]}

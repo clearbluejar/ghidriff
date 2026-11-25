@@ -17,6 +17,7 @@ A case:
      "binary": "name",                               optional: input file name (default: the old file's name)
      "project": "path",                              optional: an analyzed Ghidra project directory, cloned
      "args": ["--no-bsim-accept-seeds"],             optional: more ghidriff arguments
+     "min_ghidra": "12.1",                            optional: skip on older Ghidra (its loader can't import the inputs)
      "fix": "old-side function name",
      "default": {"modified": false},
      "pcode_gate": {"modified": true, "change_class": "compare", "const_deltas": [["0x40", "0x20"]]}}
@@ -136,6 +137,10 @@ def test_gold_case(case: dict, tmp_path: Path, tmp_path_factory):
                                               no_symbols=True,
                                               bsim_accept_seeds=args.bsim_accept_seeds,
                                               pcode_gate=False)
+    if 'min_ghidra' in case:
+        version = tuple(int(x) for x in d.get_ghidra_version().split('.')[:3] if x.isdigit())
+        if version < tuple(int(x) for x in case['min_ghidra'].split('.')):
+            pytest.skip(f"Ghidra {d.get_ghidra_version()} cannot import this case's inputs (needs {case['min_ghidra']})")
     d.setup_project([old, new], projects, project_name, args.symbols_path)
     d.analyze_project()
 
