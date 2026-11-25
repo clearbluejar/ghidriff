@@ -3,7 +3,7 @@ PIP ?= $(PYTHON) -m pip
 PYTEST ?= $(PYTHON) -m pytest
 RUFF ?= $(PYTHON) -m ruff
 
-.PHONY: install install-dev dev-setup test test-fast test-integration lint format clean check
+.PHONY: install install-dev dev-setup test test-fast test-integration test-gold lint format clean check
 
 install:
 	$(PIP) install -e .
@@ -22,6 +22,11 @@ test-fast:
 
 test-integration:
 	$(PYTEST) -m integration
+
+# known fixes on real binary pairs: tests/gold/cases.example.json plus GHIDRIFF_GOLD_CASES (default
+# tests/gold/cases.local.json, gitignored); writes GHIDRIFF_GOLD_REPORT
+test-gold:
+	$(PYTEST) -s tests/test_gold_cases.py
 
 lint:
 	$(RUFF) check ghidriff tests

@@ -69,6 +69,11 @@ from 1.0.0 on the same inputs.
 - `stats.ambiguous_modified_len` and `ambiguous_match: true` on modified entries that share an old
   or new function with another entry (a one-to-many match).
 - Ghidra 12.2 support. CI runs on Ghidra 12.0.4, 12.1.4 and 12.2.
+- `make test-gold` (`tests/test_gold_cases.py`): known fixes on real binary pairs, each diffed without and
+  with `--pcode-gate`, with a report per case (in modified, diff_type, change class, constant deltas,
+  pairs surfaced and dropped, seconds). Real cases live in a local, gitignored file
+  (`GHIDRIFF_GOLD_CASES`); `tests/gold/cases.example.json` shows the format on the synthetic operand
+  fixture.
 - `stats.bsim`: what BSim did (`status` ran, cut, timeout or skipped; candidate pairs; functions left
   out; time per phase) and `stats.one_to_many_capped`: the buckets matched as a group, per correlator.
 

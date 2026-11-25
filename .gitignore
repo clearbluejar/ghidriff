@@ -139,3 +139,6 @@ binaries/
 tests/data
 
 .DS_Store
+
+# gold cases on real binaries stay local (tests/test_gold_cases.py)
+tests/gold/*.local.json
