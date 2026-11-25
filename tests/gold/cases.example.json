@@ -1,0 +1,11 @@
+[
+ {
+  "name": "operand-bound (synthetic)",
+  "old": "../fixtures/operand/bin/operand.base",
+  "new": "../fixtures/operand/bin/operand.const",
+  "binary": "operand",
+  "fix": "_check",
+  "default": {"modified": false},
+  "pcode_gate": {"modified": true, "change_class": "compare", "const_deltas": [["0x40", "0x20"]]}
+ }
+]
