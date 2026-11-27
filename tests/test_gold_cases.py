@@ -18,6 +18,7 @@ A case:
      "project": "path",                              optional: an analyzed Ghidra project directory, cloned
      "args": ["--no-bsim-accept-seeds"],             optional: more ghidriff arguments
      "min_ghidra": "12.1",                            optional: skip on older Ghidra (its loader can't import the inputs)
+     "modes": ["default"],                            optional: the diffs to run (default: both)
      "fix": "old-side function name",
      "default": {"modified": false},
      "pcode_gate": {"modified": true, "change_class": "compare", "const_deltas": [["0x40", "0x20"]]}}
@@ -146,7 +147,7 @@ def test_gold_case(case: dict, tmp_path: Path, tmp_path_factory):
 
     # default first: a gated diff leaves its surfaced pairs on the engine
     results = {}
-    for mode in ('default', 'pcode_gate'):
+    for mode in [m for m in ('default', 'pcode_gate') if m in case.get('modes', ('default', 'pcode_gate'))]:
         d.pcode_gate = mode == 'pcode_gate'
         start = time()
         pdiff = d.diff_bins(old, new)
