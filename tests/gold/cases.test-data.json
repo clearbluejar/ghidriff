@@ -6,8 +6,16 @@
   "binary": "com.apple.iokit.IOStorageFamily",
   "min_ghidra": "12.1",
   "fix": "FUN_fffffff009b770e0",
-  "default": {"modified": false},
-  "pcode_gate": {"modified": true, "diff_type": ["pcode"], "new": "FUN_fffffff009bb2d60"}
+  "default": {
+   "modified": false
+  },
+  "pcode_gate": {
+   "modified": true,
+   "diff_type": [
+    "pcode"
+   ],
+   "new": "FUN_fffffff009bb2d60"
+  }
  },
  {
   "name": "CVE-2026-112477 IOSurface (iOS 24A446 to 24B119)",
@@ -16,7 +24,34 @@
   "binary": "com.apple.iokit.IOSurface",
   "min_ghidra": "12.1",
   "fix": "FUN_fffffff009bae76c",
-  "default": {"modified": false},
-  "pcode_gate": {"modified": true, "diff_type": ["pcode"]}
+  "default": {
+   "modified": false
+  },
+  "pcode_gate": {
+   "modified": true,
+   "diff_type": [
+    "pcode"
+   ]
+  }
+ },
+ {
+  "name": "CVE-2026-112688 CoreMedia (iOS 24A446 to 24B119)",
+  "old": "../data/bins/CoreMedia.iPhone13_3.24A446",
+  "new": "../data/bins/CoreMedia.iPhone13_3.24B119",
+  "binary": "CoreMedia",
+  "fix": "_hevcbridgeParseVdrDmDataPayloadExMetadatatBlocks",
+  "modes": [
+   "default"
+  ],
+  "default": {
+   "modified": true,
+   "diff_type": [
+    "code",
+    "length"
+   ],
+   "old_length": 5052,
+   "new_length": 5080,
+   "new": "_hevcbridgeParseVdrDmDataPayloadExMetadataBlocks"
+  }
  }
 ]
