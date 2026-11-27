@@ -1,0 +1,7 @@
+# LF in the repository and in checkouts, whatever the platform or editor
+* text=auto eol=lf
+
+# binaries that Git's detection must not touch
+tests/fixtures/**/bin/** binary
+*.gzf binary
+*.gdt binary
