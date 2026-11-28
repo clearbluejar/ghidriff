@@ -1,6 +1,6 @@
 import hashlib
 
-from typing import List, Tuple, TYPE_CHECKING
+from typing import Tuple, TYPE_CHECKING
 
 from .ghidra_diff_engine import GhidraDiffEngine
 
@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from ghidra_builtins import *
 
 
-class StructualGraphDiff(GhidraDiffEngine):
+class StructuralGraphDiff(GhidraDiffEngine):
     """
     An Ghidra Diff implementation using simple comparison mechanisms
     """
@@ -347,7 +347,7 @@ class StructualGraphDiff(GhidraDiffEngine):
 
         matches = sorted(matches, key=lambda x: str(x[0]))
 
-        # no need to skip types because we just ignore the matches for structual sig
+        # no need to skip types because we just ignore the matches for structural sig
         skip_types = []
 
         return [unmatched, matches, skip_types]
